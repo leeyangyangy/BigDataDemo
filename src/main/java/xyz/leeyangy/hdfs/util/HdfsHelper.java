@@ -15,13 +15,12 @@ public class HdfsHelper {
     //    连接hdfs对象
     private static URI _hdfsUri = null;
 
-    private static String _username = null;
+    private static String _username = "lee";
 
     //    静态初始化方法
     static {
         _conf = new Configuration();
         _hdfsUri = URI.create("hdfs://192.168.1.7:19000");
-        _username = "hadoop";
     }
 
     public static FileSystem getFS() {
