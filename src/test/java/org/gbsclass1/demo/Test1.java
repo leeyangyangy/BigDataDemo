@@ -1,4 +1,4 @@
-package xyz.leeyangy.hdfs.demo;
+package org.gbsclass1.demo;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;

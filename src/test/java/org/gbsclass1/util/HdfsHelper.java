@@ -1,4 +1,4 @@
-package xyz.leeyangy.hdfs.util;
+package org.gbsclass1.util;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;

@@ -1,8 +1,8 @@
-package xyz.leeyangy.hdfs.demo;
+package org.gbsclass1.demo;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import xyz.leeyangy.hdfs.util.HdfsHelper;
+import org.gbsclass1.util.HdfsHelper;
 
 //操作hdfs对象
 public class HdfsOperator {
