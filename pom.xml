@@ -3,8 +3,8 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>xyz.leeyangy.hdfs</groupId>
-    <artifactId>hadoop_demo</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <artifactId>mapreduce_classdesign</artifactId>
+    <version>1.0</version>
     <packaging>jar</packaging>
 
     <name>hadoop_demo</name>
