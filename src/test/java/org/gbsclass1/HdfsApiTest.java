@@ -98,9 +98,21 @@ public class HdfsApiTest {
     }
 
 
+    /**
+    * @Param: []
+    * @return: void
+    * @Author: liyangyang
+    * @Date: 2023/6/3 23:52
+    * @Description: 创建和删除文件
+    */
     @Test
     public void testCreateAndDeleteDir(){
         tools.createAndDeleteDirByUserOperator("/asd");
+    }
+
+    @Test
+    public void testDeleteFile() throws IOException {
+        tools.deleteFile("/sss");
     }
 
     public static void main(String[] args) throws IOException {
@@ -114,7 +126,8 @@ public class HdfsApiTest {
 //        tools.write2LocalFile("/sss","d:/tmp/it.txt");
 //        tools.createAndDeleteDirByUserOperator("/asd");
 //            tools.appendFileByUserOperator("");
-        tools.appendFileByUserOperator("/sss");
+//        tools.appendFileByUserOperator("/sss");
+
     }
 
 
