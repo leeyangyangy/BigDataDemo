@@ -86,6 +86,12 @@ public class HdfsApiTest {
     }
 
 
+    @Test
+    public void testCreateAndDelete() throws IOException {
+        tools.createAndDelete("/asd/text.txt");
+    }
+
+
     public static void main(String[] args) throws IOException {
         Tools tools = new Tools();
 //        tools.copyFile2Hdfs("d:/it.txt","/sss");

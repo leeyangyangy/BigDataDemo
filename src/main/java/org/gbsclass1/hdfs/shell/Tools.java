@@ -5,7 +5,6 @@ import org.gbsclass1.hdfs.api.Display;
 import org.gbsclass1.hdfs.api.HdfsApi;
 
 import java.io.*;
-import java.util.Scanner;
 import java.util.UUID;
 
 /**
@@ -373,5 +372,38 @@ public class Tools {
 
     }
 
+    /**
+    * @Param: [remotePath]
+    * @return: void
+    * @Author: liyangyang
+    * @Date: 2023/6/3 16:16
+    * @Description: 提供一个HDFS内的文件的路径，对该文件进行创建和删除操作。如果文件所在目录不存在，则自动创建目录。
+    */
+    public void createAndDelete(String remotePath) throws IOException {
+        FileSystem fs = HdfsApi.getFS();
+
+        if (remotePath == null) {
+            System.out.println("文件输入路径为空，请重试");
+            return;
+        }
+        Path path = new Path(remotePath);
+        FSDataOutputStream out = null;
+        try {
+            if (fs.exists(path)) {
+                //  存在删除
+                fs.delete(path, true);
+                Display.delete_file_success(remotePath);
+            } else {
+                // 创建文件，如果文件所在目录不存在，则自动创建目录
+                out = fs.create(path, true);
+                out.writeUTF("Hello, HDFS!");
+                out.close();
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        } finally {
+            HdfsApi.closeFS(fs);
+        }
+    }
 
 }
