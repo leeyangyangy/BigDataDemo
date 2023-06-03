@@ -216,7 +216,7 @@ public class Tools {
                                 //  read = -1，表示文件已经读取完毕，退出循环
                                 break;
                             }
-                            System.out.print(new String(buffer));
+//                            System.out.print(new String(buffer));
                             fos.write(buffer, 0, read);
                         }
                         Display.download_success(remotePath, localPath);
