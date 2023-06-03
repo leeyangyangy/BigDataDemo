@@ -250,5 +250,47 @@ public class Tools {
 
     }
 
+    /**
+    * @Param: [remotePath]
+    * @return: void
+    * @Author: liyangyang
+    * @Date: 2023/6/3 15:00
+    * @Description: 将HDFS中指定文件的内容输出到终端。
+    */
+    public void getFileContent(String remotePath) throws IOException {
+//        获取远程文件对象
+        FileSystem fs = HdfsApi.getFS();
+        Path path = new Path(remotePath);
+        try {
+           if (fs.exists(path)){
+               // 打开文件
+               FSDataInputStream fsInput = fs.open(path);
+
+               //  缓冲区
+               byte[] buffer = new byte[1024];
+
+               //  开始循环读取写入
+               while (true) {
+                   //  本轮循环，读取到内容，返回值为读取的字节数
+                   int read = fsInput.read(buffer);
+                   if (read < 0) {
+                       //  read = -1，表示文件已经读取完毕，退出循环
+                       break;
+                   }
+                   System.out.print(new String(buffer));
+               }
+               //  关闭
+               fsInput.close();
+           }else {
+               System.out.println("远程文件不存在");
+           }
+       }catch (Exception e){
+           e.printStackTrace();
+       }finally {
+            //  关闭hdfs
+            HdfsApi.closeFS(fs);
+       }
+
+    }
 
 }

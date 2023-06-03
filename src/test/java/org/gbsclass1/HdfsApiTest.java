@@ -17,14 +17,18 @@ import java.nio.file.Path;
 public class HdfsApiTest {
 
 
-
+    Tools tools = new Tools();
     @Test
     public void copyFile2Hdfs() throws IOException {
-        Tools tools = new Tools();
+        tools = new Tools();
         tools.copyFile2Hdfs("d:/it.txt","/sss");
 //        Display.success("1","2");
     }
 
+    @Test
+    public void testReadFile() throws IOException {
+        tools.getFileContent("/sss");
+    }
 
     public static void main(String[] args) throws IOException {
         Tools tools = new Tools();
