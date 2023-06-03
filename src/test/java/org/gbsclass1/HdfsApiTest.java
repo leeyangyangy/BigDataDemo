@@ -18,6 +18,14 @@ public class HdfsApiTest {
 
 
     Tools tools = new Tools();
+
+    /**
+    * @Param: []
+    * @return: void
+    * @Author: liyangyang
+    * @Date: 2023/6/3 15:25
+    * @Description: 文件上传
+    */
     @Test
     public void copyFile2Hdfs() throws IOException {
         tools = new Tools();
@@ -25,10 +33,36 @@ public class HdfsApiTest {
 //        Display.success("1","2");
     }
 
+    /**
+     * @Param: []
+     * @return: void
+     * @Author: liyangyang
+     * @Date: 2023/6/3 15:25
+     * @Description: 文件下载
+     */
+    @Test
+    public void testDownloadFIle() throws IOException {
+        tools.write2LocalFile("/sss","d:/tmp/it.txt");
+    }
+
+    /**
+    * @Param: []
+    * @return: void
+    * @Author: liyangyang
+    * @Date: 2023/6/3 15:25
+    * @Description: 文件信息读取
+    */
     @Test
     public void testReadFile() throws IOException {
         tools.getFileContent("/sss");
     }
+
+
+    @Test
+    public void testGetFileInfo() throws IOException {
+        tools.getFIleInfo("/sss");
+    }
+
 
     public static void main(String[] args) throws IOException {
         Tools tools = new Tools();
