@@ -80,7 +80,7 @@ public class HdfsApi {
      * @Description: 文件路径为空
      */
     public static boolean remotePath_checkNull(String remotePath) {
-        return remotePath != null ;
+        return remotePath != null && !"".equals(remotePath) && !remotePath.trim().equals("") ;
     }
 
     /**

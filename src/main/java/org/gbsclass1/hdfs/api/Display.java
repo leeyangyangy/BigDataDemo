@@ -145,6 +145,10 @@ public interface Display {
         System.out.println("远程文件不存在");
     }
 
+    static void dstPath_isExist(){
+        System.out.println("目标文件或路径已经存在");
+    }
+
     /**
     * @Param: []
     * @return: void
@@ -158,6 +162,10 @@ public interface Display {
 
     static void delete_success(){
         System.out.println("删除成功");
+    }
+
+    static void move_success(){
+        System.out.println("文件移动成功");
     }
 
     /**

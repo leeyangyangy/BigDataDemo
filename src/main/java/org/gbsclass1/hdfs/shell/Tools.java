@@ -557,4 +557,39 @@ public class Tools {
         }
     }
 
+    /**
+    * @Param: [srcPath, dstPath]
+    * @return: void
+    * @Author: liyangyang
+    * @Date: 2023/6/3 23:55
+    * @Description: 在HDFS中，将文件从源路径移动到目的路径
+    */
+    public void cpFile(String srcPath,String dstPath) throws IOException {
+//        获取文件对象
+        FileSystem fs = HdfsApi.getFS();
+
+//        判断路径非空
+        if (HdfsApi.remotePath_checkNull(srcPath) && HdfsApi.remotePath_checkNull(dstPath)){
+//            临时文件
+            Path srcPath_tmp = new Path(srcPath);
+            Path dstPath_tmp = new Path(dstPath);
+            //  判断源文件是否存在
+            if (HdfsApi.remoteFile_isExist(fs,srcPath_tmp) ){
+                //  判断目标文件是否存在
+                if (!HdfsApi.remoteFile_isExist(fs,dstPath_tmp)){
+                    fs.rename(srcPath_tmp,dstPath_tmp);
+                    Display.move_success();
+                }else {
+                    Display.dstPath_isExist();
+                }
+
+            }else {
+                Display.remotePath_noExist();
+            }
+
+        }else {
+            Display.remotePath_isNull();
+        }
+    }
+    
 }
