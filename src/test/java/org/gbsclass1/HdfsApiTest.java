@@ -85,12 +85,23 @@ public class HdfsApiTest {
         tools.listFiles("/user");
     }
 
-
+    /**
+    * @Param: []
+    * @return: void
+    * @Author: liyangyang
+    * @Date: 2023/6/3 17:47
+    * @Description:
+    */
     @Test
     public void testCreateAndDelete() throws IOException {
         tools.createAndDelete("/asd/text.txt");
     }
 
+
+    @Test
+    public void testCreateAndDeleteDir(){
+        tools.createAndDeleteDirByUserOperator("/asd");
+    }
 
     public static void main(String[] args) throws IOException {
         Tools tools = new Tools();
@@ -100,7 +111,9 @@ public class HdfsApiTest {
 //        获取文件名和父路径
 //        System.out.println(file.getParent());
 //        System.out.println(file.getName());
-        tools.write2LocalFile("/sss","d:/tmp/it.txt");
+//        tools.write2LocalFile("/sss","d:/tmp/it.txt");
+        tools.createAndDeleteDirByUserOperator("/asd");
+
     }
 
 
