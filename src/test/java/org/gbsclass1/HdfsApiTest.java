@@ -1,11 +1,14 @@
 package org.gbsclass1;
 
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.gbsclass1.hdfs.api.HdfsApi;
 import org.gbsclass1.hdfs.shell.Tools;
+import org.gbsclass1.hdfs.stream.MyFSDataInputStream;
 import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Path;
 
 /**
  * @Author liyangyang
@@ -147,8 +150,8 @@ public class HdfsApiTest {
     }
 
     public static void main(String[] args) throws IOException {
-        Tools tools = new Tools();
-        tools.copyFile2Hdfs("d:/it.txt","/sss");
+//        Tools tools = new Tools();
+//        tools.copyFile2Hdfs("d:/it.txt","/sss");
 
 //        File file=new File("D:\\tmp\\it.txt");
 //        获取文件名和父路径
@@ -158,8 +161,33 @@ public class HdfsApiTest {
 //        tools.createAndDeleteDirByUserOperator("/asd");
 //            tools.appendFileByUserOperator("");
 //        tools.appendFileByUserOperator("/sss");
+        //  创建文件对象
+        FileSystem fs = HdfsApi.getFS();
+        Path path = new Path("/ss");
+        MyFSDataInputStream myfsdInput = new MyFSDataInputStream(fs,path);
+        String line;
+        while ((line = myfsdInput.readLine0()) != null) {
+            System.out.println(line);
+        }
+        // 关闭输入流和文件系统对象
+        myfsdInput.close();
+        HdfsApi.closeFS(fs);
     }
 
+    // 任务二
+    
+    /**
+    * @Param: []
+    * @return: void
+    * @Author: liyangyang
+    * @Date: 2023/6/4 0:37
+    * @Description: 编程实现一个类“MyFSDataInputStream”，该类继承“org. apache.hadoop.fs. FSData Input Stream" ,
+     * 要求如下:实现按行读取HDFS中指定文件的方法“readLine0",如果读到文件末尾，则返回空，否则返回文件- -行的文本。
+    */
+    @Test
+    public void testReadLine0() throws IOException {
+
+    }
 
 
 }
