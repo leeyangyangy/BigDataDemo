@@ -20,5 +20,9 @@ public interface Display {
                 + "上失败");
     }
 
+    static void download_success(String remotePath, String localPath) {
+        System.out.println("从远端文件" + remotePath + "下载成本地文件" + localPath + "完毕");
+    }
+
 
 }

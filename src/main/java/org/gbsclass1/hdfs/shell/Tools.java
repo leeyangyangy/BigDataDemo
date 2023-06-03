@@ -1,14 +1,12 @@
 package org.gbsclass1.hdfs.shell;
 
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.*;
 import org.gbsclass1.hdfs.api.Display;
 import org.gbsclass1.hdfs.api.HdfsApi;
 
 import java.io.*;
 import java.util.Scanner;
+import java.util.UUID;
 
 /**
  * @Author liyangyang
@@ -29,12 +27,12 @@ public class Tools {
      *              向HDFS中上传任意文本文件，如果指定的文件在HDFS中已经存在，
      *              由用户指定的是追加到原有文件末尾还是覆盖原有的文件。
      */
-    void copyFile2Hdfs(String localPath, String remotePath) throws IOException {
+    public void copyFile2Hdfs(String localPath, String remotePath) throws IOException {
 //        localPath，本地文件路径；remotePath，hdfs上远端文件的路径
         FileSystem fs = HdfsApi.getFS();
 
         if (localPath==null ){
-            System.out.println("请检填写本地文件路径");
+            System.out.println("请填写本地文件路径");
             return;
         } else if (remotePath ==null) {
             System.out.println("请填写上传文件路径");
@@ -127,4 +125,130 @@ public class Tools {
         // 关闭文件系统对象
         HdfsApi.closeFS(fs);
     }
+
+
+    /**
+    * @Param: [remotePath, localPath]
+    * @return: void
+    * @Author: liyangyang
+    * @Date: 2023/6/2 15:50
+    * @Description: 从HDFS中下载指定文件，如果本地文件与要下载的文件名称相同，则自动对下载的文件重命名
+    */
+    public void write2LocalFile(String remotePath, String localPath) throws IOException {
+        //  用文件流的方式，从远端下载文件到本地
+        //  localPath，本地文件路径；remotePath，hdfs上远端文件的路径
+        FileSystem fs = HdfsApi.getFS();
+        if (localPath==null ){
+            System.out.println("请填写本地文件路径");
+            return;
+        } else if (remotePath ==null) {
+            System.out.println("请填写下载文件路径");
+            return;
+        } else if(fs!=null){
+        //  判断远程文件是否存在
+            if (fs.exists(new Path(remotePath))){
+                File localfile = new File(localPath);
+                //  执行下载
+                //  远端文件开输入流，进行读取
+                FSDataInputStream fsInput = null;
+                //  本地文件开输出，进行写入
+                FileOutputStream fos = null;
+                //  缓冲区
+                byte[] buffer = new byte[1024];
+
+                // 如果本地文件存在
+                if ( localfile.exists() ){
+                    //  修改文件名
+                    System.out.println(localfile.getParent());
+                    String parentSrc = localfile.getParent();
+                    //  拼接路径
+                    String newSrc = parentSrc+"\\"+ UUID.randomUUID()+"-"+localfile.getName();
+                    try {
+                        //  打开远端文件，以便读取
+                        fsInput = fs.open(new Path(remotePath));
+                        //  打开本地文件，以便输出
+                        fos = new FileOutputStream(newSrc);
+                        //  开始循环读取写入
+                        while (true) {
+                            //  本轮循环，读取到内容，返回值为读取的字节数
+                            int read = fsInput.read(buffer);
+                            if (read < 0) {
+                                //  read = -1，表示文件已经读取完毕，退出循环
+                                break;
+                            }
+//                            System.out.print(new String(buffer));
+                            fos.write(buffer, 0, read);
+                        }
+                        Display.download_success(remotePath, newSrc);
+                    } catch (FileNotFoundException e) {
+                        e.printStackTrace();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    } finally {
+                        if (fos != null) {
+                            try {
+                                fos.close();
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                        }
+
+                        if (fsInput != null) {
+                            try {
+                                fsInput.close();
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                        }
+                    }
+
+                }else {
+                    try {
+                        //  打开远端文件，以便读取
+                        fsInput = fs.open(new Path(remotePath));
+                        //  打开本地文件，以便输出
+                        fos = new FileOutputStream(new File(localPath));
+                        //  开始循环读取写入
+                        while (true) {
+                            //  本轮循环，读取到内容，返回值为读取的字节数
+                            int read = fsInput.read(buffer);
+                            if (read < 0) {
+                                //  read = -1，表示文件已经读取完毕，退出循环
+                                break;
+                            }
+                            System.out.print(new String(buffer));
+                            fos.write(buffer, 0, read);
+                        }
+                        Display.download_success(remotePath, localPath);
+                    } catch (FileNotFoundException e) {
+                        e.printStackTrace();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    } finally {
+                        if (fos != null) {
+                            try {
+                                fos.close();
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                        }
+
+                        if (fsInput != null) {
+                            try {
+                                fsInput.close();
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                        }
+                    }
+                }
+            }else {
+                System.out.println("远程文件不存在");
+            }
+        }
+        HdfsApi.closeFS(fs);
+
+    }
+
+
 }
