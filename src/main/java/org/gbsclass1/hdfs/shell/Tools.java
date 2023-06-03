@@ -531,6 +531,30 @@ public class Tools {
         }
     }
 
-
+    /**
+    * @Param: [remotePath]
+    * @return: void
+    * @Author: liyangyang
+    * @Date: 2023/6/3 23:47
+    * @Description: 删除指定文件
+    */
+    public void deleteFile(String remotePath) throws IOException {
+        FileSystem fs = HdfsApi.getFS();
+        //  远程文件非空判断
+        if (!HdfsApi.remotePath_checkNull(remotePath)) {
+            Display.remotePath_isNull();
+            return;
+        } else {
+            //        获取路径
+            Path path = new Path(remotePath);
+            //  远程文件非空判断
+            if (HdfsApi.remoteFile_isExist(fs, path)) {
+                fs.delete(path, true);
+                Display.delete_success();
+            } else {
+                Display.remotePath_noExist();
+            }
+        }
+    }
 
 }
