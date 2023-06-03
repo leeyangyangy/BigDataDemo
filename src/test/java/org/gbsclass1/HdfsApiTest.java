@@ -105,15 +105,16 @@ public class HdfsApiTest {
 
     public static void main(String[] args) throws IOException {
         Tools tools = new Tools();
-//        tools.copyFile2Hdfs("d:/it.txt","/sss");
+        tools.copyFile2Hdfs("d:/it.txt","/sss");
 
 //        File file=new File("D:\\tmp\\it.txt");
 //        获取文件名和父路径
 //        System.out.println(file.getParent());
 //        System.out.println(file.getName());
 //        tools.write2LocalFile("/sss","d:/tmp/it.txt");
-        tools.createAndDeleteDirByUserOperator("/asd");
-
+//        tools.createAndDeleteDirByUserOperator("/asd");
+//            tools.appendFileByUserOperator("");
+        tools.appendFileByUserOperator("/sss");
     }
 
 

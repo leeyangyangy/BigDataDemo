@@ -87,7 +87,7 @@ public interface Display {
      * @Description: 删除文件成功
      */
     static void delete_file_success(String remotePath) {
-        System.out.println("删除文件"+remotePath+"成功");
+        System.out.println("删除文件" + remotePath + "成功");
     }
 
     /**
@@ -98,7 +98,76 @@ public interface Display {
      * @Description: 删除文件失败
      */
     static void delete_file_error(String remotePath) {
-        System.out.println("删除文件"+remotePath+"失败");
+        System.out.println("删除文件" + remotePath + "失败");
     }
 
+    /**
+    * @Param: []
+    * @return: void
+    * @Author: liyangyang
+    * @Date: 2023/6/3 20:53
+    * @Description: 本地路径为空提示
+    */
+    static void localPath_isNull(){
+        System.out.println("本地文件路径为空，请检查");
+    }
+
+    /**
+     * @Param: []
+     * @return: void
+     * @Author: liyangyang
+     * @Date: 2023/6/3 20:53
+     * @Description: 远程路径为空提示
+     */
+    static void remotePath_isNull(){
+        System.out.println("远程文件路径为空，请检查");
+    }
+
+    /**
+     * @Param: []
+     * @return: void
+     * @Author: liyangyang
+     * @Date: 2023/6/3 20:53
+     * @Description: 本地文件不存在
+     */
+    static void localPath_noExist(){
+        System.out.println("本地文件不存在");
+    }
+
+    /**
+     * @Param: []
+     * @return: void
+     * @Author: liyangyang
+     * @Date: 2023/6/3 20:53
+     * @Description: 远程文件不存在
+     */
+    static void remotePath_noExist(){
+        System.out.println("远程文件不存在");
+    }
+
+    /**
+    * @Param: []
+    * @return: void
+    * @Author: liyangyang
+    * @Date: 2023/6/3 21:24
+    * @Description: 用户操作提示
+    */
+    static void common_append() {
+        System.out.println("文件内容追加到原有文件的开头或结尾? (输入 t --- 插入尾部，h -- 插入头部，其它不执行)");
+    }
+
+    static void delete_success(){
+        System.out.println("删除成功");
+    }
+
+    /**
+    * @Param: []
+    * @return: void
+    * @Author: liyangyang
+    * @Date: 2023/6/3 21:24
+    * @Description: 程序退出
+    */
+    static void process_exit(){
+        System.out.println("程序退出");;
+    }
 }

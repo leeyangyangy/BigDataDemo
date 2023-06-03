@@ -2,9 +2,11 @@ package org.gbsclass1.hdfs.shell;
 
 import org.apache.hadoop.fs.*;
 import org.gbsclass1.hdfs.api.Display;
+import org.gbsclass1.hdfs.api.GetUserOperator;
 import org.gbsclass1.hdfs.api.HdfsApi;
 
 import java.io.*;
+import java.util.Scanner;
 import java.util.UUID;
 
 /**
@@ -444,7 +446,91 @@ public class Tools {
         }
     }
     
+    /**
+    * @Param: [remotePath]
+    * @return: void
+    * @Author: liyangyang
+    * @Date: 2023/6/3 20:28
+    * @Description: 向HDFS中指定的文件追加内容，由用户指定内容追加到原有文件的开头或结尾。
+    */
+    public void appendFileByUserOperator(String remotePath) throws IOException {
+//        获取文件对象
+        FileSystem fs = HdfsApi.getFS();
+//        路径非空判断
+        if (!HdfsApi.remotePath_checkNull(remotePath)){
+            Display.remotePath_isNull();
+            return;
+        }else {
+            //        获取路径
+            Path path = new Path(remotePath);
+            //  远程文件非空判断
+            if (HdfsApi.remoteFile_isExist(fs,path)){
+                //  获取用户输入信息
+                String s = GetUserOperator.append();
+                //  读取文件内容
+                FSDataInputStream fsdInput = null;
+                //  输出文件内容
+                FSDataOutputStream fsdOutput = null;
+                // 如果用户指定内容追加到原有文件的开头
+                if ("H".equalsIgnoreCase(s)){
+                    try {
+                        // 获取文件输入流
+                        fsdInput = fs.open(path);
 
-    
+                        // 创建文件
+                        fsdOutput = fs.create(path,true);
+                        // 追加内容
+                        System.out.println("请输入要添加内容:");
+                        fsdOutput.write(new BufferedReader(new InputStreamReader(System.in,"UTF-8")).readLine().getBytes());
+
+                        //  添加换行
+                        fsdOutput.write("\n".getBytes());
+                        // 读取文件原有内容
+                        byte[] buffer = new byte[1024];
+                        int bytesRead = 0;
+                        while ((bytesRead = fsdInput.read(buffer)) > 0) {
+                            fsdOutput.write(buffer, 0, bytesRead);
+                        }
+                        // 关闭文件输出流和文件输入流
+                        fsdOutput.close();
+                        fsdInput.close();
+
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    } finally {
+                        // 关闭文件系统对象
+                        HdfsApi.closeFS(fs);
+                    }
+//                    fsdOutput = fs.create(path, true);
+
+                // 如果用户指定内容追加到原有文件的结尾
+                } else if ("T".equalsIgnoreCase(s)) {
+                    // 直接写入新内容
+                    try {
+                        fsdOutput = fs.append(path);
+                        System.out.println("请输入要添加内容:");
+//                        fsdOutput.write("我的世界".getBytes());
+//                        fsdOutput.writeUTF("\n"+new BufferedReader(new InputStreamReader(System.in,"UTF-8")).readLine());
+                        fsdOutput.write(new BufferedReader(new InputStreamReader(System.in,"UTF-8")).readLine().getBytes());
+                        //  添加换行符
+                        fsdOutput.write("\n".getBytes());
+                        fsdOutput.close();
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    } finally {
+                        // 关闭文件系统对象
+                        HdfsApi.closeFS(fs);
+                    }
+                }else {
+                    Display.process_exit();
+                }
+            }else {
+                Display.remotePath_noExist();
+                HdfsApi.closeFS(fs);
+            }
+        }
+    }
+
+
 
 }
