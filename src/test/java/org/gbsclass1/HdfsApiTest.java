@@ -57,10 +57,32 @@ public class HdfsApiTest {
         tools.getFileContent("/sss");
     }
 
-
+    /**
+    * @Param: []
+    * @return: void
+    * @Author: liyangyang
+    * @Date: 2023/6/3 15:39
+    * @Description: 获取文件信息
+    */
     @Test
     public void testGetFileInfo() throws IOException {
         tools.getFIleInfo("/sss");
+        System.out.println("--------------");
+        tools.getFIleInfo("/6");
+    }
+
+    /**
+    * @Param: []
+    * @return: void
+    * @Author: liyangyang
+    * @Date: 2023/6/3 15:40
+    * @Description: 遍历所有文件信息
+    */
+    @Test
+    public void testListDir(){
+        tools.listFiles("/spark_input");
+        System.out.println("--------------");
+        tools.listFiles("/user");
     }
 
 

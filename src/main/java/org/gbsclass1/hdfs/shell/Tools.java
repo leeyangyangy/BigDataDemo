@@ -333,4 +333,45 @@ public class Tools {
         }
     }
 
+    /**
+    * @Param: [remotePath]
+    * @return: void
+    * @Author: liyangyang
+    * @Date: 2023/6/3 15:32
+    * @Description: 给定HDFS中某一个目录，输出该目录下的所有文件的读写权限、大小、创建时间、路径等信息，如果该文件是目录，则递归输出该目录下所有文件相关信息
+    */
+    public void listFiles(String remotePath){
+//        获取文件对象
+        FileSystem fs = HdfsApi.getFS();
+//        路径非空判断
+        if (remotePath == null) {
+            System.out.println("文件输入路径为空，请重试");
+            return;
+        }
+        Path path = new Path(remotePath);
+        try{
+            //  判断远程文件是否为空
+            if (fs.exists(path)){
+                FileStatus[] statuses = fs.listStatus(path);
+                for (FileStatus status : statuses) {
+                    // 显示读写权限、大小、创建时间、路径等信息
+                    System.out.println("Permission: " + status.getPermission());
+                    System.out.println("Size: " + status.getLen());
+                    System.out.println("Creation time: " + status.getModificationTime());
+                    System.out.println("Path: " + status.getPath());
+                    // 如果是目录，则递归调用
+                    if (status.isDirectory()) listFiles(status.getPath().toString());
+                }
+            }else {
+                System.out.println("远程文件不存在，请检查路径");
+            }
+        }catch (Exception e){
+            e.printStackTrace();
+        }finally {
+            HdfsApi.closeFS(fs);
+        }
+
+    }
+
+
 }
