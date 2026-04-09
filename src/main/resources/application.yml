@@ -1,0 +1,8 @@
+# spring profile
+spring:
+  application:
+    name: scala-action
+
+# backend port
+server:
+  port: 8080
