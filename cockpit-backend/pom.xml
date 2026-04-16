@@ -6,7 +6,7 @@
 
     <groupId>xyz.leeyangy</groupId>
     <artifactId>cockpit-backend</artifactId>
-    <name>soc-actions</name>
+    <name>spc-actions</name>
     <description>spc-actions project for Spring Boot</description>
     <version>1.0.0</version>
     <parent>
