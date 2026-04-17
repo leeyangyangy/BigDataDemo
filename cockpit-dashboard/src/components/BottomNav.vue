@@ -4,35 +4,46 @@
     <div class="nav-indicator" :style="indicatorStyle" :class="{ 'light-indicator': isLightMode }"></div>
     <div
       v-for="(item, index) in navItems"
-      :key="index"
+      :key="item.key"
       class="nav-item"
-      :class="{ active: activeIndex === index, 'light-item': isLightMode }"
+      :class="{ active: activeKey === item.key, 'light-item': isLightMode }"
       :ref="el => itemRefs[index] = el"
-      @click="handleClick(index, $event)"
+      @click="handleClick(item.key, $event)"
       @mouseenter="handleHover(index)"
       @mouseleave="handleLeave(index)"
     >
       <span class="ripple-container">
-        <span 
-          class="ripple" 
+        <span
+          class="ripple"
           :ref="el => rippleRefs[index] = el"
           :class="{ 'light-ripple': isLightMode }"
         ></span>
       </span>
-      <span class="icon-wrapper" :class="{ 'bounce': clickedIndex === index, 'light-icon-wrapper': isLightMode && activeIndex === index }">
+      <span class="icon-wrapper" :class="{ 'bounce': clickedIndex === index, 'light-icon-wrapper': isLightMode && activeKey === item.key }">
         <span class="nav-icon">{{ item.icon }}</span>
-        <span class="icon-glow" :class="{ 'light-glow': isLightMode }" v-if="activeIndex === index"></span>
-        <span class="icon-ring" v-if="activeIndex === index && isLightMode"></span>
+        <span class="icon-glow" :class="{ 'light-glow': isLightMode }" v-if="activeKey === item.key"></span>
+        <span class="icon-ring" v-if="activeKey === item.key && isLightMode"></span>
       </span>
-      <span class="nav-label" :class="{ 'light-label': isLightMode && activeIndex === index }">{{ item.label }}</span>
+      <span class="nav-label" :class="{ 'light-label': isLightMode && activeKey === item.key }">{{ item.label }}</span>
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, nextTick, onMounted, watch } from 'vue'
+import { useTheme } from '../composables/useTheme'
 
-const activeIndex = ref(1)
+const props = defineProps({
+  activeIndex: { type: Number, default: 1 },
+  userRole: { type: String, default: '' },
+  activeKey: { type: String, default: 'home' }
+})
+
+const emit = defineEmits(['navigate'])
+
+const { isDark } = useTheme()
+
+const activeIndex = ref(props.activeIndex)
 const hoveredIndex = ref(-1)
 const clickedIndex = ref(-1)
 const indicatorStyle = ref({})
@@ -40,17 +51,57 @@ const navRef = ref(null)
 const itemRefs = ref([])
 const rippleRefs = ref([])
 
-const navItems = [
-  { icon: '🏠', label: '首页' },
-  { icon: '📊', label: '数据' },
-  { icon: '💬', label: 'AIChat' },
-  { icon: '🗺️', label: '地图' },
-  { icon: '☰', label: '后台' }
+const allNavItems = [
+  { key: 'home', icon: '🏠', label: '首页' },
+  { key: 'data', icon: '📊', label: '数据' },
+  // { key: 'chat', icon: '💬', label: 'AIChat' },
+  // { key: 'map', icon: '🗺️', label: '地图' },
+  { key: 'admin', icon: '☰', label: '后台' }
 ]
 
-const isLightMode = computed(() => {
-  return document.documentElement.getAttribute('data-theme') !== 'dark'
+const adminSubItems = [
+  { key: 'admin-product', icon: '📦', label: '产品' },
+  { key: 'admin-process', icon: '⚙️', label: '工序' },
+  { key: 'admin-standard', icon: '📏', label: '工艺' },
+  { key: 'admin-equipment', icon: '🔧', label: '设备' },
+  { key: 'admin-user', icon: '👥', label: '用户' }
+]
+
+const navItems = computed(() => {
+  const isAdminMode = props.activeKey.startsWith('admin')
+  if (isAdminMode) {
+    return [{ key: 'home', icon: '🏠', label: '首页' }, ...adminSubItems]
+  }
+  if (props.userRole === 'ADMIN') return allNavItems
+  return allNavItems.filter(item => item.key !== 'admin')
 })
+
+const activeKey = ref(props.activeKey || 'home')
+
+function findIndexByKey(key) {
+  return navItems.value.findIndex(item => item.key === key)
+}
+
+watch(() => props.activeIndex, (val) => {
+  const keyMap = { 1: 'home', 2: 'data', 3: 'chat', 4: 'map', 5: 'admin-product', 6: 'admin-process', 7: 'admin-standard', 8: 'admin-equipment', 9: 'admin-user' }
+  const key = keyMap[val] || 'home'
+  activeKey.value = key
+  nextTick(() => {
+    const idx = findIndexByKey(key)
+    if (idx >= 0) updateIndicator(idx)
+  })
+})
+
+watch(() => props.activeKey, (key) => {
+  if (!key) return
+  activeKey.value = key
+  nextTick(() => {
+    const idx = findIndexByKey(key)
+    if (idx >= 0) updateIndicator(idx)
+  })
+}, { immediate: true })
+
+const isLightMode = computed(() => !isDark.value)
 
 const updateIndicator = (index) => {
   nextTick(() => {
@@ -71,17 +122,19 @@ const updateIndicator = (index) => {
   })
 }
 
-const handleClick = (index, event) => {
-  activeIndex.value = index
-  
-  clickedIndex.value = index
+const handleClick = (key, event) => {
+  activeKey.value = key
+  const idx = findIndexByKey(key)
+  if (idx >= 0) clickedIndex.value = idx
+  emit('navigate', key)
+
+  createRipple(event, idx >= 0 ? idx : 0)
+
   setTimeout(() => {
     clickedIndex.value = -1
   }, 600)
 
-  createRipple(event, index)
-  
-  updateIndicator(index)
+  nextTick(() => updateIndicator(idx >= 0 ? idx : 0))
 }
 
 const handleHover = (index) => {

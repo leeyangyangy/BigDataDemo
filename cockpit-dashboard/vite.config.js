@@ -21,22 +21,15 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8080',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
         configure: (proxy, options) => {
           proxy.on('error', (err, req, res) => {
-            console.log('proxy error', err)
+            console.warn('[vite] http proxy error:', req.url, err.message)
           })
           proxy.on('proxyReq', (proxyReq, req, res) => {
-            console.log('Proxying:', req.method, req.url, '->', options.target + proxyReq.path)
+            console.log('Proxying:', req.method, req.url, '->', options.target + req.url)
           })
         }
       },
-
-      '/dashboard': {
-        target: 'http://localhost:8080',
-        changeOrigin: true
-      },
-
       '/actuator': {
         target: 'http://localhost:8080',
         changeOrigin: true

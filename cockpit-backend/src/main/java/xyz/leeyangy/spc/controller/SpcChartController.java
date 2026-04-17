@@ -1,0 +1,189 @@
+package xyz.leeyangy.spc.controller;
+
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.web.bind.annotation.*;
+import xyz.leeyangy.spc.common.R;
+import xyz.leeyangy.spc.entity.SpcData;
+import xyz.leeyangy.spc.entity.SpcStatResult;
+import xyz.leeyangy.spc.entity.ParamVersion;
+import xyz.leeyangy.spc.service.ParamVersionService;
+import xyz.leeyangy.spc.service.SpcDataService;
+import xyz.leeyangy.spc.service.SpcStatService;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.stream.Collectors;
+
+@RestController
+@RequestMapping("/api/spc/chart")
+@RequiredArgsConstructor
+public class SpcChartController {
+
+    private final SpcDataService spcDataService;
+    private final SpcStatService spcStatService;
+    private final ParamVersionService paramVersionService;
+
+    @GetMapping("/control")
+    public R<Map<String, Object>> getControlChart(
+            @RequestParam Long paramId,
+            @RequestParam Long productId,
+            @RequestParam(required = false) String batchId,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startTime,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime,
+            @RequestParam(defaultValue = "100") Integer limit) {
+
+        ParamVersion version = paramVersionService.getCurrentVersion(paramId, productId);
+        if (version == null) {
+            Map<String, Object> emptyResult = new LinkedHashMap<>();
+            emptyResult.put("paramId", paramId);
+            emptyResult.put("productId", productId);
+            emptyResult.put("versionNo", 0);
+            emptyResult.put("timeSeries", new ArrayList<>());
+            emptyResult.put("values", new ArrayList<>());
+            emptyResult.put("zones", new ArrayList<>());
+            emptyResult.put("oocFlags", new ArrayList<>());
+            emptyResult.put("limits", new LinkedHashMap<>());
+            emptyResult.put("totalPoints", 0);
+            emptyResult.put("message", "该参数尚未配置标准版本，请先在后台管理中设置上下限");
+            return R.ok(emptyResult);
+        }
+
+        List<SpcData> dataList = spcDataService.listRecentData(version.getId(), limit);
+
+        List<String> timeSeries = new ArrayList<>();
+        List<BigDecimal> values = new ArrayList<>();
+        List<Integer> zones = new ArrayList<>();
+        List<Integer> oocFlags = new ArrayList<>();
+
+        for (SpcData d : dataList) {
+            timeSeries.add(d.getCollectTime().toString());
+            values.add(d.getMeasuredValue());
+            zones.add(d.getZone() != null ? d.getZone() : 0);
+            oocFlags.add(d.getIsOoc() != null ? d.getIsOoc() : 0);
+        }
+
+        SpcStatResult stat = spcStatService.getLatestStat(version.getId(), batchId);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("paramVersionId", version.getId());
+        result.put("paramId", paramId);
+        result.put("productId", productId);
+        result.put("versionNo", version.getVersionNo());
+        result.put("timeSeries", timeSeries);
+        result.put("values", values);
+        result.put("zones", zones);
+        result.put("oocFlags", oocFlags);
+
+        Map<String, Object> limits = new LinkedHashMap<>();
+        limits.put("ucl", version.getUcl() != null ? version.getUcl() :
+                (stat != null ? stat.getCalcUcl() : null));
+        limits.put("lcl", version.getLcl() != null ? version.getLcl() :
+                (stat != null ? stat.getCalcLcl() : null));
+        limits.put("cl", version.getCl() != null ? version.getCl() :
+                (stat != null ? stat.getCalcCl() : null));
+        limits.put("usl", version.getUsl());
+        limits.put("lsl", version.getLsl());
+        limits.put("target", version.getTarget());
+        result.put("limits", limits);
+
+        if (stat != null) {
+            Map<String, Object> capability = new LinkedHashMap<>();
+            capability.put("cp", stat.getCp());
+            capability.put("cpk", stat.getCpk());
+            capability.put("pp", stat.getPp());
+            capability.put("ppk", stat.getPpk());
+            capability.put("mean", stat.getMeanValue());
+            capability.put("stdDev", stat.getStdDev());
+            capability.put("sampleCount", stat.getSampleCount());
+            result.put("capability", capability);
+        }
+
+        result.put("totalPoints", dataList.size());
+        return R.ok(result);
+    }
+
+    @GetMapping("/data")
+    public R<Map<String, Object>> getDataByEquipment(
+            @RequestParam Long paramId,
+            @RequestParam(required = false) Long equipmentId,
+            @RequestParam(required = false) Long productId,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startTime,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime,
+            @RequestParam(defaultValue = "100") Integer limit) {
+
+        Page<SpcData> pageResult = spcDataService.pageByCondition(
+                new Page<>(1, limit), null, null, productId, paramId, startTime, endTime);
+
+        List<SpcData> allData = pageResult.getRecords();
+        if (equipmentId != null) {
+            allData = allData.stream()
+                    .filter(d -> equipmentId.equals(d.getEquipmentId()))
+                    .collect(Collectors.toList());
+        }
+
+        List<String> timeSeries = new ArrayList<>();
+        List<BigDecimal> values = new ArrayList<>();
+        List<Integer> zones = new ArrayList<>();
+        List<Integer> oocFlags = new ArrayList<>();
+        for (SpcData d : allData) {
+            if (d.getCollectTime() != null && d.getMeasuredValue() != null) {
+                timeSeries.add(d.getCollectTime().toString());
+                values.add(d.getMeasuredValue());
+                zones.add(d.getZone() != null ? d.getZone() : 0);
+                oocFlags.add(d.getIsOoc() != null ? d.getIsOoc() : 0);
+            }
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("paramId", paramId);
+        result.put("equipmentId", equipmentId);
+        result.put("timeSeries", timeSeries);
+        result.put("values", values);
+        result.put("zones", zones);
+        result.put("oocFlags", oocFlags);
+        result.put("totalPoints", allData.size());
+
+        ParamVersion version = (productId != null) ? paramVersionService.getCurrentVersion(paramId, productId) : null;
+        if (version != null) {
+            Map<String, Object> limits = new LinkedHashMap<>();
+            limits.put("usl", version.getUsl());
+            limits.put("lsl", version.getLsl());
+            limits.put("target", version.getTarget());
+            limits.put("ucl", version.getUcl());
+            limits.put("lcl", version.getLcl());
+            limits.put("cl", version.getCl() != null ? version.getCl() : version.getTarget());
+            result.put("limits", limits);
+            result.put("paramVersionId", version.getId());
+            result.put("versionNo", version.getVersionNo());
+
+            SpcStatResult stat = spcStatService.getLatestStat(version.getId(), null);
+            if (stat != null) {
+                Map<String, Object> capability = new LinkedHashMap<>();
+                capability.put("cp", stat.getCp());
+                capability.put("cpk", stat.getCpk());
+                capability.put("pp", stat.getPp());
+                capability.put("ppk", stat.getPpk());
+                capability.put("mean", stat.getMeanValue());
+                capability.put("stdDev", stat.getStdDev());
+                capability.put("sampleCount", stat.getSampleCount());
+                result.put("capability", capability);
+            }
+        } else {
+            Map<String, Object> emptyLimits = new LinkedHashMap<>();
+            emptyLimits.put("usl", null);
+            emptyLimits.put("lsl", null);
+            emptyLimits.put("target", null);
+            emptyLimits.put("ucl", null);
+            emptyLimits.put("lcl", null);
+            emptyLimits.put("cl", null);
+            result.put("limits", emptyLimits);
+            result.put("paramVersionId", null);
+            result.put("versionNo", 0);
+        }
+
+        return R.ok(result);
+    }
+}

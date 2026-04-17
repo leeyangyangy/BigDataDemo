@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="xyz.leeyangy.spc.mapper.ParamVersionMapper">
+
+    <select id="selectCurrentVersion" resultType="xyz.leeyangy.spc.entity.ParamVersion">
+        SELECT * FROM spc_param_version
+        WHERE param_id = #{paramId}
+          AND product_id = #{productId}
+          AND is_current = 1
+          AND deleted = 0
+        LIMIT 1
+    </select>
+
+</mapper>
