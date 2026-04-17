@@ -20,12 +20,15 @@ public class ParamVersionController {
     private final StandardChangeLogService changeLogService;
 
     @GetMapping("/current")
-    public R<ParamVersion> getCurrentVersion(@RequestParam Long paramId, @RequestParam Long productId) {
-        return R.ok(paramVersionService.getCurrentVersion(paramId, productId));
+    public R<ParamVersion> getCurrentVersion(@RequestParam Long paramId, @RequestParam(required = false) Long productId) {
+        if (productId != null) {
+            return R.ok(paramVersionService.getCurrentVersion(paramId, productId));
+        }
+        return R.ok(paramVersionService.getAnyCurrentVersion(paramId));
     }
 
     @GetMapping("/history")
-    public R<List<ParamVersion>> getVersionHistory(@RequestParam Long paramId, @RequestParam Long productId) {
+    public R<List<ParamVersion>> getVersionHistory(@RequestParam Long paramId, @RequestParam(required = false) Long productId) {
         return R.ok(paramVersionService.getVersionHistory(paramId, productId));
     }
 
@@ -40,8 +43,9 @@ public class ParamVersionController {
 
     @PostMapping("/create")
     public R<ParamVersion> createNewVersion(@RequestBody ParamVersion newVersion) {
-        ParamVersion oldVersion = paramVersionService.getCurrentVersion(
-                newVersion.getParamId(), newVersion.getProductId());
+        ParamVersion oldVersion = (newVersion.getProductId() != null)
+                ? paramVersionService.getCurrentVersion(newVersion.getParamId(), newVersion.getProductId())
+                : paramVersionService.getAnyCurrentVersion(newVersion.getParamId());
 
         ParamVersion created = paramVersionService.createNewVersion(newVersion);
 
@@ -51,5 +55,25 @@ public class ParamVersionController {
                 true);
 
         return R.ok(created);
+    }
+
+    @PutMapping("/{id}/enable")
+    public R<Boolean> enableVersion(@PathVariable Long id) {
+        return R.ok(paramVersionService.enableVersion(id));
+    }
+
+    @PutMapping("/{id}/disable")
+    public R<Boolean> disableVersion(@PathVariable Long id) {
+        return R.ok(paramVersionService.disableVersion(id));
+    }
+
+    @PutMapping("/{id}")
+    public R<Boolean> updateVersion(@PathVariable Long id, @RequestBody ParamVersion updated) {
+        return R.ok(paramVersionService.updateVersion(id, updated));
+    }
+
+    @DeleteMapping("/{id}")
+    public R<Boolean> deleteVersion(@PathVariable Long id) {
+        return R.ok(paramVersionService.deleteVersion(id));
     }
 }

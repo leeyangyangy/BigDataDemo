@@ -31,6 +31,16 @@ public class SpcDataService extends ServiceImpl<SpcDataMapper, SpcData> {
 
     @Transactional(rollbackFor = Exception.class)
     public SpcData uploadData(SpcData data) {
+        if (data.getEquipmentId() == null) {
+            throw new RuntimeException("设备ID不能为空，请选择设备");
+        }
+        if (data.getMeasuredValue() == null) {
+            throw new RuntimeException("测量值不能为空");
+        }
+        if (data.getParamId() == null) {
+            throw new RuntimeException("工艺参数ID不能为空");
+        }
+
         if (data.getMsgId() != null) {
             Boolean isNew = redisTemplate.opsForValue().setIfAbsent(
                     IDEMPOTENT_PREFIX + data.getMsgId(), "1", Duration.ofHours(24));
@@ -55,9 +65,11 @@ public class SpcDataService extends ServiceImpl<SpcDataMapper, SpcData> {
                 log.info("[DataUpload] 自动创建默认参数版本: paramId={} productId={}", data.getParamId(), data.getProductId());
                 ParamVersion defaultVersion = new ParamVersion();
                 defaultVersion.setParamId(data.getParamId());
-                defaultVersion.setProductId(data.getProductId());
+                defaultVersion.setProductId(data.getProductId() != null ? data.getProductId() : 0L);
                 defaultVersion.setVersionNo(1);
                 defaultVersion.setIsCurrent(1);
+                defaultVersion.setDeleted(0);
+                defaultVersion.setStatus(1);
                 defaultVersion.setEffectiveFrom(LocalDateTime.now());
                 defaultVersion.setChartType("I_MR");
                 defaultVersion.setChangeReason("系统自动创建(首次数据提交)");
@@ -170,11 +182,16 @@ public class SpcDataService extends ServiceImpl<SpcDataMapper, SpcData> {
                 .orderByDesc(SpcData::getCollectTime));
     }
 
-    public List<SpcData> listRecentData(Long paramVersionId, int limit) {
-        return list(new LambdaQueryWrapper<SpcData>()
+    public List<SpcData> listRecentData(Long paramVersionId, int limit, LocalDateTime startTime, LocalDateTime endTime) {
+        LambdaQueryWrapper<SpcData> wrapper = new LambdaQueryWrapper<SpcData>()
                 .eq(SpcData::getParamVersionId, paramVersionId)
                 .eq(SpcData::getDeleted, 0)
-                .orderByDesc(SpcData::getCollectTime)
-                .last("LIMIT " + limit));
+                .ge(startTime != null, SpcData::getCollectTime, startTime)
+                .le(endTime != null, SpcData::getCollectTime, endTime)
+                .orderByDesc(SpcData::getCollectTime);
+        if (startTime == null && endTime == null) {
+            wrapper.last("LIMIT " + limit);
+        }
+        return list(wrapper);
     }
 }

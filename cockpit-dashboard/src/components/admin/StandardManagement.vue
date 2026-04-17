@@ -2,9 +2,13 @@
   <div class="mgmt-section">
     <div class="toolbar">
       <div class="search-bar">
+        <select v-model="filterProductId" class="filter-select-sm" @change="onProductChange">
+          <option value="">全部产品</option>
+          <option v-for="p in productList" :key="p.id" :value="p.id">{{ p.productName }} ({{ p.productCode }})</option>
+        </select>
         <select v-model="filterProcessId" class="filter-select-sm" @change="loadData">
           <option value="">全部工序</option>
-          <option v-for="p in processList" :key="p.id" :value="p.id">{{ p.processName }} ({{ p.processCode }})</option>
+          <option v-for="p in filteredProcessList" :key="p.id" :value="p.id">{{ p.processName }} ({{ p.processCode }})</option>
         </select>
         <input v-model="keyword" type="text" class="search-input" placeholder="搜索参数编码/名称..." @keyup.enter="loadData" />
         <button class="btn-search" @click="loadData">查询</button>
@@ -72,7 +76,7 @@
     <!-- 批量添加弹窗 -->
     <div class="modal-overlay" v-if="showBatchForm" @click.self="closeBatchForm">
       <div class="modal-card modal-lg">
-        <h3 class="modal-title">批量添加工艺参数参数</h3>
+        <h3 class="modal-title">批量添加工艺参数</h3>
 
         <div class="batch-form-section">
           <div class="form-field full">
@@ -241,10 +245,11 @@
 
         <h4>历史版本</h4>
         <div class="version-list" v-if="versionHistoryList.length > 0">
-          <div v-for="v in versionHistoryList" :key="v.id" class="version-item" :class="{ current: v.isCurrent === 1 }">
+          <div v-for="v in versionHistoryList" :key="v.id" class="version-item" :class="{ current: v.isCurrent === 1, disabled: v.status === 0 }">
             <div class="version-item-header">
               <span class="v-no">V{{ v.versionNo }}</span>
               <span class="v-status" :class="v.isCurrent === 1 ? 'current-v' : ''">{{ v.isCurrent === 1 ? '● 当前生效' : '已归档' }}</span>
+              <span class="v-status-tag" :class="v.status === 1 ? 'status-on' : 'status-off'">{{ v.status === 1 ? '启用' : '停用' }}</span>
               <span class="v-time">{{ v.effectiveFrom }}</span>
             </div>
             <div class="version-item-body">
@@ -252,11 +257,42 @@
               <span>| UCL={{ v.ucl ?? '-' }} LCL={{ v.lcl ?? '-' }}</span>
               <span v-if="v.changeReason" class="v-reason">原因: {{ v.changeReason }}</span>
             </div>
+            <div class="version-item-actions">
+              <button class="btn-action btn-edit" @click="handleEditVersion(v)">编辑</button>
+              <button v-if="v.status === 0"
+                      class="btn-action btn-enable" @click="handleEnableVersion(v)">启用</button>
+              <button v-if="v.status === 1"
+                      class="btn-action btn-disable" @click="handleDisableVersion(v)">停用</button>
+              <button v-if="v.isCurrent !== 1"
+                      class="btn-action btn-del" @click="handleDeleteVersion(v)">删除</button>
+            </div>
+
+            <div v-if="editingVersionId === v.id" class="version-edit-form">
+              <div class="form-grid form-grid-4">
+                <div class="form-field"><label>USL</label><input v-model.number="editVersionForm.usl" type="number" step="0.000001" class="form-input form-input-sm" /></div>
+                <div class="form-field"><label>LSL</label><input v-model.number="editVersionForm.lsl" type="number" step="0.000001" class="form-input form-input-sm" /></div>
+                <div class="form-field"><label>Target</label><input v-model.number="editVersionForm.target" type="number" step="0.000001" class="form-input form-input-sm" /></div>
+                <div class="form-field"><label>UCL</label><input v-model.number="editVersionForm.ucl" type="number" step="0.000001" class="form-input form-input-sm" /></div>
+                <div class="form-field"><label>LCL</label><input v-model.number="editVersionForm.lcl" type="number" step="0.000001" class="form-input form-input-sm" /></div>
+                <div class="form-field"><label>CL</label><input v-model.number="editVersionForm.cl" type="number" step="0.000001" class="form-input form-input-sm" /></div>
+                <div class="form-field"><label>图表类型</label>
+                  <select v-model="editVersionForm.chartType" class="form-input form-input-sm">
+                    <option value="XbarR">Xbar-R</option>
+                    <option value="XbarS">Xbar-S</option>
+                    <option value="I-MR">I-MR</option>
+                    <option value="P">P图</option>
+                  </select>
+                </div>
+                <div class="form-field"><label>子组大小</label><input v-model.number="editVersionForm.subgroupSize" type="number" class="form-input form-input-sm" min="1" /></div>
+              </div>
+              <div class="version-edit-actions">
+                <button class="btn-submit btn-sm" @click="submitEditVersion" :disabled="versionSubmitting">{{ versionSubmitting ? '保存中...' : '保存修改' }}</button>
+                <button class="btn-cancel btn-sm" @click="cancelEditVersion">取消</button>
+              </div>
+            </div>
           </div>
         </div>
-        <div class="empty-state" v-else>
-          <p>暂无版本记录</p>
-        </div>
+        <div class="empty-state" v-else><p>暂无版本记录</p></div>
 
         <div class="modal-actions">
           <button class="btn-cancel" @click="closeVersionForm">关闭</button>
@@ -277,10 +313,17 @@ const pageSize = ref(15)
 const loading = ref(false)
 
 const keyword = ref('')
+const filterProductId = ref('')
 const filterProcessId = ref('')
 
+const productList = ref([])
 const processList = ref([])
 const versionMap = ref({})
+
+const filteredProcessList = computed(() => {
+  if (!filterProductId.value) return processList.value
+  return processList.value.filter(p => p.productId === Number(filterProductId.value))
+})
 
 const showBatchForm = ref(false)
 const showEditForm = ref(false)
@@ -315,6 +358,13 @@ const newVersion = ref({
   changeReason: ''
 })
 
+const editingVersionId = ref(null)
+const editVersionForm = ref({
+  usl: null, lsl: null, target: null,
+  ucl: null, lcl: null, cl: null,
+  chartType: 'XbarR', subgroupSize: 5
+})
+
 const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
 
 const validRowCount = computed(() =>
@@ -344,6 +394,20 @@ async function loadProcesses() {
   } catch (e) { console.error('加载工序失败:', e) }
 }
 
+async function loadProducts() {
+  try {
+    const res = await adminApi.product.getPage({ current: 1, size: 100 })
+    if (res.code === 200 && res.data) {
+      productList.value = res.data.records || []
+    }
+  } catch (e) { console.error('加载产品失败:', e) }
+}
+
+function onProductChange() {
+  filterProcessId.value = ''
+  loadData()
+}
+
 async function loadVersionsForList() {
   if (!list.value.length) return
   try {
@@ -352,7 +416,7 @@ async function loadVersionsForList() {
       try {
         const res = await spcApi.getParamVersionCurrent({
           paramId: item.id,
-          productId: filterProcessId.value || 0
+          productId: filterProductId.value || undefined
         })
         if (res.code === 200 && res.data) {
           versionMap.value[item.id] = res.data
@@ -518,7 +582,7 @@ async function openVersionManage(item) {
   try {
     const res = await spcApi.getParamVersionHistory({
       paramId: item.id,
-      productId: filterProcessId.value || 0
+      productId: filterProductId.value || undefined
     })
     if (res.code === 200 && Array.isArray(res.data)) {
       versionHistoryList.value = res.data
@@ -538,7 +602,7 @@ async function submitNewVersion() {
     const payload = {
       ...newVersion.value,
       paramId: versionItem.value.id,
-      productId: filterProcessId.value || 0,
+      productId: filterProductId.value || undefined,
       changeType: 'LIMIT_ADJUST',
       isCurrent: 1
     }
@@ -571,8 +635,70 @@ async function handleDelete(item) {
   }
 }
 
+async function handleEnableVersion(v) {
+  try {
+    const res = await spcApi.enableParamVersion(v.id)
+    if (res.code === 200) {
+      await openVersionManage(versionItem.value)
+    }
+  } catch (e) { console.error('启用版本失败:', e) }
+}
+
+async function handleDisableVersion(v) {
+  if (!confirm(`确定停用版本 V${v.versionNo} 吗？`)) return
+  try {
+    const res = await spcApi.disableParamVersion(v.id)
+    if (res.code === 200) {
+      await openVersionManage(versionItem.value)
+    }
+  } catch (e) { alert(e.message || '停用失败: ' + (e.response?.data?.msg || '')) }
+}
+
+async function handleDeleteVersion(v) {
+  if (!confirm(`确定删除版本 V${v.versionNo} 吗？此操作不可恢复！`)) return
+  try {
+    const res = await spcApi.deleteParamVersion(v.id)
+    if (res.code === 200) {
+      await openVersionManage(versionItem.value)
+    }
+  } catch (e) { alert(e.message || '删除失败: ' + (e.response?.data?.msg || '')) }
+}
+
+function handleEditVersion(v) {
+  editingVersionId.value = v.id
+  editVersionForm.value = {
+    usl: v.usl, lsl: v.lsl, target: v.target,
+    ucl: v.ucl, lcl: v.lcl, cl: v.cl,
+    chartType: v.chartType || 'XbarR', subgroupSize: v.subgroupSize
+  }
+}
+
+function cancelEditVersion() {
+  editingVersionId.value = null
+}
+
+async function submitEditVersion() {
+  if (!editingVersionId.value) return
+  versionSubmitting.value = true
+  try {
+    const res = await spcApi.updateParamVersion(editingVersionId.value, editVersionForm.value)
+    if (res.code === 200) {
+      editingVersionId.value = null
+      await openVersionManage(versionItem.value)
+    }
+  } catch (e) { alert(e.message || '保存失败: ' + (e.response?.data?.msg || '')) } finally {
+    versionSubmitting.value = false
+  }
+}
+
+function hasEnabledSibling(v) {
+  return versionHistoryList.value.some(sib =>
+    sib.id !== v.id && sib.status === 1
+  )
+}
+
 onMounted(async () => {
-  await loadProcesses()
+  await Promise.all([loadProducts(), loadProcesses()])
   loadData()
 })
 </script>
@@ -607,25 +733,14 @@ onMounted(async () => {
 }
 
 .search-input {
-  padding: 8px 14px;
-  border: 1px solid var(--border-input);
-  border-radius: 8px;
-  background: var(--bg-input);
-  color: var(--text-primary);
-  font-size: 13px;
-  width: 220px;
-  outline: none;
+  padding: 8px 14px; border: 1px solid var(--border-input); border-radius: 8px;
+  background: var(--bg-input); color: var(--text-primary); font-size: 13px; width: 220px; outline: none;
 }
 .search-input:focus { border-color: var(--accent-primary); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.12); }
 
 .filter-select-sm {
-  padding: 8px 10px;
-  border: 1px solid var(--border-input);
-  border-radius: 8px;
-  background: var(--bg-input);
-  color: var(--text-primary);
-  font-size: 13px;
-  cursor: pointer;
+  padding: 8px 10px; border: 1px solid var(--border-input); border-radius: 8px;
+  background: var(--bg-input); color: var(--text-primary); font-size: 13px; cursor: pointer;
 }
 
 .btn-search {
@@ -818,6 +933,7 @@ onMounted(async () => {
   background: var(--bg-tertiary);
 }
 .version-item.current { border-color: #52c41a; background: rgba(82,196,26,0.04); }
+.version-item.disabled { opacity: 0.65; }
 
 .version-item-header { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
 .v-no {
@@ -826,6 +942,11 @@ onMounted(async () => {
 }
 .v-status { font-size: 11px; }
 .v-status.current-v { color: #52c41a; font-weight: 600; }
+.v-status-tag {
+  font-size: 10px; padding: 1px 6px; border-radius: 3px; font-weight: 600;
+}
+.v-status-tag.status-on { background: rgba(82,196,26,0.12); color: #52c41a; }
+.v-status-tag.status-off { background: rgba(255,77,79,0.1); color: #ff4d4f; }
 .v-time { font-size: 11px; color: var(--text-tertiary); margin-left: auto; }
 
 .version-item-body {
@@ -833,6 +954,47 @@ onMounted(async () => {
   display: flex; gap: 12px; flex-wrap: wrap;
 }
 .v-reason { color: #faad14 !important; font-family: inherit !important; }
+
+.version-item-actions {
+  display: flex; gap: 8px; margin-top: 8px;
+  padding-top: 8px; border-top: 1px dashed var(--border-color);
+}
+.version-item-actions .btn-action {
+  padding: 3px 12px; font-size: 11px; border-radius: 5px;
+}
+.version-item-actions .btn-enable {
+  background: rgba(82,196,26,0.08); color: #52c41a; border: 1px solid rgba(82,196,26,0.3);
+}
+.version-item-actions .btn-enable:hover { background: rgba(82,196,26,0.16); }
+.version-item-actions .btn-disable {
+  background: rgba(255,77,79,0.06); color: #ff4d4f; border: 1px solid rgba(255,77,79,0.25);
+}
+.version-item-actions .btn-disable:hover { background: rgba(255,77,79,0.12); }
+
+.version-edit-form {
+  margin-top: 10px;
+  padding: 14px;
+  background: rgba(24,144,255,0.03);
+  border: 1px solid rgba(24,144,255,0.15);
+  border-radius: 8px;
+}
+.version-edit-form .form-grid-4 {
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.version-edit-form .form-field label {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.form-input-sm {
+  padding: 5px 8px;
+  font-size: 12px;
+}
+.version-edit-actions {
+  display: flex;
+  gap: 8px;
+}
 
 @media (max-width: 768px) {
   .toolbar { flex-direction: column; align-items: stretch; }

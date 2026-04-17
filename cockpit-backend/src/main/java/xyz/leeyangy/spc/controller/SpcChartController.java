@@ -51,7 +51,7 @@ public class SpcChartController {
             return R.ok(emptyResult);
         }
 
-        List<SpcData> dataList = spcDataService.listRecentData(version.getId(), limit);
+        List<SpcData> dataList = spcDataService.listRecentData(version.getId(), limit, startTime, endTime);
 
         List<String> timeSeries = new ArrayList<>();
         List<BigDecimal> values = new ArrayList<>();

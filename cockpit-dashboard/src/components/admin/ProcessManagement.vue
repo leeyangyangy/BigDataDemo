@@ -20,7 +20,8 @@
             <th>工序编码</th>
             <th>工序名称</th>
             <th>类型</th>
-            <th>所属车间ID</th>
+            <th>所属车间</th>
+            <th>绑定设备</th>
             <th>描述</th>
             <th>排序</th>
             <th>状态</th>
@@ -32,7 +33,8 @@
             <td><strong>{{ item.processCode }}</strong></td>
             <td>{{ item.processName }}</td>
             <td><span class="type-tag">{{ item.processType || '-' }}</span></td>
-            <td>{{ item.workshopId || '-' }}</td>
+            <td><span class="process-tag">{{ getWorkshopName(item.workshopId) }}</span></td>
+            <td><span class="equip-count" @click="openEquipModal(item)">{{ getEquipCount(item.id) }} 台</span></td>
             <td class="text-muted text-truncate" style="max-width:150px">{{ item.description || '-' }}</td>
             <td>{{ item.sortOrder ?? 0 }}</td>
             <td>
@@ -40,6 +42,7 @@
             </td>
             <td class="actions">
               <button class="btn-action btn-edit" @click="openEdit(item)">编辑</button>
+              <button class="btn-action btn-equip" @click="openEquipModal(item)">设备</button>
               <button class="btn-action btn-del" @click="handleDelete(item)">删除</button>
             </td>
           </tr>
@@ -76,8 +79,11 @@
             <input v-model="form.processType" type="text" class="form-input" placeholder="如: 封测/镀膜/光刻" />
           </div>
           <div class="form-field">
-            <label>所属车间ID</label>
-            <input v-model.number="form.workshopId" type="number" class="form-input" placeholder="车间ID" />
+            <label>所属车间</label>
+            <select v-model.number="form.workshopId" class="form-input">
+              <option :value="null">未绑定</option>
+              <option v-for="w in workshopList" :key="w.id" :value="w.id">{{ w.workshopName }} ({{ w.workshopCode }})</option>
+            </select>
           </div>
           <div class="form-field full">
             <label>描述</label>
@@ -104,12 +110,99 @@
         </div>
       </div>
     </div>
+
+    <!-- 工序设备管理弹窗 -->
+    <div class="modal-overlay" v-if="showEquipModal" @click.self="showEquipModal = false">
+      <div class="modal-card modal-lg">
+        <h3 class="modal-title">工序设备管理 - {{ currentProcess?.processName }}</h3>
+        <div class="toolbar-sm">
+          <button class="btn-create btn-sm" @click="openEquipForm(null)">+ 添加设备</button>
+        </div>
+        <div class="table-wrap" style="margin-top:12px">
+          <table class="data-table" v-if="processEquipList.length > 0">
+            <thead>
+              <tr><th>设备编码</th><th>设备名称</th><th>型号</th><th>类型</th><th>位置</th><th>状态</th><th>操作</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="eq in processEquipList" :key="eq.id">
+                <td><strong>{{ eq.equipCode }}</strong></td>
+                <td>{{ eq.equipName }}</td>
+                <td>{{ eq.equipModel || '-' }}</td>
+                <td>{{ eq.equipType || '-' }}</td>
+                <td>{{ eq.location || '-' }}</td>
+                <td><span class="status-tag" :class="eq.status === '正常' ? 'on' : 'off'">{{ eq.status || '-' }}</span></td>
+                <td class="actions">
+                  <button class="btn-action btn-edit" @click="openEquipForm(eq)">编辑</button>
+                  <button class="btn-action btn-del" @click="handleUnbindEquip(eq)">解绑</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="empty-state" v-else><p>该工序暂无绑定设备，请点击上方按钮添加</p></div>
+        </div>
+
+        <!-- 设备添加/编辑子弹窗 -->
+        <div class="modal-overlay-inner" v-if="showEquipForm" @click.self="showEquipForm = false">
+          <div class="modal-card">
+            <h3 class="modal-title">{{ equipEditId ? '编辑设备' : '添加设备到工序' }}</h3>
+            <div class="form-grid">
+              <div class="form-field full">
+                <label>设备编码 <span class="req">*</span></label>
+                <input v-model="equipForm.equipCode" type="text" class="form-input" :disabled="!!equipEditId" placeholder="如: EQ001" />
+              </div>
+              <div class="form-field full">
+                <label>设备名称 <span class="req">*</span></label>
+                <input v-model="equipForm.equipName" type="text" class="form-input" placeholder="请输入设备名称" />
+              </div>
+              <div class="form-field">
+                <label>设备型号</label>
+                <input v-model="equipForm.equipModel" type="text" class="form-input" placeholder="型号" />
+              </div>
+              <div class="form-field">
+                <label>设备类型</label>
+                <select v-model="equipForm.equipType" class="form-input">
+                  <option value="">请选择</option>
+                  <option value="检测设备">检测设备</option>
+                  <option value="生产设备">生产设备</option>
+                  <option value="辅助设备">辅助设备</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label>位置</label>
+                <input v-model="equipForm.location" type="text" class="form-input" placeholder="位置信息" />
+              </div>
+              <div class="form-field">
+                <label>状态</label>
+                <select v-model="equipForm.status" class="form-input">
+                  <option value="正常">正常</option>
+                  <option value="维修中">维修中</option>
+                  <option value="停用">停用</option>
+                </select>
+              </div>
+              <div class="form-field full">
+                <label>备注</label>
+                <input v-model="equipForm.remark" type="text" class="form-input" placeholder="备注信息" />
+              </div>
+            </div>
+            <div class="form-msg" v-if="equipMsg" :class="{ error: equipMsgType === 'error', success: equipMsgType === 'success' }">{{ equipMsg }}</div>
+            <div class="modal-actions">
+              <button class="btn-cancel" @click="showEquipForm = false; equipMsg = ''">取消</button>
+              <button class="btn-submit" @click="submitEquip" :disabled="equipSubmitting">{{ equipSubmitting ? '提交中...' : (equipEditId ? '保存' : '添加') }}</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button class="btn-cancel" @click="showEquipModal = false">关闭</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { adminApi } from '../../utils/api.js'
+import { adminApi, spcApi } from '../../utils/api.js'
 
 const list = ref([])
 const total = ref(0)
@@ -132,6 +225,25 @@ const form = ref({
   workshopId: null, description: '', status: 1, sortOrder: 0
 })
 
+const workshopList = ref([])
+
+const showEquipModal = ref(false)
+const currentProcess = ref(null)
+const processEquipList = ref([])
+const showEquipForm = ref(false)
+const equipEditId = ref(null)
+const equipSubmitting = ref(false)
+const equipMsg = ref('')
+const equipMsgType = ref('')
+const equipForm = ref({ equipCode: '', equipName: '', equipModel: '', equipType: '检测设备', location: '', status: '正常', remark: '' })
+const processEquipCountMap = ref({})
+
+function getWorkshopName(workshopId) {
+  if (!workshopId) return '未绑定'
+  const w = workshopList.value.find(x => x.id === workshopId)
+  return w ? w.workshopName : '-'
+}
+
 const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
 
 async function loadData() {
@@ -152,6 +264,7 @@ async function loadData() {
   } finally {
     loading.value = false
   }
+  await loadEquipCounts()
 }
 
 function openCreate() {
@@ -228,7 +341,98 @@ async function handleDelete(item) {
 
 onMounted(() => {
   loadData()
+  loadWorkshopList()
 })
+
+async function loadWorkshopList() {
+  try {
+    const res = await adminApi.workshop.listAll()
+    if (res.code === 200) workshopList.value = res.data || []
+  } catch (e) { console.error('加载车间列表失败', e) }
+}
+
+function getEquipCount(processId) {
+  return processEquipCountMap.value[processId] ?? 0
+}
+
+async function openEquipModal(item) {
+  currentProcess.value = item
+  showEquipModal.value = true
+  showEquipForm.value = false
+  await loadProcessEquipData(item.id)
+}
+
+async function loadProcessEquipData(processId) {
+  try {
+    const res = await spcApi.getProcessEquipment(processId)
+    processEquipList.value = (res.code === 200 && Array.isArray(res.data)) ? res.data : []
+  } catch (e) { console.error('加载工序设备失败:', e); processEquipList.value = [] }
+}
+
+function openEquipForm(eq) {
+  equipEditId.value = eq ? eq.id : null
+  equipMsg.value = ''
+  if (eq) {
+    equipForm.value = { equipCode: eq.equipCode, equipName: eq.equipName, equipModel: eq.equipModel || '', equipType: eq.equipType || '检测设备', location: eq.location || '', status: eq.status || '正常', remark: eq.remark || '' }
+  } else {
+    equipForm.value = { equipCode: '', equipName: '', equipModel: '', equipType: '检测设备', location: '', status: '正常', remark: '' }
+  }
+  showEquipForm.value = true
+}
+
+async function submitEquip() {
+  if (!equipForm.value.equipCode?.trim()) { equipMsg.value = '设备编码为必填项'; equipMsgType.value = 'error'; return }
+  if (!equipForm.value.equipName?.trim()) { equipMsg.value = '设备名称为必填项'; equipMsgType.value = 'error'; return }
+
+  equipSubmitting.value = true
+  equipMsg.value = ''
+
+  try {
+    let res
+    const payload = { ...equipForm.value, processId: currentProcess.value.id }
+    if (equipEditId.value) {
+      res = await adminApi.equipment.update(equipEditId.value, payload)
+    } else {
+      res = await adminApi.equipment.create(payload)
+    }
+
+    if (res.code === 200) {
+      equipMsg.value = equipEditId.value ? '更新成功' : '添加成功'
+      equipMsgType.value = 'success'
+      setTimeout(() => { showEquipForm.value = false; loadProcessEquipData(currentProcess.value.id) }, 800)
+    } else {
+      equipMsg.value = res.msg || '操作失败'
+      equipMsgType.value = 'error'
+    }
+  } catch (e) {
+    equipMsg.value = e.message || '网络错误'
+    equipMsgType.value = 'error'
+  } finally {
+    equipSubmitting.value = false
+  }
+}
+
+async function handleUnbindEquip(eq) {
+  if (!confirm(`确定解绑设备 "${eq.equipName}" (${eq.equipCode}) 吗？`)) return
+
+  try {
+    const res = await adminApi.equipment.delete(eq.id)
+    if (res.code === 200) {
+      await loadProcessEquipData(currentProcess.value.id)
+    }
+  } catch (e) { console.error('解绑失败:', e) }
+}
+
+async function loadEquipCounts() {
+  const map = {}
+  for (const p of list.value) {
+    try {
+      const res = await spcApi.getProcessEquipment(p.id)
+      map[p.id] = (res.code === 200 && Array.isArray(res.data)) ? res.data.length : 0
+    } catch (e) { map[p.id] = 0 }
+  }
+  processEquipCountMap.value = map
+}
 </script>
 
 <style scoped>
@@ -344,6 +548,28 @@ onMounted(() => {
   color: #722ed1;
 }
 
+.process-tag {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  background: rgba(24,144,255,0.08);
+  color: #1890ff;
+}
+
+.equip-count {
+  display: inline-block;
+  padding: 3px 12px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(250,173,20,0.1);
+  color: #ad6800;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.equip-count:hover { background: rgba(250,173,20,0.22); transform: scale(1.05); }
+
 .status-tag {
   padding: 3px 12px;
   border-radius: 12px;
@@ -368,6 +594,9 @@ onMounted(() => {
 .btn-edit:hover { background: #bae7ff; }
 .btn-del { background: #fff1f0; color: #cf1322; }
 .btn-del:hover { background: #ffa39e; }
+
+.btn-equip { background: #fff7e6; color: #d46b08; }
+.btn-equip:hover { background: #ffd591; }
 
 .empty-state {
   text-align: center;
@@ -420,6 +649,28 @@ onMounted(() => {
   max-width: 90vw;
   box-shadow: 0 20px 60px rgba(0,0,0,0.3);
   border: 1px solid var(--border-color);
+}
+
+.modal-card.modal-lg {
+  width: 760px;
+}
+
+.toolbar-sm {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+.btn-sm { padding: 6px 14px; font-size: 12px; }
+
+.modal-overlay-inner {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.35);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1300;
 }
 
 .modal-title {

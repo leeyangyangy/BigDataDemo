@@ -46,7 +46,9 @@ public class SpcDataController {
     @GetMapping("/recent")
     public R<List<SpcData>> recentData(
             @RequestParam Long paramVersionId,
-            @RequestParam(defaultValue = "30") Integer limit) {
-        return R.ok(spcDataService.listRecentData(paramVersionId, limit));
+            @RequestParam(defaultValue = "30") Integer limit,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startTime,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime) {
+        return R.ok(spcDataService.listRecentData(paramVersionId, limit, startTime, endTime));
     }
 }

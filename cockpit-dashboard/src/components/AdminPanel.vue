@@ -1,9 +1,9 @@
 <template>
   <div class="admin-panel">
-    <div class="admin-header">
-<!--      <h2 class="admin-title">后台管理</h2>-->
-      <p class="admin-subtitle">系统配置与数据管理</p>
-    </div>
+<!--    <div class="admin-header">-->
+<!--&lt;!&ndash;      <h2 class="admin-title">后台管理</h2>&ndash;&gt;-->
+<!--      <p class="admin-subtitle">系统配置与数据管理</p>-->
+<!--    </div>-->
 
 <!--    <div class="tab-bar">-->
 <!--      <button-->

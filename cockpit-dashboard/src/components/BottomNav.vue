@@ -64,6 +64,7 @@ const adminSubItems = [
   { key: 'admin-process', icon: '⚙️', label: '工序' },
   { key: 'admin-standard', icon: '📏', label: '工艺' },
   { key: 'admin-equipment', icon: '🔧', label: '设备' },
+  { key: 'admin-workshop', icon: '🏭', label: '车间' },
   { key: 'admin-user', icon: '👥', label: '用户' }
 ]
 
@@ -82,22 +83,15 @@ function findIndexByKey(key) {
   return navItems.value.findIndex(item => item.key === key)
 }
 
-watch(() => props.activeIndex, (val) => {
-  const keyMap = { 1: 'home', 2: 'data', 3: 'chat', 4: 'map', 5: 'admin-product', 6: 'admin-process', 7: 'admin-standard', 8: 'admin-equipment', 9: 'admin-user' }
-  const key = keyMap[val] || 'home'
-  activeKey.value = key
-  nextTick(() => {
-    const idx = findIndexByKey(key)
-    if (idx >= 0) updateIndicator(idx)
-  })
-})
-
 watch(() => props.activeKey, (key) => {
   if (!key) return
   activeKey.value = key
   nextTick(() => {
     const idx = findIndexByKey(key)
-    if (idx >= 0) updateIndicator(idx)
+    if (idx >= 0) {
+      activeIndex.value = idx
+      updateIndicator(idx)
+    }
   })
 }, { immediate: true })
 
@@ -173,10 +167,14 @@ const createRipple = (event, index) => {
 
 onMounted(() => {
   setTimeout(() => {
-    updateIndicator(activeIndex.value)
+    const idx = findIndexByKey(activeKey.value)
+    if (idx >= 0) updateIndicator(idx)
   }, 150)
-  
-  window.addEventListener('resize', () => updateIndicator(activeIndex.value))
+
+  window.addEventListener('resize', () => {
+    const idx = findIndexByKey(activeKey.value)
+    if (idx >= 0) updateIndicator(idx)
+  })
 })
 </script>
 

@@ -4,8 +4,12 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import xyz.leeyangy.spc.common.R;
+import xyz.leeyangy.spc.entity.Equipment;
 import xyz.leeyangy.spc.entity.Process;
+import xyz.leeyangy.spc.service.EquipmentService;
 import xyz.leeyangy.spc.service.ProcessService;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/spc/process")
@@ -13,12 +17,18 @@ import xyz.leeyangy.spc.service.ProcessService;
 public class ProcessController {
 
     private final ProcessService processService;
+    private final EquipmentService equipmentService;
 
     @GetMapping("/page")
     public R<Page<Process>> page(
             @RequestParam(defaultValue = "1") Integer current,
             @RequestParam(defaultValue = "20") Integer size) {
         return R.ok(processService.page(new Page<>(current, size)));
+    }
+
+    @GetMapping("/{id}/equipment")
+    public R<List<Equipment>> listEquipment(@PathVariable Long id) {
+        return R.ok(equipmentService.listByProcessId(id));
     }
 
     @PostMapping

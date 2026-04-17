@@ -1,7 +1,7 @@
 <template>
   <div class="app-container">
     <div class="header-bar">
-      <h1 class="header">SPC过程控制管理系统</h1>
+      <h1 class="header">飓芯科技工艺保障驾驶舱</h1>
       <div class="header-right">
         <ThemeSwitcher />
         <div class="user-area" v-if="loggedIn">
@@ -42,6 +42,7 @@
         <UserManagement v-if="activeNav === 'admin-user'" :key="'admin-user'" />
         <ProductManagement v-else-if="activeNav === 'admin-product'" :key="'admin-product'" />
         <ProcessManagement v-else-if="activeNav === 'admin-process'" :key="'admin-process'" />
+        <WorkshopManagement v-else-if="activeNav === 'admin-workshop'" :key="'admin-workshop'" />
         <AdminPanel v-else-if="activeNav === 'admin-standard' || activeNav === 'admin-equipment'" :key="activeNav" :defaultTab="activeNav === 'admin-standard' ? 'standard' : 'equipment'" />
       </template>
       <div v-else-if="activeNav.startsWith('admin')" class="admin-gate">
@@ -75,6 +76,7 @@ import SpcDashboard from './components/SpcDashboard.vue'
 import UserManagement from './components/admin/UserManagement.vue'
 import ProductManagement from './components/admin/ProductManagement.vue'
 import ProcessManagement from './components/admin/ProcessManagement.vue'
+import WorkshopManagement from './components/admin/WorkshopManagement.vue'
 import AdminPanel from './components/AdminPanel.vue'
 import BottomNav from './components/BottomNav.vue'
 import ThemeSwitcher from './components/ThemeSwitcher.vue'
@@ -123,8 +125,13 @@ function handleNavigate(key) {
 }
 
 function navKeyToIndex(key) {
-  const map = { home: 1, data: 2, chat: 3, map: 4, admin: 5, 'admin-product': 5, 'admin-process': 6, 'admin-standard': 7, 'admin-equipment': 8, 'admin-user': 9 }
-  return map[key] || 1
+  const isAdmin = key.startsWith('admin')
+  if (isAdmin) {
+    const map = { 'home': 0, 'admin-product': 1, 'admin-process': 2, 'admin-standard': 3, 'admin-equipment': 4, 'admin-workshop': 5, 'admin-user': 6 }
+    return map[key] ?? 1
+  }
+  const map = { home: 0, data: 1, admin: 2 }
+  return map[key] ?? 0
 }
 
 function onAuthExpired() {

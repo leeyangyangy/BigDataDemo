@@ -29,7 +29,7 @@
       </div>
       <div class="filter-group">
         <label>设备</label>
-        <select v-model="selectedEquipment" class="filter-select" @change="onEquipmentChange" :disabled="!selectedParam">
+        <select v-model="selectedEquipment" class="filter-select" @change="onEquipmentChange" :disabled="!selectedProcess">
           <option :value="null">全部设备</option>
           <option v-for="eq in equipmentList" :key="eq.id" :value="eq.id">{{ eq.name }} ({{ eq.code }})</option>
         </select>
@@ -41,6 +41,18 @@
           <option :value="100">最近100</option>
           <option :value="200">最近200</option>
           <option :value="500">最近500</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>时间范围</label>
+        <select v-model="timeRange" class="filter-select short" @change="onTimeRangeChange">
+          <option value="">不限</option>
+          <option value="7">近7天</option>
+          <option value="14">近14天</option>
+          <option value="30">近1月</option>
+          <option value="90">近3月</option>
+          <option value="180">近半年</option>
+          <option value="365">近1年</option>
         </select>
       </div>
       <button class="btn-apply" @click="refreshAllCharts">查询控制图</button>
@@ -121,12 +133,12 @@
 
     <div class="charts-section">
       <div v-if="processCharts.length > 0" class="chart-grid">
-        <div v-for="pc in processCharts" :key="pc.paramId" class="chart-card-multi">
+        <div v-for="pc in processCharts" :key="pc.equipmentId ? `${pc.paramId}-${pc.equipmentId}` : pc.paramId" class="chart-card-multi">
           <div class="chart-card-header">
-            <span class="chart-title">{{ pc.paramName }}<span class="chart-unit" v-if="pc.unit">({{ pc.unit }})</span></span>
+            <span class="chart-title">{{ pc.paramName }}<span class="chart-unit" v-if="pc.unit">({{ pc.unit }})</span><span class="chart-equip-tag" v-if="pc.equipmentName">【{{ pc.equipmentName }}】</span></span>
             <span class="chart-version-tag" v-if="pc.version">V{{ pc.version.versionNo }}</span>
           </div>
-          <SpcControlChart :ref="el => { if(el) chartRefs[pc.paramId] = el }" :chartData="pc.chartData" />
+          <SpcControlChart :ref="el => { if(el) chartRefs[pc.equipmentId ? `${pc.paramId}-${pc.equipmentId}` : pc.paramId] = el }" :chartData="pc.chartData" />
           <div class="chart-mini-stats" v-if="pc.chartData?.capability">
             <span>Cpk: <strong :class="getCpkClass(pc.chartData.capability.cpk)">{{ pc.chartData.capability.cpk ?? '-' }}</strong></span>
             <span>均值: {{ pc.chartData.capability.mean ?? '-' }}</span>
@@ -138,7 +150,9 @@
         <SpcControlChart ref="chartRef" :chartData="chartData" />
       </div>
       <div v-else class="chart-empty-hint">
-        <span>请选择产品和工序查看该工序下所有标准的SPC控制图</span>
+        <span v-if="selectedProcess && !selectedParam && selectedEquipment">该设备下暂无工艺参数数据</span>
+        <span v-else-if="selectedProcess && !selectedParam">该工序下暂无工艺参数数据</span>
+        <span v-else>请选择产品和工序查看SPC控制图</span>
       </div>
     </div>
 
@@ -220,50 +234,65 @@
               </select>
             </div>
           </div>
-          <div class="form-row">
-            <div class="form-field">
-              <label>标准(工艺参数)</label>
-              <select v-model.number="uploadData.paramId" class="form-input" @change="onUploadParamChange" :disabled="!uploadData.processId">
-                <option :value="null">请选择标准</option>
-                <option v-for="p in uploadParams" :key="p.id" :value="p.id">{{ p.paramName }} ({{ p.paramCode }}) <span v-if="p.unit">[{{ p.unit }}]</span></option>
-              </select>
+
+          <!-- 多工艺参数选择 -->
+          <div class="multi-param-section" v-if="uploadParams.length > 0">
+            <label class="multi-param-label">选择工艺参数 (可多选) <span class="req">*</span></label>
+            <div class="param-checkbox-grid">
+              <label v-for="p in uploadParams" :key="p.id"
+                     class="param-checkbox-item"
+                     :class="{ checked: uploadSelectedParamIds.includes(p.id) }">
+                <input type="checkbox" :value="p.id" v-model="uploadSelectedParamIds"
+                       @change="onMultiParamChange(p)" />
+                <span class="param-info">
+                  <strong>{{ p.paramName }}</strong>
+                  <small>{{ p.paramCode }} <span v-if="p.unit">[{{ p.unit }}]</span></small>
+                </span>
+              </label>
             </div>
-            <div class="form-field">
-              <label>设备</label>
-              <select v-model.number="uploadData.equipmentId" class="form-input">
-                <option :value="null">请选择设备</option>
+          </div>
+
+          <!-- 每个选中参数的测量值 + 上下限 -->
+          <div class="multi-value-section" v-if="uploadSelectedParamIds.length > 0">
+            <div class="multi-value-row" v-for="pid in uploadSelectedParamIds" :key="'val-' + pid">
+              <div class="param-col-left">
+                <div class="param-badge">{{ getParamName(pid) }}</div>
+                <span class="unit-tag">{{ getParamUnit(pid) }}</span>
+              </div>
+              <div class="param-col-right">
+                <input v-model.number="uploadMultiValues[pid]" type="number" step="0.000001"
+                       class="form-input value-input" placeholder="测量值 (必填)" />
+                <div class="param-limit-info" v-if="uploadParamVersionMap[pid]">
+                  <span class="limit-item">USL={{ uploadParamVersionMap[pid].usl ?? '-' }}</span>
+                  <span class="limit-item">LSL={{ uploadParamVersionMap[pid].lsl ?? '-' }}</span>
+                  <span class="limit-item">T={{ uploadParamVersionMap[pid].target ?? '-' }}</span>
+                  <span class="limit-sep">|</span>
+                  <span class="limit-item">UCL={{ uploadParamVersionMap[pid].ucl ?? '-' }}</span>
+                  <span class="limit-item">LCL={{ uploadParamVersionMap[pid].lcl ?? '-' }}</span>
+                </div>
+                <div class="param-limit-info loading-hint" v-else-if="uploadLoadingVersions.has(pid)">
+                  加载标准中...
+                </div>
+                <div class="param-limit-info no-version-hint" v-else>
+                  暂无版本，提交时将自动创建
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 设备(必选) -->
+          <div class="form-row" v-if="uploadSelectedParamIds.length > 0">
+            <div class="form-field full">
+              <label>设备 <span class="req">*</span></label>
+              <select v-model.number="uploadData.equipmentId" class="form-input" :class="{ 'input-error': submitAttempted && !uploadData.equipmentId }">
+                <option :value="null">请选择设备 (必选)</option>
                 <option v-for="eq in equipmentList" :key="eq.id" :value="eq.id">{{ eq.name }}</option>
               </select>
+              <span class="field-error" v-if="submitAttempted && !uploadData.equipmentId">请选择设备</span>
             </div>
           </div>
-          <div class="form-row" v-if="uploadData.paramId && uploadData.productId">
-            <div class="form-field full">
-              <label>标准版本
-                <span class="field-hint" v-if="uploadVersionList.length === 0">(暂无版本,将自动创建)</span>
-              </label>
-              <select v-model.number="uploadSelectedVersion" class="form-input" @change="onUploadVersionChange">
-                <option :value="null">自动选择当前版本 / 自动创建新版本</option>
-                <option v-for="v in uploadVersionList" :key="v.id" :value="v.id">
-                  V{{ v.versionNo }}
-                  {{ v.isCurrent === 1 ? '【当前】' : '【历史】' }}
-                  (USL={{ v.usl ?? '-' }} LSL={{ v.lsl ?? '-' }})
-                </option>
-              </select>
-            </div>
-          </div>
-          <div class="standard-limit-hint" v-if="uploadCurrentVersion">
-            <span class="hint-label">当前工艺参数上下限:</span>
-            USL={{ uploadCurrentVersion.usl ?? '-' }}
-            LSL={{ uploadCurrentVersion.lsl ?? '-' }}
-            Target={{ uploadCurrentVersion.target ?? '-' }}
-            | UCL={{ uploadCurrentVersion.ucl ?? '-' }}
-            LCL={{ uploadCurrentVersion.lcl ?? '-' }}
-          </div>
+
           <div class="form-row">
-            <div class="form-field">
-              <label>测量值 <span class="unit-hint" v-if="uploadParamObj?.unit">({{ uploadParamObj.unit }})</span></label>
-              <input v-model.number="uploadData.measuredValue" type="number" step="0.000001" class="form-input" placeholder="输入测量值" />
-            </div>
             <div class="form-field">
               <label>批次号</label>
               <input v-model="uploadData.batchId" type="text" class="form-input" placeholder="批次号(可留空)" />
@@ -281,8 +310,8 @@
           </div>
           <div class="form-actions">
             <button class="btn-cancel" @click="showUploadForm = false">取消</button>
-            <button class="btn-submit" @click="submitData" :disabled="uploading || !uploadData.paramId || !uploadData.measuredValue && uploadData.measuredValue !== 0">
-              {{ uploading ? '提交中...' : '提交' }}
+            <button class="btn-submit" @click="submitData" :disabled="uploading || uploadSelectedParamIds.length === 0 || !hasAnyValue">
+              {{ uploading ? '提交中...' : `批量提交 (${uploadSelectedParamIds.length} 项)` }}
             </button>
           </div>
           <div class="upload-result" v-if="uploadResult">
@@ -291,11 +320,21 @@
         </div>
       </div>
     </div>
+
+    <div class="floating-actions">
+      <button class="fab-btn fab-refresh" @click="handleRefresh" :title="'刷新数据'">
+        <span v-if="!isRefreshing">↻</span>
+        <span v-else class="spin">↻</span>
+      </button>
+      <transition name="fade-up">
+        <button class="fab-btn fab-top" v-show="showBackTop" @click="scrollToTop" :title="'回到顶部'">↑</button>
+      </transition>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, reactive} from 'vue'
 import SpcControlChart from './SpcControlChart.vue'
 import { spcApi, adminApi } from '../utils/api.js'
 
@@ -310,6 +349,52 @@ const selectedProcess = ref(null)
 const selectedParam = ref(null)
 const selectedEquipment = ref(null)
 const dataLimit = ref(100)
+const timeRange = ref('')
+
+const showBackTop = ref(false)
+const isRefreshing = ref(false)
+
+const FILTER_KEY = 'spc_filter_state'
+
+function saveFilterState() {
+  const state = {
+    productId: selectedProduct.value,
+    processId: selectedProcess.value,
+    paramId: selectedParam.value,
+    equipmentId: selectedEquipment.value,
+    dataLimit: dataLimit.value,
+    timeRange: timeRange.value
+  }
+  try { localStorage.setItem(FILTER_KEY, JSON.stringify(state)) } catch (e) {}
+}
+
+function loadFilterState() {
+  try {
+    const raw = localStorage.getItem(FILTER_KEY)
+    if (!raw) return null
+    return JSON.parse(raw)
+  } catch (e) { return null }
+}
+
+const CACHE_TTL = 5 * 60 * 1000
+const dataCache = new Map()
+
+function getCache(key) {
+  const entry = dataCache.get(key)
+  if (!entry) return null
+  if (Date.now() - entry.ts > CACHE_TTL) { dataCache.delete(key); return null }
+  return entry.data
+}
+
+function setCache(key, data) {
+  dataCache.set(key, { data, ts: Date.now() })
+}
+
+function invalidateCache(prefix) {
+  for (const k of dataCache.keys()) {
+    if (k.startsWith(prefix)) dataCache.delete(k)
+  }
+}
 
 const products = ref([])
 const processes = ref([])
@@ -326,11 +411,10 @@ const useManualLimits = ref(false)
 const showUploadForm = ref(false)
 const uploading = ref(false)
 const uploadResult = ref(null)
+const submitAttempted = ref(false)
 
 const uploadProcesses = ref([])
 const uploadParams = ref([])
-const uploadCurrentVersion = ref(null)
-
 const processCharts = ref([])
 const chartRefs = ref({})
 
@@ -349,8 +433,14 @@ const uploadData = ref({
   fillTime: ''
 })
 
-const uploadVersionList = ref([])
-const uploadSelectedVersion = ref(null)
+const uploadSelectedParamIds = ref([])
+const uploadMultiValues = reactive({})
+const uploadParamVersionMap = reactive({})
+const uploadLoadingVersions = ref(new Set())
+
+const hasAnyValue = computed(() => {
+  return Object.values(uploadMultiValues).some(v => v !== null && v !== undefined && v !== '')
+})
 
 const capability = computed(() => chartData.value?.capability || null)
 const capabilityClass = computed(() => {
@@ -386,17 +476,95 @@ function requireAuth(fn) {
 
 onMounted(async () => {
   await loadProducts()
-  loadEquipmentList()
+  const saved = loadFilterState()
+  if (!saved) return
+
+  if (saved.dataLimit != null) dataLimit.value = saved.dataLimit
+  if (saved.timeRange != null) timeRange.value = saved.timeRange
+
+  let needsRefresh = false
+  const pendingEquipId = saved.equipmentId || null
+
+  if (saved.productId && products.value.some(p => p.id === saved.productId)) {
+    selectedProduct.value = saved.productId
+    await onProductChange(false)
+    if (saved.processId && processes.value.some(p => p.id === saved.processId)) {
+      selectedProcess.value = saved.processId
+      await onProcessChange(false)
+      if (pendingEquipId && equipmentList.value.some(e => e.id === pendingEquipId)) {
+        selectedEquipment.value = pendingEquipId
+      }
+      if (saved.paramId && params.value.some(p => p.id === saved.paramId)) {
+        selectedParam.value = saved.paramId
+        await onParamChange(false)
+      } else if (params.value.length > 0) {
+        needsRefresh = true
+      }
+    }
+  }
+
+  if (needsRefresh || (selectedProcess.value && !selectedParam.value)) {
+    refreshAllCharts()
+  }
+
+  saveFilterState()
+  window.addEventListener('scroll', onScroll, { passive: true })
 })
 
+onUnmounted(() => {
+  window.removeEventListener('scroll', onScroll)
+})
+
+function onScroll() {
+  showBackTop.value = window.scrollY > 200
+}
+
+async function handleRefresh() {
+  if (isRefreshing.value) return
+  isRefreshing.value = true
+  dataCache.clear()
+  try {
+    await loadProducts()
+    if (selectedProduct.value) {
+      processes.value = []
+      params.value = []
+      equipmentList.value = []
+      await onProductChange(false)
+      if (selectedProcess.value) {
+        await onProcessChange(false)
+        if (selectedParam.value) {
+          await onParamChange(false)
+        } else if (params.value.length > 0) {
+          await refreshAllCharts()
+        }
+      }
+    } else {
+      chartData.value = null
+      processCharts.value = []
+      currentVersion.value = null
+    }
+  } finally {
+    setTimeout(() => { isRefreshing.value = false }, 600)
+  }
+}
+
+function scrollToTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
 async function loadProducts() {
+  const cached = getCache('products')
+  if (cached) { products.value = cached; return }
   try {
     const res = await spcApi.getProductPage({ current: 1, size: 100 })
-    if (res.code === 200) products.value = res.data.records
+    if (res.code === 200) {
+      products.value = res.data.records
+      setCache('products', res.data.records)
+    }
   } catch (e) { console.error('加载产品失败', e) }
 }
 
-async function onProductChange() {
+async function onProductChange(save = true) {
   selectedProcess.value = null
   selectedParam.value = null
   selectedEquipment.value = null
@@ -407,51 +575,93 @@ async function onProductChange() {
   currentVersion.value = null
   processCharts.value = []
 
-  if (!selectedProduct.value) return
+  if (!selectedProduct.value) { if (save) saveFilterState(); return }
 
   try {
+    const cached = getCache('processes')
+    if (cached) { processes.value = cached; if (save) saveFilterState(); return }
     const processRes = await spcApi.getProcessPage({ current: 1, size: 100 })
-    if (processRes.code === 200) processes.value = processRes.data.records
+    if (processRes.code === 200) {
+      processes.value = processRes.data.records
+      setCache('processes', processRes.data.records)
+    }
   } catch (e) { console.error('加载工序失败', e) }
+  if (save) saveFilterState()
 }
 
 async function onEquipmentChange() {
-  if (selectedParam.value && selectedProduct.value) {
-    refreshAllCharts()
-  }
+  saveFilterState()
+  refreshAllCharts()
 }
 
-async function loadEquipmentList() {
-  try {
-    const res = await adminApi.equipment.getPage({ current: 1, size: 200 })
-    if (res.code === 200 && res.data?.records) {
-      equipmentList.value = res.data.records.map(eq => ({
-        id: eq.id,
-        code: eq.equipCode,
-        name: eq.equipName || eq.equipCode
-      }))
-    }
-  } catch (e) { console.error('加载设备列表失败', e) }
+function onTimeRangeChange() {
+  saveFilterState()
+  refreshAllCharts()
 }
 
-async function onProcessChange() {
+function getTimeRangeParams() {
+  if (!timeRange.value) return {}
+  const days = Number(timeRange.value)
+  const now = new Date()
+  const start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
+  const pad = (n) => String(n).padStart(2, '0')
+  const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  return { startTime: fmt(start), endTime: fmt(now) }
+}
+
+async function onProcessChange(save = true) {
   selectedParam.value = null
+  selectedEquipment.value = null
   params.value = []
+  equipmentList.value = []
   chartData.value = null
   currentVersion.value = null
   processCharts.value = []
 
-  if (!selectedProcess.value || !selectedProduct.value) return
+  if (!selectedProcess.value || !selectedProduct.value) { if (save) saveFilterState(); return }
 
   try {
+    const cacheKey = `params:${selectedProcess.value}`
+    const cached = getCache(cacheKey)
+    if (cached) {
+      params.value = cached
+      if (params.value.length > 0) loadAllProcessCharts()
+      if (save) saveFilterState()
+      return
+    }
     const res = await spcApi.getParamPage({ current: 1, size: 100 })
     if (res.code === 200) {
-      params.value = res.data.records.filter(p => p.processId === selectedProcess.value)
-      if (params.value.length > 0) {
-        loadAllProcessCharts()
-      }
+      const filtered = res.data.records.filter(p => p.processId === selectedProcess.value)
+      params.value = filtered
+      setCache(cacheKey, filtered)
+      if (filtered.length > 0) loadAllProcessCharts()
     }
   } catch (e) { console.error('加载标准(参数)失败', e) }
+
+  await loadEquipmentByProcess()
+  if (save) saveFilterState()
+}
+
+async function loadEquipmentByProcess() {
+  equipmentList.value = []
+  if (!selectedProcess.value) return
+
+  const cacheKey = `equip:${selectedProcess.value}`
+  const cached = getCache(cacheKey)
+  if (cached) { equipmentList.value = cached; return }
+
+  try {
+    const res = await spcApi.getProcessEquipment(selectedProcess.value)
+    if (res.code === 200 && res.data) {
+      const mapped = res.data.map(eq => ({
+        id: eq.id,
+        code: eq.equipCode,
+        name: eq.equipName || eq.equipCode
+      }))
+      equipmentList.value = mapped
+      setCache(cacheKey, mapped)
+    }
+  } catch (e) { console.error('加载工序设备列表失败', e) }
 }
 
 async function loadAllProcessCharts() {
@@ -470,12 +680,19 @@ async function loadAllProcessCharts() {
 
     let chartD = null
     try {
-      const chartRes = await spcApi.getControlChart({
+      const baseParams = {
         paramId: param.id,
         productId: selectedProduct.value,
-        limit: dataLimit.value
-      })
-      if (chartRes.code === 200) chartD = chartRes.data
+        limit: dataLimit.value,
+        ...getTimeRangeParams()
+      }
+      let res
+      if (selectedEquipment.value) {
+        res = await spcApi.getDataByEquipment({ ...baseParams, equipmentId: selectedEquipment.value })
+      } else {
+        res = await spcApi.getControlChart(baseParams)
+      }
+      if (res.code === 200) chartD = res.data
     } catch (e) { }
 
     if (chartD && useManualLimits.value && hasManualLimit.value && chartD.limits) {
@@ -487,19 +704,7 @@ async function loadAllProcessCharts() {
       if (m.lcl != null) chartD.limits.lcl = m.lcl
     }
 
-    if (chartD && selectedEquipment.value && chartD.values) {
-      const dataPage = await spcApi.getDataPage({
-        current: 1, size: dataLimit.value,
-        paramId: param.id, productId: selectedProduct.value
-      }).catch(() => ({ code: 500 }))
-      if (dataPage.code === 200 && dataPage.data?.records) {
-        const filtered = dataPage.data.records.filter(d => d.equipmentId === selectedEquipment.value)
-          .sort((a, b) => new Date(a.collectTime) - new Date(b.collectTime))
-        chartD.values = filtered.map(d => d.measuredValue)
-        chartD.timeSeries = filtered.map(d => d.collectTime?.toString() || d.fillTime?.toString() || '')
-        chartD.totalPoints = filtered.length
-      }
-    }
+    ensureChronologicalOrder(chartD)
 
     return { paramId: param.id, paramName: param.paramName, unit: param.unit, version, chartData: chartD }
   })
@@ -509,12 +714,18 @@ async function loadAllProcessCharts() {
   } catch (e) { console.error('批量加载控制图失败', e) }
 }
 
-async function onParamChange() {
-  selectedEquipment.value = null
+async function onParamChange(save = true) {
   chartData.value = null
   currentVersion.value = null
+  processCharts.value = []
 
-  if (!selectedParam.value || !selectedProduct.value) return
+  if (!selectedParam.value) {
+    if (selectedProcess.value && params.value.length > 0) {
+      await loadAllProcessCharts()
+    }
+    if (save) saveFilterState()
+    return
+  }
 
   try {
     const res = await spcApi.getParamVersionCurrent({
@@ -524,7 +735,47 @@ async function onParamChange() {
     if (res.code === 200) currentVersion.value = res.data
   } catch (e) { console.error('加载版本失败', e) }
 
-  loadEquipmentList()
+  await refreshAllCharts()
+  if (save) saveFilterState()
+}
+
+async function loadSingleChart() {
+  if (!selectedParam.value || !selectedProduct.value) return
+
+  try {
+    const baseParams = {
+      paramId: selectedParam.value,
+      productId: selectedProduct.value,
+      limit: dataLimit.value,
+      ...getTimeRangeParams()
+    }
+
+    let cd
+    if (selectedEquipment.value) {
+      const res = await spcApi.getDataByEquipment({
+        ...baseParams,
+        equipmentId: selectedEquipment.value
+      })
+      cd = res.code === 200 ? res.data : null
+    } else {
+      const res = await spcApi.getControlChart(baseParams)
+      cd = res.code === 200 ? res.data : null
+    }
+
+    if (!cd) { chartData.value = null; return }
+
+    if (useManualLimits.value && hasManualLimit.value && cd.limits) {
+      const m = manualLimits.value
+      if (m.usl != null) cd.limits.usl = m.usl
+      if (m.lsl != null) cd.limits.lsl = m.lsl
+      if (m.target != null) cd.limits.target = m.target
+      if (m.ucl != null) cd.limits.ucl = m.ucl
+      if (m.lcl != null) cd.limits.lcl = m.lcl
+    }
+
+    ensureChronologicalOrder(cd)
+    chartData.value = cd
+  } catch (e) { console.error('加载单参数控制图失败:', e) }
 }
 
 function applyManualLimits() {
@@ -546,28 +797,106 @@ function getCpkClass(cpk) {
   return 'danger'
 }
 
-async function loadChart() {
-  if (!selectedParam.value) return
-
-  try {
-    const params = {
-      paramId: selectedParam.value,
-      limit: dataLimit.value
-    }
-    if (selectedProduct.value) params.productId = selectedProduct.value
-    if (selectedEquipment.value) params.equipmentId = selectedEquipment.value
-
-    const res = await spcApi.getDataByEquipment(params)
-    if (res.code === 200) chartData.value = res.data
-  } catch (e) { console.error('加载控制图失败', e) }
+function ensureChronologicalOrder(chartD) {
+  if (!chartD || !chartD.values || !chartD.timeSeries || chartD.values.length <= 1) return
+  const paired = chartD.values.map((v, i) => ({ value: v, time: chartD.timeSeries[i] }))
+    .sort((a, b) => {
+      const ta = a.time ? new Date(a.time).getTime() : 0
+      const tb = b.time ? new Date(b.time).getTime() : 0
+      return ta - tb
+    })
+  chartD.values = paired.map(p => p.value)
+  chartD.timeSeries = paired.map(p => p.time)
 }
 
-function refreshAllCharts() {
-  if (selectedProcess.value) {
-    loadAllProcessCharts()
-  } else if (selectedParam.value) {
-    loadChart()
+async function refreshAllCharts() {
+  const hasParam = !!selectedParam.value
+  const hasEquip = !!selectedEquipment.value
+
+  if (hasParam && !hasEquip) {
+    await loadParamAcrossEquipments()
+  } else if (hasParam && hasEquip) {
+    await loadSingleChart()
+  } else {
+    await loadAllProcessCharts()
   }
+}
+
+async function loadParamAcrossEquipments() {
+  processCharts.value = []
+  chartData.value = null
+  if (!selectedParam.value || !selectedProduct.value) return
+
+  let version = null
+  try {
+    const verRes = await spcApi.getParamVersionCurrent({
+      paramId: selectedParam.value,
+      productId: selectedProduct.value
+    })
+    if (verRes.code === 200) version = verRes.data
+  } catch (e) { }
+
+  const paramInfo = params.value.find(p => p.id === selectedParam.value)
+  const paramName = paramInfo?.paramName ?? ''
+  const unit = paramInfo?.unit ?? ''
+
+  let targetEquipList = equipmentList.value
+  if (!targetEquipList.length && selectedProcess.value) {
+    try {
+      const res = await spcApi.getProcessEquipment(selectedProcess.value)
+      if (res.code === 200 && res.data) {
+        targetEquipList = res.data.map(eq => ({
+          id: eq.id,
+          code: eq.equipCode,
+          name: eq.equipName || eq.equipCode
+        }))
+      }
+    } catch (e) { }
+  }
+
+  if (!targetEquipList.length) {
+    await loadSingleChart()
+    return
+  }
+
+  const chartPromises = targetEquipList.map(async (eq) => {
+    let chartD = null
+    try {
+      const res = await spcApi.getDataByEquipment({
+        paramId: selectedParam.value,
+        productId: selectedProduct.value,
+        equipmentId: eq.id,
+        limit: dataLimit.value,
+        ...getTimeRangeParams()
+      })
+      if (res.code === 200) chartD = res.data
+    } catch (e) { }
+
+    if (chartD && useManualLimits.value && hasManualLimit.value && chartD.limits) {
+      const m = manualLimits.value
+      if (m.usl != null) chartD.limits.usl = m.usl
+      if (m.lsl != null) chartD.limits.lsl = m.lsl
+      if (m.target != null) chartD.limits.target = m.target
+      if (m.ucl != null) chartD.limits.ucl = m.ucl
+      if (m.lcl != null) chartD.limits.lcl = m.lcl
+    }
+
+    ensureChronologicalOrder(chartD)
+
+    return {
+      paramId: selectedParam.value,
+      equipmentId: eq.id,
+      equipmentName: eq.name,
+      paramName,
+      unit,
+      version,
+      chartData: chartD
+    }
+  })
+
+  try {
+    processCharts.value = await Promise.all(chartPromises)
+  } catch (e) { console.error('加载参数跨设备控制图失败', e) }
 }
 
 async function calculateStat() {
@@ -575,7 +904,7 @@ async function calculateStat() {
 
   try {
     await spcApi.calculateStat({ paramVersionId: currentVersion.value.id })
-    await loadChart()
+    refreshAllCharts()
   } catch (e) { console.error('计算统计失败', e) }
 }
 
@@ -584,7 +913,7 @@ async function onUploadProductChange() {
   uploadData.value.paramId = null
   uploadProcesses.value = []
   uploadParams.value = []
-  uploadCurrentVersion.value = null
+  submitAttempted.value = false
 
   if (!uploadData.value.productId) return
 
@@ -597,7 +926,11 @@ async function onUploadProductChange() {
 async function onUploadProcessChange() {
   uploadData.value.paramId = null
   uploadParams.value = []
-  uploadCurrentVersion.value = null
+  uploadSelectedParamIds.value = []
+  Object.keys(uploadMultiValues).forEach(k => delete uploadMultiValues[k])
+  Object.keys(uploadParamVersionMap).forEach(k => delete uploadParamVersionMap[k])
+  uploadLoadingVersions.value = new Set()
+  submitAttempted.value = false
 
   if (!uploadData.value.processId) return
 
@@ -607,80 +940,135 @@ async function onUploadProcessChange() {
       uploadParams.value = res.data.records.filter(p => p.processId === uploadData.value.processId)
     }
   } catch (e) { console.error('加载标准(参数)失败', e) }
+
+  await loadEquipmentByProcess()
 }
 
-async function onUploadParamChange() {
-  uploadCurrentVersion.value = null
-  uploadSelectedVersion.value = null
-  uploadVersionList.value = []
+// async function loadEquipmentByProcess() {
+//   equipmentList.value = []
+//   uploadData.value.equipmentId = null
+//   if (!uploadData.value.processId) return
+//   try {
+//     const res = await spcApi.getProcessEquipment(uploadData.value.processId)
+//     if (res.code === 200 && res.data) {
+//       equipmentList.value = res.data.map(eq => ({
+//         id: eq.id,
+//         code: eq.equipCode,
+//         name: eq.equipName || eq.equipCode
+//       }))
+//     }
+//   } catch (e) { console.error('加载设备列表失败', e) }
+// }
 
-  if (!uploadData.value.paramId || !uploadData.value.productId) return
+function onMultiParamChange(param) {
+  const isChecked = uploadSelectedParamIds.value.includes(param.id)
+  if (!isChecked) {
+    delete uploadMultiValues[param.id]
+    delete uploadParamVersionMap[param.id]
+    return
+  }
+  loadParamVersion(param.id)
+}
 
+async function loadParamVersion(paramId) {
+  if (!uploadData.value.productId) return
+  uploadLoadingVersions.value = new Set([...uploadLoadingVersions.value, paramId])
   try {
-    const [verRes, histRes] = await Promise.all([
-      spcApi.getParamVersionCurrent({
-        paramId: uploadData.value.paramId,
-        productId: uploadData.value.productId
-      }),
-      spcApi.getParamVersionHistory({
-        paramId: uploadData.value.paramId,
-        productId: uploadData.value.productId
-      })
-    ])
-    if (verRes.code === 200) {
-      uploadCurrentVersion.value = verRes.data
-      if (verRes.data) uploadSelectedVersion.value = verRes.data.id
+    const res = await spcApi.getParamVersionCurrent({
+      paramId: paramId,
+      productId: uploadData.value.productId
+    })
+    if (res.code === 200 && res.data) {
+      uploadParamVersionMap[paramId] = res.data
     }
-    if (histRes.code === 200 && histRes.data) {
-      uploadVersionList.value = histRes.data
-    }
-  } catch (e) { console.error('加载标准版本失败', e) }
+  } catch (e) { console.error('加载版本失败:', e) } finally {
+    const s = new Set(uploadLoadingVersions.value)
+    s.delete(paramId)
+    uploadLoadingVersions.value = s
+  }
 }
 
-function onUploadVersionChange() {
-  const v = uploadVersionList.value.find(v => v.id === uploadSelectedVersion.value)
-  uploadCurrentVersion.value = v || null
+function getParamName(paramId) {
+  const p = uploadParams.value.find(p => p.id === paramId)
+  return p ? p.paramName : ''
+}
+
+function getParamUnit(paramId) {
+  const p = uploadParams.value.find(p => p.id === paramId)
+  return p ? (p.unit || '') : ''
 }
 
 async function submitData() {
+  submitAttempted.value = true
   uploading.value = true
   uploadResult.value = null
 
   try {
-    const payload = { ...uploadData.value }
-    if (uploadSelectedVersion.value) {
-      payload.paramVersionId = uploadSelectedVersion.value
+    if (uploadSelectedParamIds.value.length === 0) {
+      uploadResult.value = { success: false, message: '请至少选择一个工艺参数' }
+      return
     }
-    if (!payload.fillTime) {
-      delete payload.fillTime
-    } else {
-      payload.fillTime = payload.fillTime.replace('T', ' ') + ':00'
+    if (!uploadData.value.equipmentId) {
+      uploadResult.value = { success: false, message: '请选择设备' }
+      return
     }
 
-    const res = await spcApi.uploadData(payload)
-    if (res.code === 200) {
-      uploadResult.value = { success: true, message: '数据提交成功！' }
-      uploadData.value = {
-        productId: uploadData.value.productId,
-        processId: uploadData.value.processId,
-        paramId: uploadData.value.paramId,
-        equipmentId: uploadData.value.equipmentId,
-        batchId: null,
-        paramVersionId: null,
-        measuredValue: null,
-        fillTime: ''
+    const emptyParams = []
+    for (const pid of uploadSelectedParamIds.value) {
+      const val = uploadMultiValues[pid]
+      if (val === null || val === undefined || val === '' || isNaN(val)) {
+        emptyParams.push(getParamName(pid))
       }
-      uploadSelectedVersion.value = null
-      uploadCurrentVersion.value = null
-      uploadVersionList.value = []
-      setTimeout(() => {
-        showUploadForm.value = false
-        uploadResult.value = null
-        loadChart()
-      }, 1500)
-    } else {
-      uploadResult.value = { success: false, message: res.msg || '提交失败' }
     }
+    if (emptyParams.length > 0) {
+      uploadResult.value = { success: false, message: `以下参数的测量值不能为空: ${emptyParams.join(', ')}` }
+      return
+    }
+
+    const basePayload = {
+      productId: uploadData.value.productId,
+      processId: uploadData.value.processId,
+      equipmentId: uploadData.value.equipmentId,
+      batchId: uploadData.value.batchId || null
+    }
+    let fillTime = uploadData.value.fillTime
+    if (fillTime) fillTime = fillTime.replace('T', ' ') + ':00'
+
+    const records = []
+    for (const pid of uploadSelectedParamIds.value) {
+      records.push({
+        ...basePayload,
+        paramId: pid,
+        measuredValue: uploadMultiValues[pid],
+        paramVersionId: null,
+        ...(fillTime ? { fillTime } : {})
+      })
+    }
+
+    const results = await Promise.allSettled(
+      records.map(r => spcApi.uploadData(r))
+    )
+
+    const okCount = results.filter(r => r.status === 'fulfilled' && r.value.code === 200).length
+    const failCount = records.length - okCount
+
+    if (okCount > 0 && failCount === 0) {
+      uploadResult.value = { success: true, message: `成功提交 ${okCount} 条数据！` }
+    } else if (okCount > 0) {
+      uploadResult.value = { success: true, message: `成功 ${okCount} 条，失败 ${failCount} 条` }
+    } else {
+      uploadResult.value = { success: false, message: '全部提交失败，请检查网络或数据格式' }
+      return
+    }
+
+    Object.keys(uploadMultiValues).forEach(k => delete uploadMultiValues[k])
+    submitAttempted.value = false
+    dataCache.clear()
+    setTimeout(() => {
+      showUploadForm.value = false
+      uploadResult.value = null
+      refreshAllCharts()
+    }, 1500)
   } catch (e) {
     uploadResult.value = { success: false, message: '网络错误' }
   } finally {
@@ -699,6 +1087,8 @@ async function loadVersionHistory() {
     if (res.code === 200) versionHistory.value = res.data
   } catch (e) { console.error('加载版本历史失败', e) }
 }
+
+watch(dataLimit, () => { saveFilterState(); refreshAllCharts() })
 
 watch(showVersionHistory, (val) => {
   if (val) loadVersionHistory()
@@ -897,6 +1287,12 @@ watch(() => props.isLoggedIn, (val) => {
   font-weight: 600;
 }
 
+.chart-equip-tag {
+  color: #1890ff;
+  font-size: 12px;
+  margin-left: 6px;
+}
+
 .chart-mini-stats {
   display: flex;
   gap: 16px;
@@ -1053,6 +1449,20 @@ watch(() => props.isLoggedIn, (val) => {
 .form-input:focus {
   border-color: var(--accent-primary);
   box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.1);
+}
+
+.form-input.input-error {
+  border-color: #e74c3c;
+}
+
+.req {
+  color: #e74c3c;
+  font-weight: bold;
+}
+
+.field-error {
+  font-size: 11px;
+  color: #e74c3c;
 }
 
 .datetime-row {
@@ -1295,4 +1705,243 @@ watch(() => props.isLoggedIn, (val) => {
   cursor: pointer; white-space: nowrap;
 }
 .btn-reset-limit:hover { border-color: var(--accent-primary); color: var(--accent-primary); }
+
+.multi-param-section {
+  margin: 16px 0;
+}
+
+.multi-param-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+}
+
+.param-checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid var(--border-input);
+  border-radius: 8px;
+  background: var(--bg-input);
+}
+
+.param-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+
+.param-checkbox-item:hover {
+  background: rgba(var(--accent-rgb), 0.06);
+}
+
+.param-checkbox-item.checked {
+  background: rgba(var(--accent-rgb), 0.1);
+  border-color: var(--accent-primary);
+}
+
+.param-checkbox-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.param-checkbox-item .param-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.param-checkbox-item .param-info strong {
+  font-size: 13px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.param-checkbox-item .param-info small {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.multi-value-section {
+  margin: 16px 0;
+  padding: 12px;
+  border: 1px solid var(--border-input);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+}
+
+.multi-value-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px dashed var(--border-light);
+}
+
+.multi-value-row:last-child {
+  border-bottom: none;
+}
+
+.param-col-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-width: 120px;
+}
+
+.param-col-right {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.param-badge {
+  padding: 4px 10px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.value-input {
+  width: 100%;
+  min-width: 0;
+}
+
+.unit-tag {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  padding: 3px 6px;
+  background: var(--bg-input);
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.param-limit-info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-family: monospace;
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  background: var(--bg-input);
+  border-radius: 5px;
+}
+
+.limit-item {
+  white-space: nowrap;
+}
+
+.limit-sep {
+  color: var(--border-color);
+}
+
+.loading-hint {
+  color: var(--accent-primary);
+  font-family: inherit !important;
+  font-style: italic;
+}
+
+.no-version-hint {
+  color: #faad14;
+  font-family: inherit !important;
+}
+
+.floating-actions {
+  position: fixed;
+  right: 28px;
+  bottom: 28px;
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fab-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 12px rgba(0,0,0,0.15);
+  transition: transform 0.2s, box-shadow 0.2s, background-color 0.25s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.fab-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 5px 20px rgba(0,0,0,0.22);
+}
+
+.fab-btn:active {
+  transform: scale(0.95);
+}
+
+.fab-refresh {
+  background: linear-gradient(135deg, #1890ff, #096dd9);
+  color: #fff;
+}
+
+.fab-refresh:hover {
+  background: linear-gradient(135deg, #40a9ff, #1890ff);
+}
+
+.fab-top {
+  background: linear-gradient(135deg, #52c41a, #389e0d);
+  color: #fff;
+}
+
+.fab-top:hover {
+  background: linear-gradient(135deg, #73d13d, #52c41a);
+}
+
+.spin {
+  display: inline-block;
+  animation: fab-spin 0.6s linear infinite;
+}
+
+@keyframes fab-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.fade-up-enter-active,
+.fade-up-leave-active {
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+.fade-up-enter-from,
+.fade-up-leave-to {
+  opacity: 0;
+  transform: translateY(12px);
+}
 </style>
