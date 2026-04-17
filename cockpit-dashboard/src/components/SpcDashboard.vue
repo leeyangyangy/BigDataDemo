@@ -57,15 +57,38 @@
       </div>
       <button class="btn-apply" @click="refreshAllCharts">查询控制图</button>
       <button class="btn-calc" @click="requireAuth(calculateStat)" v-if="isLoggedIn">计算统计</button>
-      <button class="btn-upload" @click="requireAuth(() => showUploadForm = true)" v-if="isLoggedIn">填写数据</button>
     </div>
+
+    <!-- 数据导入导出模块 -->
+    <SpcDataImport
+      :is-logged-in="isLoggedIn"
+      :selected-product="selectedProduct"
+      :selected-process="selectedProcess"
+      :selected-param="selectedParam"
+      :products="products"
+      :processes="processes"
+      :equipment-list="equipmentList"
+      :params="params"
+      :data-limit="dataLimit"
+      :time-range="timeRange"
+      @require-login="$emit('require-login')"
+      @refresh="refreshAllCharts"
+      @data-imported="handleDataImported"
+    />
 
     <!-- 手动上下限输入 -->
     <div class="limit-input-bar" v-if="selectedParamObj">
-      <div class="limit-header-row">
+      <div class="limit-header-row" @click="showLimitPanel = !showLimitPanel">
         <span class="limit-title">📐 手动设置上下限</span>
-        <span class="limit-hint">留空则使用最新工艺参数版本值</span>
+        <div class="limit-header-right">
+          <span class="limit-hint" v-if="!showLimitPanel">留空则使用最新工艺参数版本值</span>
+          <span class="limit-toggle" :class="{ expanded: showLimitPanel }">{{ showLimitPanel ? '▲' : '▼' }}</span>
+        </div>
       </div>
+
+      <transition name="slide-fade">
+        <div class="limit-body" v-if="showLimitPanel">
+          <span class="limit-hint-full">留空则使用最新工艺参数版本值</span>
 
       <div class="limit-groups">
         <!-- 规格限 -->
@@ -112,6 +135,8 @@
         <button class="btn-apply-limit" @click="applyManualLimits" :disabled="!hasManualLimit">✓ 应用并重绘</button>
         <button class="btn-reset-limit" @click="resetManualLimits">↺ 恢复默认</button>
       </div>
+        </div>
+      </transition>
     </div>
 
     <div class="standard-info-bar" v-if="currentVersion || selectedParamObj">
@@ -181,6 +206,13 @@
       </div>
     </div>
 
+    <SpcAlertPanel
+      v-if="selectedParam && selectedProduct"
+      :alerts="alertList"
+      :loading="loadingAlerts"
+      @rules-change="onRulesChange"
+    />
+
     <div class="version-history-modal" v-if="showVersionHistory" @click.self="showVersionHistory = false">
       <div class="modal-content">
         <h3>工艺参数版本历史</h3>
@@ -214,113 +246,6 @@
       </div>
     </div>
 
-    <div class="upload-modal" v-if="showUploadForm" @click.self="showUploadForm = false">
-      <div class="modal-content">
-        <h3>填写SPC数据</h3>
-        <div class="upload-form">
-          <div class="form-row">
-            <div class="form-field">
-              <label>产品</label>
-              <select v-model.number="uploadData.productId" class="form-input" @change="onUploadProductChange">
-                <option :value="null">请选择产品</option>
-                <option v-for="p in products" :key="p.id" :value="p.id">{{ p.productName }} ({{ p.productCode }})</option>
-              </select>
-            </div>
-            <div class="form-field">
-              <label>工序</label>
-              <select v-model.number="uploadData.processId" class="form-input" @change="onUploadProcessChange" :disabled="!uploadData.productId">
-                <option :value="null">请选择工序</option>
-                <option v-for="p in uploadProcesses" :key="p.id" :value="p.id">{{ p.processName }}</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- 多工艺参数选择 -->
-          <div class="multi-param-section" v-if="uploadParams.length > 0">
-            <label class="multi-param-label">选择工艺参数 (可多选) <span class="req">*</span></label>
-            <div class="param-checkbox-grid">
-              <label v-for="p in uploadParams" :key="p.id"
-                     class="param-checkbox-item"
-                     :class="{ checked: uploadSelectedParamIds.includes(p.id) }">
-                <input type="checkbox" :value="p.id" v-model="uploadSelectedParamIds"
-                       @change="onMultiParamChange(p)" />
-                <span class="param-info">
-                  <strong>{{ p.paramName }}</strong>
-                  <small>{{ p.paramCode }} <span v-if="p.unit">[{{ p.unit }}]</span></small>
-                </span>
-              </label>
-            </div>
-          </div>
-
-          <!-- 每个选中参数的测量值 + 上下限 -->
-          <div class="multi-value-section" v-if="uploadSelectedParamIds.length > 0">
-            <div class="multi-value-row" v-for="pid in uploadSelectedParamIds" :key="'val-' + pid">
-              <div class="param-col-left">
-                <div class="param-badge">{{ getParamName(pid) }}</div>
-                <span class="unit-tag">{{ getParamUnit(pid) }}</span>
-              </div>
-              <div class="param-col-right">
-                <input v-model.number="uploadMultiValues[pid]" type="number" step="0.000001"
-                       class="form-input value-input" placeholder="测量值 (必填)" />
-                <div class="param-limit-info" v-if="uploadParamVersionMap[pid]">
-                  <span class="limit-item">USL={{ uploadParamVersionMap[pid].usl ?? '-' }}</span>
-                  <span class="limit-item">LSL={{ uploadParamVersionMap[pid].lsl ?? '-' }}</span>
-                  <span class="limit-item">T={{ uploadParamVersionMap[pid].target ?? '-' }}</span>
-                  <span class="limit-sep">|</span>
-                  <span class="limit-item">UCL={{ uploadParamVersionMap[pid].ucl ?? '-' }}</span>
-                  <span class="limit-item">LCL={{ uploadParamVersionMap[pid].lcl ?? '-' }}</span>
-                </div>
-                <div class="param-limit-info loading-hint" v-else-if="uploadLoadingVersions.has(pid)">
-                  加载标准中...
-                </div>
-                <div class="param-limit-info no-version-hint" v-else>
-                  暂无版本，提交时将自动创建
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 设备(必选) -->
-          <div class="form-row" v-if="uploadSelectedParamIds.length > 0">
-            <div class="form-field full">
-              <label>设备 <span class="req">*</span></label>
-              <select v-model.number="uploadData.equipmentId" class="form-input" :class="{ 'input-error': submitAttempted && !uploadData.equipmentId }">
-                <option :value="null">请选择设备 (必选)</option>
-                <option v-for="eq in equipmentList" :key="eq.id" :value="eq.id">{{ eq.name }}</option>
-              </select>
-              <span class="field-error" v-if="submitAttempted && !uploadData.equipmentId">请选择设备</span>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-field">
-              <label>批次号</label>
-              <input v-model="uploadData.batchId" type="text" class="form-input" placeholder="批次号(可留空)" />
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-field full">
-              <label>填写时间</label>
-              <div class="datetime-row">
-                <input v-model="uploadData.fillTime" type="datetime-local" class="form-input" />
-                <button class="btn-now" @click="uploadData.fillTime = ''">当前时间</button>
-              </div>
-              <span class="field-hint">不选择则默认为当前时间</span>
-            </div>
-          </div>
-          <div class="form-actions">
-            <button class="btn-cancel" @click="showUploadForm = false">取消</button>
-            <button class="btn-submit" @click="submitData" :disabled="uploading || uploadSelectedParamIds.length === 0 || !hasAnyValue">
-              {{ uploading ? '提交中...' : `批量提交 (${uploadSelectedParamIds.length} 项)` }}
-            </button>
-          </div>
-          <div class="upload-result" v-if="uploadResult">
-            <span :class="uploadResult.success ? 'success' : 'error'">{{ uploadResult.message }}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <div class="floating-actions">
       <button class="fab-btn fab-refresh" @click="handleRefresh" :title="'刷新数据'">
         <span v-if="!isRefreshing">↻</span>
@@ -336,6 +261,8 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, reactive} from 'vue'
 import SpcControlChart from './SpcControlChart.vue'
+import SpcAlertPanel from './SpcAlertPanel.vue'
+import SpcDataImport from './SpcDataImport.vue'
 import { spcApi, adminApi } from '../utils/api.js'
 
 const props = defineProps({
@@ -407,40 +334,13 @@ const showVersionHistory = ref(false)
 
 const manualLimits = ref({ usl: null, lsl: null, target: null, ucl: null, lcl: null })
 const useManualLimits = ref(false)
+const showLimitPanel = ref(false)
 
-const showUploadForm = ref(false)
-const uploading = ref(false)
-const uploadResult = ref(null)
-const submitAttempted = ref(false)
-
-const uploadProcesses = ref([])
-const uploadParams = ref([])
 const processCharts = ref([])
 const chartRefs = ref({})
-
-const now = new Date()
-const pad = (n) => String(n).padStart(2, '0')
-const defaultFillTime = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`
-
-const uploadData = ref({
-  productId: null,
-  processId: null,
-  paramId: null,
-  equipmentId: null,
-  batchId: null,
-  paramVersionId: null,
-  measuredValue: null,
-  fillTime: ''
-})
-
-const uploadSelectedParamIds = ref([])
-const uploadMultiValues = reactive({})
-const uploadParamVersionMap = reactive({})
-const uploadLoadingVersions = ref(new Set())
-
-const hasAnyValue = computed(() => {
-  return Object.values(uploadMultiValues).some(v => v !== null && v !== undefined && v !== '')
-})
+const alertList = ref([])
+const loadingAlerts = ref(false)
+const enabledAlertRules = ref([1, 2, 3, 4, 5, 6, 7, 8])
 
 const capability = computed(() => chartData.value?.capability || null)
 const capabilityClass = computed(() => {
@@ -454,11 +354,6 @@ const capabilityClass = computed(() => {
 const selectedParamObj = computed(() => {
   if (!selectedParam.value || !params.value.length) return null
   return params.value.find(p => p.id === selectedParam.value) || null
-})
-
-const uploadParamObj = computed(() => {
-  if (!uploadData.value.paramId || !uploadParams.value.length) return null
-  return uploadParams.value.find(p => p.id === uploadData.value.paramId) || null
 })
 
 const hasManualLimit = computed(() => {
@@ -897,6 +792,48 @@ async function loadParamAcrossEquipments() {
   try {
     processCharts.value = await Promise.all(chartPromises)
   } catch (e) { console.error('加载参数跨设备控制图失败', e) }
+
+  loadAlerts()
+}
+
+async function loadAlerts() {
+  if (!selectedParam.value || !selectedProduct.value) {
+    alertList.value = []
+    return
+  }
+
+  loadingAlerts.value = true
+  try {
+    const res = await spcApi.getAlerts({
+      paramId: selectedParam.value,
+      productId: selectedProduct.value,
+      equipmentId: selectedEquipment.value || null,
+      limit: dataLimit.value,
+      ...getTimeRangeParams()
+    })
+    if (res.code === 200 && res.data) {
+      alertList.value = res.data.filter(a => enabledAlertRules.value.includes(a.ruleId))
+    } else {
+      alertList.value = []
+    }
+  } catch (e) {
+    console.error('加载异常检测数据失败', e)
+    alertList.value = []
+  } finally {
+    loadingAlerts.value = false
+  }
+}
+
+function onRulesChange(rules) {
+  enabledAlertRules.value = rules
+  if (alertList.value.length > 0) {
+    alertList.value = alertList.value.filter(a => enabledAlertRules.value.includes(a.ruleId))
+  }
+}
+
+function handleDataImported() {
+  dataCache.clear()
+  refreshAllCharts()
 }
 
 async function calculateStat() {
@@ -906,174 +843,6 @@ async function calculateStat() {
     await spcApi.calculateStat({ paramVersionId: currentVersion.value.id })
     refreshAllCharts()
   } catch (e) { console.error('计算统计失败', e) }
-}
-
-async function onUploadProductChange() {
-  uploadData.value.processId = null
-  uploadData.value.paramId = null
-  uploadProcesses.value = []
-  uploadParams.value = []
-  submitAttempted.value = false
-
-  if (!uploadData.value.productId) return
-
-  try {
-    const res = await spcApi.getProcessPage({ current: 1, size: 100 })
-    if (res.code === 200) uploadProcesses.value = res.data.records
-  } catch (e) { console.error('加载工序失败', e) }
-}
-
-async function onUploadProcessChange() {
-  uploadData.value.paramId = null
-  uploadParams.value = []
-  uploadSelectedParamIds.value = []
-  Object.keys(uploadMultiValues).forEach(k => delete uploadMultiValues[k])
-  Object.keys(uploadParamVersionMap).forEach(k => delete uploadParamVersionMap[k])
-  uploadLoadingVersions.value = new Set()
-  submitAttempted.value = false
-
-  if (!uploadData.value.processId) return
-
-  try {
-    const res = await spcApi.getParamPage({ current: 1, size: 100 })
-    if (res.code === 200) {
-      uploadParams.value = res.data.records.filter(p => p.processId === uploadData.value.processId)
-    }
-  } catch (e) { console.error('加载标准(参数)失败', e) }
-
-  await loadEquipmentByProcess()
-}
-
-// async function loadEquipmentByProcess() {
-//   equipmentList.value = []
-//   uploadData.value.equipmentId = null
-//   if (!uploadData.value.processId) return
-//   try {
-//     const res = await spcApi.getProcessEquipment(uploadData.value.processId)
-//     if (res.code === 200 && res.data) {
-//       equipmentList.value = res.data.map(eq => ({
-//         id: eq.id,
-//         code: eq.equipCode,
-//         name: eq.equipName || eq.equipCode
-//       }))
-//     }
-//   } catch (e) { console.error('加载设备列表失败', e) }
-// }
-
-function onMultiParamChange(param) {
-  const isChecked = uploadSelectedParamIds.value.includes(param.id)
-  if (!isChecked) {
-    delete uploadMultiValues[param.id]
-    delete uploadParamVersionMap[param.id]
-    return
-  }
-  loadParamVersion(param.id)
-}
-
-async function loadParamVersion(paramId) {
-  if (!uploadData.value.productId) return
-  uploadLoadingVersions.value = new Set([...uploadLoadingVersions.value, paramId])
-  try {
-    const res = await spcApi.getParamVersionCurrent({
-      paramId: paramId,
-      productId: uploadData.value.productId
-    })
-    if (res.code === 200 && res.data) {
-      uploadParamVersionMap[paramId] = res.data
-    }
-  } catch (e) { console.error('加载版本失败:', e) } finally {
-    const s = new Set(uploadLoadingVersions.value)
-    s.delete(paramId)
-    uploadLoadingVersions.value = s
-  }
-}
-
-function getParamName(paramId) {
-  const p = uploadParams.value.find(p => p.id === paramId)
-  return p ? p.paramName : ''
-}
-
-function getParamUnit(paramId) {
-  const p = uploadParams.value.find(p => p.id === paramId)
-  return p ? (p.unit || '') : ''
-}
-
-async function submitData() {
-  submitAttempted.value = true
-  uploading.value = true
-  uploadResult.value = null
-
-  try {
-    if (uploadSelectedParamIds.value.length === 0) {
-      uploadResult.value = { success: false, message: '请至少选择一个工艺参数' }
-      return
-    }
-    if (!uploadData.value.equipmentId) {
-      uploadResult.value = { success: false, message: '请选择设备' }
-      return
-    }
-
-    const emptyParams = []
-    for (const pid of uploadSelectedParamIds.value) {
-      const val = uploadMultiValues[pid]
-      if (val === null || val === undefined || val === '' || isNaN(val)) {
-        emptyParams.push(getParamName(pid))
-      }
-    }
-    if (emptyParams.length > 0) {
-      uploadResult.value = { success: false, message: `以下参数的测量值不能为空: ${emptyParams.join(', ')}` }
-      return
-    }
-
-    const basePayload = {
-      productId: uploadData.value.productId,
-      processId: uploadData.value.processId,
-      equipmentId: uploadData.value.equipmentId,
-      batchId: uploadData.value.batchId || null
-    }
-    let fillTime = uploadData.value.fillTime
-    if (fillTime) fillTime = fillTime.replace('T', ' ') + ':00'
-
-    const records = []
-    for (const pid of uploadSelectedParamIds.value) {
-      records.push({
-        ...basePayload,
-        paramId: pid,
-        measuredValue: uploadMultiValues[pid],
-        paramVersionId: null,
-        ...(fillTime ? { fillTime } : {})
-      })
-    }
-
-    const results = await Promise.allSettled(
-      records.map(r => spcApi.uploadData(r))
-    )
-
-    const okCount = results.filter(r => r.status === 'fulfilled' && r.value.code === 200).length
-    const failCount = records.length - okCount
-
-    if (okCount > 0 && failCount === 0) {
-      uploadResult.value = { success: true, message: `成功提交 ${okCount} 条数据！` }
-    } else if (okCount > 0) {
-      uploadResult.value = { success: true, message: `成功 ${okCount} 条，失败 ${failCount} 条` }
-    } else {
-      uploadResult.value = { success: false, message: '全部提交失败，请检查网络或数据格式' }
-      return
-    }
-
-    Object.keys(uploadMultiValues).forEach(k => delete uploadMultiValues[k])
-    submitAttempted.value = false
-    dataCache.clear()
-    setTimeout(() => {
-      showUploadForm.value = false
-      uploadResult.value = null
-      refreshAllCharts()
-    }, 1500)
-  } catch (e) {
-    uploadResult.value = { success: false, message: '网络错误' }
-  } finally {
-    uploading.value = false
-  }
 }
 
 async function loadVersionHistory() {
@@ -1202,6 +971,40 @@ watch(() => props.isLoggedIn, (val) => {
 .btn-upload {
   background: linear-gradient(135deg, #722ed1, #531dab);
   color: white;
+}
+
+.btn-import,
+.btn-export,
+.btn-template {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-import {
+  background: linear-gradient(135deg, #13c2c2, #08979c);
+  color: white;
+}
+
+.btn-export {
+  background: linear-gradient(135deg, #faad14, #d48806);
+  color: white;
+}
+
+.btn-template {
+  background: linear-gradient(135deg, #52c41a, #389e0d);
+  color: white;
+}
+
+.btn-import:hover,
+.btn-export:hover,
+.btn-template:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .btn-version {
@@ -1536,11 +1339,34 @@ watch(() => props.isLoggedIn, (val) => {
   .chart-grid { grid-template-columns: 1fr; }
 }
 
+@media (max-width: 768px) {
+  .filter-bar { gap: 8px; flex-wrap: wrap; justify-content: stretch; }
+  .filter-group { min-width: calc(50% - 4px); flex: 1; }
+  .filter-select { min-width: auto; width: 100%; font-size: 12px; padding: 8px 28px 8px 8px; }
+  .btn-apply, .btn-calc { flex: 1; text-align: center; font-size: 12px; padding: 10px 16px; }
+}
+
 @media (max-width: 600px) {
   .filter-bar { flex-direction: column; align-items: stretch; }
+  .filter-group { min-width: 100%; }
+  .filter-select { min-width: 100%; }
+  .btn-apply, .btn-calc { width: 100%; order: 99; margin-top: 4px; }
+
   .stat-grid { grid-template-columns: repeat(2, 1fr); }
   .form-row { flex-direction: column; }
   .chart-mini-stats { flex-wrap: wrap; gap: 8px; }
+
+  .limit-input-bar { padding: 12px 14px; }
+  .limit-groups { flex-direction: column; }
+  .limit-group { min-width: 100%; }
+  .group-fields { flex-direction: column; }
+  .limit-field { width: 100%; }
+  .limit-input { width: 100%; box-sizing: border-box; }
+  .limit-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn-apply-limit, .btn-reset-limit { flex: 1; min-width: 120px; text-align: center; }
+
+  .standard-info-bar { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .standard-info { flex-direction: column; align-items: flex-start; gap: 4px; }
 }
 
 .standard-info-bar {
@@ -1637,9 +1463,50 @@ watch(() => props.isLoggedIn, (val) => {
 .limit-header-row {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 14px;
+  cursor: pointer;
+  user-select: none;
+  padding: 6px 0;
+  transition: background 0.2s;
+  border-radius: 8px;
+}
+.limit-header-row:hover {
+  background: rgba(24,144,255,0.05);
 }
 .limit-title { font-size: 14px; font-weight: 700; color: var(--text-primary); }
 .limit-hint { font-size: 11px; color: var(--text-tertiary); }
+
+.limit-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.limit-toggle {
+  font-size: 12px;
+  color: #1890ff;
+  transition: transform 0.3s ease;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(24,144,255,0.08);
+}
+.limit-toggle.expanded {
+  transform: rotate(180deg);
+}
+
+.limit-body {
+  overflow: hidden;
+}
+
+.limit-hint-full {
+  display: block;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: rgba(250,173,20,0.06);
+  border-radius: 6px;
+  border-left: 3px solid #faad14;
+}
 
 .limit-groups {
   display: flex; gap: 16px; flex-wrap: wrap;
@@ -1943,5 +1810,147 @@ watch(() => props.isLoggedIn, (val) => {
 .fade-up-leave-to {
   opacity: 0;
   transform: translateY(12px);
+}
+
+.batch-input-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.batch-input-group .form-input {
+  flex: 1;
+}
+
+.btn-scan {
+  padding: 8px 14px;
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #722ed1, #531dab);
+  color: white;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+
+.btn-scan:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(114, 46, 209, 0.4);
+}
+
+.scanner-container {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f6f8fa;
+  border-radius: 8px;
+  border: 1px solid #d9d9d9;
+}
+
+.scanner-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  font-weight: 600;
+  color: #333;
+}
+
+.btn-close-scanner {
+  padding: 4px 12px;
+  border: none;
+  border-radius: 4px;
+  background: #ff4d4f;
+  color: white;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.btn-close-scanner:hover {
+  background: #cf1322;
+}
+
+.qr-reader {
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #000;
+}
+
+.qr-reader video {
+  border-radius: 8px;
+}
+
+.scanner-hint {
+  text-align: center;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #888;
+}
+
+.import-modal {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.import-form .file-input {
+  padding: 10px;
+  border: 2px dashed #d9d9d9;
+  border-radius: 8px;
+  background: #fafafa;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.import-form .file-input:hover {
+  border-color: #13c2c2;
+  background: #e6fffb;
+}
+
+.import-preview {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f6f8fa;
+  border-radius: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.preview-table th,
+.preview-table td {
+  padding: 4px 8px;
+  border: 1px solid #e8e8e8;
+  text-align: center;
+}
+
+.preview-table th {
+  background: #f0f0f0;
+  font-weight: 600;
+}
+
+.slide-fade-enter-active {
+  transition: all 0.3s ease-out;
+}
+.slide-fade-leave-active {
+  transition: all 0.2s ease-in;
+}
+.slide-fade-enter-from,
+.slide-fade-leave-to {
+  transform: translateY(-10px);
+  opacity: 0;
 }
 </style>

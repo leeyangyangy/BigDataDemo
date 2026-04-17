@@ -25,6 +25,7 @@ public class SpcDataService extends ServiceImpl<SpcDataMapper, SpcData> {
 
     private final ParamVersionService paramVersionService;
     private final StringRedisTemplate redisTemplate;
+    private final SpcRuleEngine spcRuleEngine;
 
     private static final String IDEMPOTENT_PREFIX = "spc:idempotent:";
     private static final String LATEST_DATA_PREFIX = "spc:latest:";
@@ -92,6 +93,20 @@ public class SpcDataService extends ServiceImpl<SpcDataMapper, SpcData> {
         save(data);
 
         cacheLatestData(data);
+
+        try {
+            LambdaQueryWrapper<SpcData> recentWrapper = new LambdaQueryWrapper<SpcData>()
+                    .eq(SpcData::getParamVersionId, version.getId())
+                    .eq(SpcData::getDeleted, 0)
+                    .orderByDesc(SpcData::getCollectTime)
+                    .last("LIMIT 30");
+            List<SpcData> recentData = list(recentWrapper);
+            if (recentData.size() >= 2) {
+                spcRuleEngine.saveAndLogAlerts(recentData, version);
+            }
+        } catch (Exception e) {
+            log.warn("[RuleEngine] 判异检测异常(不影响数据写入): {}", e.getMessage());
+        }
 
         log.info("[DataUpload] 数据写入成功: id={} paramVersionId={} value={}",
                 data.getId(), version.getId(), data.getMeasuredValue());

@@ -394,7 +394,8 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1200;
+  z-index: 2000;
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 .modal-card {
@@ -496,11 +497,22 @@ onMounted(() => {
 .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
 
 @media (max-width: 768px) {
-  .toolbar { flex-direction: column; align-items: stretch; }
-  .search-bar { flex-direction: column; }
-  .search-input { width: 100%; }
+  .toolbar { flex-direction: column; align-items: stretch; gap: 8px; }
+  .search-bar { flex-direction: column; gap: 6px; }
+  .search-input { width: 100%; box-sizing: border-box; }
+  .filter-select-sm { width: 100%; box-sizing: border-box; }
+  .btn-search, .btn-create { width: 100%; text-align: center; padding: 10px 16px; font-size: 13px; }
+  .btn-search { order: 3; }
   .form-grid { grid-template-columns: 1fr; }
-  .data-table { font-size: 12px; }
-  .data-table th, .data-table td { padding: 8px 10px; }
+  .data-table { font-size: 12px; overflow-x: auto; display: block; white-space: nowrap; }
+  .data-table th, .data-table td { padding: 8px 10px; min-width: 80px; }
+  .actions { display: flex; gap: 4px; flex-wrap: wrap; }
+  .btn-action { padding: 4px 10px; font-size: 11px; flex: 1; text-align: center; min-width: 60px; }
+  .pagination { justify-content: center; flex-wrap: wrap; gap: 6px; }
+  .page-btn { padding: 6px 14px; font-size: 12px; }
+  .page-info { font-size: 12px; }
+  .modal-actions { flex-direction: column-reverse; width: 100%; }
+  .btn-cancel, .btn-submit { width: 100%; text-align: center; padding: 10px 16px; font-size: 13px; }
+  .modal-card { width: 95vw; padding: 16px; padding-bottom: 100px; max-height: calc(100vh - 40px); overflow-y: auto; }
 }
 </style>

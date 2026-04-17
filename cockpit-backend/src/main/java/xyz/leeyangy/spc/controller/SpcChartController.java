@@ -11,6 +11,8 @@ import xyz.leeyangy.spc.entity.ParamVersion;
 import xyz.leeyangy.spc.service.ParamVersionService;
 import xyz.leeyangy.spc.service.SpcDataService;
 import xyz.leeyangy.spc.service.SpcStatService;
+import xyz.leeyangy.spc.service.SpcRuleEngine;
+import xyz.leeyangy.spc.entity.SpcAlert;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -25,6 +27,7 @@ public class SpcChartController {
     private final SpcDataService spcDataService;
     private final SpcStatService spcStatService;
     private final ParamVersionService paramVersionService;
+    private final SpcRuleEngine spcRuleEngine;
 
     @GetMapping("/control")
     public R<Map<String, Object>> getControlChart(
@@ -99,6 +102,12 @@ public class SpcChartController {
             capability.put("stdDev", stat.getStdDev());
             capability.put("sampleCount", stat.getSampleCount());
             result.put("capability", capability);
+            result.put("passRate", stat.getPassRate());
+            result.put("passCount", stat.getPassCount());
+            result.put("failCount", stat.getFailCount());
+            result.put("normalityW", stat.getNormalityW());
+            result.put("normalityPValue", stat.getNormalityPValue());
+            result.put("isNormal", stat.getIsNormal());
         }
 
         result.put("totalPoints", dataList.size());
@@ -170,6 +179,12 @@ public class SpcChartController {
                 capability.put("stdDev", stat.getStdDev());
                 capability.put("sampleCount", stat.getSampleCount());
                 result.put("capability", capability);
+                result.put("passRate", stat.getPassRate());
+                result.put("passCount", stat.getPassCount());
+                result.put("failCount", stat.getFailCount());
+                result.put("normalityW", stat.getNormalityW());
+                result.put("normalityPValue", stat.getNormalityPValue());
+                result.put("isNormal", stat.getIsNormal());
             }
         } else {
             Map<String, Object> emptyLimits = new LinkedHashMap<>();
@@ -185,5 +200,56 @@ public class SpcChartController {
         }
 
         return R.ok(result);
+    }
+
+    @GetMapping("/alerts")
+    public R<List<Map<String, Object>>> getAlerts(
+            @RequestParam Long paramId,
+            @RequestParam Long productId,
+            @RequestParam(required = false) Long equipmentId,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startTime,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime,
+            @RequestParam(defaultValue = "100") Integer limit) {
+
+        ParamVersion version = paramVersionService.getCurrentVersion(paramId, productId);
+        if (version == null) {
+            return R.ok(new ArrayList<>());
+        }
+
+        List<SpcData> dataList = spcDataService.listRecentData(version.getId(), limit, startTime, endTime);
+
+        if (equipmentId != null) {
+            dataList = dataList.stream()
+                    .filter(d -> equipmentId.equals(d.getEquipmentId()))
+                    .collect(Collectors.toList());
+        }
+
+        List<SpcAlert> alerts = spcRuleEngine.detectRules(dataList, version);
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (int i = 0; i < alerts.size(); i++) {
+            SpcAlert alert = alerts.get(i);
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("ruleId", i + 1);
+            item.put("ruleCode", alert.getRuleNumber());
+            item.put("ruleName", alert.getRuleName());
+            item.put("value", alert.getMeasuredValue() != null ? alert.getMeasuredValue().toString() : "");
+            item.put("time", alert.getAlertTime() != null ? alert.getAlertTime().toString() : "");
+            item.put("index", i);
+            item.put("message", alert.getMessage());
+            item.put("severity", getSeverityLevel(alert.getRuleNumber()));
+            result.add(item);
+        }
+
+        return R.ok(result);
+    }
+
+    private String getSeverityLevel(String ruleCode) {
+        if (SpcRuleEngine.RULE_1_BEYOND_3SIGMA.equals(ruleCode)) return "critical";
+        if (SpcRuleEngine.RULE_2_NINE_ONE_SIDE.equals(ruleCode)) return "major";
+        if (SpcRuleEngine.RULE_3_SIX_TREND.equals(ruleCode)) return "major";
+        if (SpcRuleEngine.RULE_5_TWO_OF_THREE_2SIGMA.equals(ruleCode)) return "warning";
+        if (SpcRuleEngine.RULE_6_FOUR_OF_FIVE_1SIGMA.equals(ruleCode)) return "warning";
+        return "warning";
     }
 }

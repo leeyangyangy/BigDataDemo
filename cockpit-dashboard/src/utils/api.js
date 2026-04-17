@@ -207,7 +207,14 @@ export const spcApi = {
   createProduct: (data) => api.post('/spc/product', data),
   getProcessPage: (params) => api.get('/spc/process/page', params),
   getProcessEquipment: (processId) => api.get(`/spc/process/${processId}/equipment`),
-  getParamPage: (params) => api.get('/spc/param/page', params)
+  getParamPage: (params) => api.get('/spc/param/page', params),
+  getAlerts: (params) => api.get('/spc/chart/alerts', params),
+  importData: (formData) => api.post('/spc/data/import', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  downloadTemplate: () => '/api/spc/data/template/download',
+  exportReport: (params) => {
+    const queryString = new URLSearchParams(params).toString()
+    return `/api/spc/data/export/report?${queryString}`
+  }
 }
 
 export const adminApi = {

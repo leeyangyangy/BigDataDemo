@@ -8,7 +8,6 @@
           <span class="user-badge" @click.stop="showUserMenu = !showUserMenu">
             <span class="user-avatar">{{ userInfo?.username?.[0] || 'U' }}</span>
             <span class="user-name">{{ userInfo?.username }}</span>
-            <span class="user-role">{{ roleLabel }}</span>
           </span>
           <div class="user-dropdown" v-if="showUserMenu" @click.stop>
             <div class="dropdown-header">
@@ -395,5 +394,10 @@ onUnmounted(() => {
 .gate-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(var(--accent-rgb), 0.4);
+}
+
+@media (max-width: 640px) {
+  .user-name { display: none; }
+  .user-avatar { width: 32px; height: 32px; font-size: 14px; }
 }
 </style>

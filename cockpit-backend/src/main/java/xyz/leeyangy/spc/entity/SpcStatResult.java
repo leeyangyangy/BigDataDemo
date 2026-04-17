@@ -31,6 +31,12 @@ public class SpcStatResult extends BaseEntity {
     private BigDecimal calcUcl;
     private BigDecimal calcLcl;
     private BigDecimal calcCl;
+    private BigDecimal passRate;
+    private Integer passCount;
+    private Integer failCount;
+    private BigDecimal normalityW;
+    private BigDecimal normalityPValue;
+    private Boolean isNormal;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime statTime;
