@@ -675,17 +675,16 @@ async function submitData() {
         })
       }
     }
-
-    const results = await Promise.allSettled(
-      records.map(r => spcApi.uploadData(r))
-    )
+    // TODO 需要完善数据留痕，方便后期查找对应负责人
+    const res = await spcApi.batchUploadData(records)
 
     let okCount = 0
     let failCount = 0
-    results.forEach(r => {
-      if (r.status === 'fulfilled' && r.value?.code === 200) okCount++
-      else failCount++
-    })
+    if (res.code === 200 && Array.isArray(res.data)) {
+      okCount = res.data.length
+    } else {
+      failCount = records.length
+    }
 
     if (failCount === 0) {
       uploadResult.value = { success: true, message: `成功提交 ${okCount} 条数据！` }
