@@ -116,7 +116,7 @@
       <div class="modal-card modal-lg">
         <h3 class="modal-title">工序设备管理 - {{ currentProcess?.processName }}</h3>
         <div class="toolbar-sm">
-          <button class="btn-create btn-sm" @click="openEquipForm(null)">+ 添加设备</button>
+          <button class="btn-create btn-sm" @click="openEquipSelector">+ 添加设备</button>
         </div>
         <div class="table-wrap" style="margin-top:12px">
           <table class="data-table" v-if="processEquipList.length > 0">
@@ -139,6 +139,45 @@
             </tbody>
           </table>
           <div class="empty-state" v-else><p>该工序暂无绑定设备，请点击上方按钮添加</p></div>
+        </div>
+
+        <!-- 设备选择器弹窗 -->
+        <div class="modal-overlay-inner" v-if="showEquipSelector" @click.self="showEquipSelector = false">
+          <div class="modal-card modal-lg">
+            <h3 class="modal-title">选择要绑定的设备</h3>
+            <div class="toolbar-sm" style="margin-bottom:12px">
+              <input v-model="equipSearchKeyword" type="text" class="search-input" placeholder="搜索设备编码/名称..." @keyup.enter="searchAvailableEquip" style="width:250px" />
+              <button class="btn-search btn-sm" @click="searchAvailableEquip">搜索</button>
+              <button class="btn-create btn-sm" @click="openEquipForm(null)" style="margin-left:auto">+ 手动新增设备</button>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table" v-if="availableEquipList.length > 0">
+                <thead>
+                  <tr><th>设备编码</th><th>设备名称</th><th>型号</th><th>类型</th><th>位置</th><th>当前绑定工序</th><th>操作</th></tr>
+                </thead>
+                <tbody>
+                  <tr v-for="eq in availableEquipList" :key="eq.id">
+                    <td><strong>{{ eq.equipCode }}</strong></td>
+                    <td>{{ eq.equipName }}</td>
+                    <td>{{ eq.equipModel || '-' }}</td>
+                    <td>{{ eq.equipType || '-' }}</td>
+                    <td>{{ eq.location || '-' }}</td>
+                    <td><span class="process-tag">{{ eq.processId ? (getProcessNameById(eq.processId) || '已绑定') : '未绑定' }}</span></td>
+                    <td class="actions">
+                      <button class="btn-action btn-edit" @click="bindEquipment(eq)">绑定到本工序</button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="empty-state" v-else>
+                <p v-if="!equipSearching">暂无可选设备，可点击上方按钮手动新增</p>
+                <p v-else>搜索中...</p>
+              </div>
+            </div>
+            <div class="modal-actions">
+              <button class="btn-cancel" @click="showEquipSelector = false">关闭</button>
+            </div>
+          </div>
         </div>
 
         <!-- 设备添加/编辑子弹窗 -->
@@ -237,6 +276,10 @@ const equipMsg = ref('')
 const equipMsgType = ref('')
 const equipForm = ref({ equipCode: '', equipName: '', equipModel: '', equipType: '检测设备', location: '', status: '正常', remark: '' })
 const processEquipCountMap = ref({})
+const showEquipSelector = ref(false)
+const availableEquipList = ref([])
+const equipSearchKeyword = ref('')
+const equipSearching = ref(false)
 
 function getWorkshopName(workshopId) {
   if (!workshopId) return '未绑定'
@@ -367,6 +410,56 @@ async function loadProcessEquipData(processId) {
     const res = await spcApi.getProcessEquipment(processId)
     processEquipList.value = (res.code === 200 && Array.isArray(res.data)) ? res.data : []
   } catch (e) { console.error('加载工序设备失败:', e); processEquipList.value = [] }
+}
+
+function getProcessNameById(processId) {
+  if (!processId || !list.value.length) return null
+  const p = list.value.find(x => x.id === processId)
+  return p ? p.processName : null
+}
+
+async function openEquipSelector() {
+  showEquipSelector.value = true
+  equipSearchKeyword.value = ''
+  await searchAvailableEquip()
+}
+
+async function searchAvailableEquip() {
+  equipSearching.value = true
+  try {
+    const res = await adminApi.equipment.getPage({
+      keyword: equipSearchKeyword.value || undefined,
+      size: 50
+    })
+    if (res.code === 200 && res.data?.records) {
+      availableEquipList.value = res.data.records.filter(eq => eq.processId !== currentProcess.value?.id)
+    } else {
+      availableEquipList.value = []
+    }
+  } catch (e) {
+    console.error('查询可用设备失败:', e)
+    availableEquipList.value = []
+  } finally {
+    equipSearching.value = false
+  }
+}
+
+async function bindEquipment(eq) {
+  if (!confirm(`确定将设备 "${eq.equipName}" (${eq.equipCode}) 绑定到当前工序吗？`)) return
+
+  try {
+    const res = await adminApi.equipment.update(eq.id, {
+      ...eq,
+      processId: currentProcess.value.id
+    })
+    if (res.code === 200) {
+      showEquipSelector.value = false
+      await loadProcessEquipData(currentProcess.value.id)
+      await loadEquipCounts()
+    }
+  } catch (e) {
+    console.error('绑定设备失败:', e)
+  }
 }
 
 function openEquipForm(eq) {
