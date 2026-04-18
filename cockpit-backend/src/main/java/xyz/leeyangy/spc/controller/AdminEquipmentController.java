@@ -1,6 +1,7 @@
 package xyz.leeyangy.spc.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -81,14 +82,22 @@ public class AdminEquipmentController {
         if (req.getEquipType() != null) exist.setEquipType(req.getEquipType());
         if (req.getEquipModel() != null) exist.setEquipModel(req.getEquipModel());
         if (req.getLineId() != null) exist.setLineId(req.getLineId());
-        if (req.getProcessId() != null) exist.setProcessId(req.getProcessId());
         if (req.getLocation() != null) exist.setLocation(req.getLocation());
         if (req.getStatus() != null) exist.setStatus(req.getStatus());
         if (req.getRemark() != null) exist.setRemark(req.getRemark());
 
-        equipmentService.updateById(exist);
-        log.info("[Admin] 更新设备: id={} code={}", id, exist.getEquipCode());
-        return R.ok("更新成功", exist);
+        if (Boolean.TRUE.equals(req.getClearProcessId())) {
+            equipmentService.update(new LambdaUpdateWrapper<Equipment>()
+                    .eq(Equipment::getId, id)
+                    .set(Equipment::getProcessId, null));
+            log.info("[Admin] 解绑设备: id={} code={} processId=null", id, exist.getEquipCode());
+        } else {
+            if (req.getProcessId() != null) exist.setProcessId(req.getProcessId());
+            equipmentService.updateById(exist);
+            log.info("[Admin] 更新设备: id={} code={} processId={}", id, exist.getEquipCode(), exist.getProcessId());
+        }
+
+        return R.ok("更新成功", equipmentService.getById(id));
     }
 
     @DeleteMapping("/{id}")
@@ -121,6 +130,7 @@ public class AdminEquipmentController {
         private String equipModel;
         private Long lineId;
         private Long processId;
+        private Boolean clearProcessId;
         private String location;
         private String status;
         private String remark;

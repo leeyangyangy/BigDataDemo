@@ -509,9 +509,10 @@ async function handleUnbindEquip(eq) {
   if (!confirm(`确定解绑设备 "${eq.equipName}" (${eq.equipCode}) 吗？`)) return
 
   try {
-    const res = await adminApi.equipment.delete(eq.id)
+    const res = await adminApi.equipment.update(eq.id, { clearProcessId: true })
     if (res.code === 200) {
       await loadProcessEquipData(currentProcess.value.id)
+      await loadEquipCounts()
     }
   } catch (e) { console.error('解绑失败:', e) }
 }
