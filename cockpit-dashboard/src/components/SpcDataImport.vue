@@ -8,7 +8,7 @@
     </div>
 
     <!-- 数据导入对话框 -->
-    <div class="import-modal" v-if="showImport" @click.self="showImport = false">
+    <div class="import-modal" v-if="showImport">
       <div class="modal-content">
         <h3>导入SPC数据</h3>
         <div class="import-form">
@@ -73,7 +73,7 @@
     </div>
 
     <!-- 填写数据表单 -->
-    <div class="upload-modal" v-if="showUploadForm" @click.self="showUploadForm = false">
+    <div class="upload-modal" v-if="showUploadForm">
       <div class="modal-content">
         <h3>填写SPC数据</h3>
         <div class="upload-form">

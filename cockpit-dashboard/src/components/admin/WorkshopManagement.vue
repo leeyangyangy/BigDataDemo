@@ -55,7 +55,7 @@
       <button class="page-btn" :disabled="current >= totalPages" @click="current++; loadData()">下一页</button>
     </div>
 
-    <div class="modal-overlay" v-if="showForm" @click.self="closeForm">
+    <div class="modal-overlay" v-if="showForm">
       <div class="modal-card">
         <h3 class="modal-title">{{ isEdit ? '编辑车间' : '新建车间' }}</h3>
         <div class="form-grid">

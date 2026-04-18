@@ -61,7 +61,7 @@
     </div>
 
     <!-- 弹窗 -->
-    <div class="modal-overlay" v-if="showForm" @click.self="closeForm">
+    <div class="modal-overlay" v-if="showForm">
       <div class="modal-card">
         <h3 class="modal-title">{{ isEdit ? '编辑工序' : '新增工序' }}</h3>
 
@@ -112,7 +112,7 @@
     </div>
 
     <!-- 工序设备管理弹窗 -->
-    <div class="modal-overlay" v-if="showEquipModal" @click.self="showEquipModal = false">
+    <div class="modal-overlay" v-if="showEquipModal">
       <div class="modal-card modal-lg">
         <h3 class="modal-title">工序设备管理 - {{ currentProcess?.processName }}</h3>
         <div class="toolbar-sm">
@@ -142,7 +142,7 @@
         </div>
 
         <!-- 设备选择器弹窗 -->
-        <div class="modal-overlay-inner" v-if="showEquipSelector" @click.self="showEquipSelector = false">
+        <div class="modal-overlay-inner" v-if="showEquipSelector">
           <div class="modal-card modal-lg">
             <h3 class="modal-title">选择要绑定的设备</h3>
             <div class="toolbar-sm" style="margin-bottom:12px">
@@ -181,7 +181,7 @@
         </div>
 
         <!-- 设备添加/编辑子弹窗 -->
-        <div class="modal-overlay-inner" v-if="showEquipForm" @click.self="showEquipForm = false">
+        <div class="modal-overlay-inner" v-if="showEquipForm">
           <div class="modal-card">
             <h3 class="modal-title">{{ equipEditId ? '编辑设备' : '添加设备到工序' }}</h3>
             <div class="form-grid">
@@ -862,14 +862,14 @@ async function loadEquipCounts() {
   padding: 8px 24px;
   border: none;
   border-radius: 8px;
-  background: linear-gradient(135deg, var(--accent-primary), color-mix(in srgb, var(--accent-primary) 85%, white));
+  background: linear-gradient(135deg, #1890ff, #096dd9);
   color: white;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.25s;
 }
-.btn-submit:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.35); }
+.btn-submit:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(24,144,255,0.35); }
 .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
 
 @media (max-width: 768px) {

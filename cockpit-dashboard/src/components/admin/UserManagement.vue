@@ -66,7 +66,7 @@
     </div>
 
     <!-- 弹窗 -->
-    <div class="modal-overlay" v-if="showForm" @click.self="closeForm">
+    <div class="modal-overlay" v-if="showForm">
       <div class="modal-card">
         <h3 class="modal-title">{{ isEdit ? '编辑用户' : '新增用户' }}</h3>
 

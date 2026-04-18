@@ -15,6 +15,7 @@
     </div>
 
     <div class="table-wrap" v-if="list.length > 0">
+<!--      TODO 样式带变更-->
       <table class="data-table">
         <thead>
           <tr>
@@ -66,7 +67,7 @@
     </div>
 
     <!-- 新增/编辑弹窗 -->
-    <div class="modal-overlay" v-if="showForm" @click.self="closeForm">
+    <div class="modal-overlay" v-if="showForm">
       <div class="modal-card form-modal">
         <h3>{{ isEdit ? '编辑设备' : '新增设备' }}</h3>
 

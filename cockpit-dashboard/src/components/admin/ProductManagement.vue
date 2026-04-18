@@ -56,7 +56,7 @@
     </div>
 
     <!-- 弹窗 -->
-    <div class="modal-overlay" v-if="showForm" @click.self="closeForm">
+    <div class="modal-overlay" v-if="showForm">
       <div class="modal-card">
         <h3 class="modal-title">{{ isEdit ? '编辑产品' : '新增产品' }}</h3>
 
@@ -92,7 +92,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { adminApi } from '../../utils/api.js'
+import { adminApi } from '@/utils/api.js'
 
 const list = ref([])
 const total = ref(0)
