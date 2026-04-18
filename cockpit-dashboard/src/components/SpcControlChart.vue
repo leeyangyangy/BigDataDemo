@@ -161,7 +161,7 @@ function buildMarkLines(limits) {
   const lines = []
   if (limits.ucl != null) lines.push({ yAxis: limits.ucl, name: 'UCL', lineStyle: { color: '#f5222d', type: 'dashed', width: 2 }, label: { position: 'end', formatter: 'UCL: {c}', fontSize: 10 } })
   if (limits.lcl != null) lines.push({ yAxis: limits.lcl, name: 'LCL', lineStyle: { color: '#f5222d', type: 'dashed', width: 2 }, label: { position: 'end', formatter: 'LCL: {c}', fontSize: 10 } })
-  if (limits.cl != null) lines.push({ yAxis: limits.cl, name: 'CL', lineStyle: { color: '#52c41a', type: 'solid', width: 1.5 }, label: { position: 'end', formatter: 'CL: {c}', fontSize: 10 } })
+  if (limits.cl != null) lines.push({ yAxis: limits.cl, name: 'CL', lineStyle: { color: '#52c41a', type: 'solid', width: 1.5 }, label: { position: 'insideEndTop', formatter: 'CL: {c}', fontSize: 10, color: '#52c41a' } })
   return lines
 }
 
@@ -238,7 +238,7 @@ function renderIMR(data) {
 
   const mrMarkLines = []
   if (mrUcl != null) mrMarkLines.push({ yAxis: mrUcl, name: 'UCL', lineStyle: { color: '#f5222d', type: 'dashed', width: 2 }, label: { position: 'end', formatter: 'MR-UCL: {c}', fontSize: 10 } })
-  if (mrCl != null) mrMarkLines.push({ yAxis: mrCl, name: 'CL', lineStyle: { color: '#52c41a', type: 'solid', width: 1.5 }, label: { position: 'end', formatter: 'MR-CL: {c}', fontSize: 10 } })
+  if (mrCl != null) mrMarkLines.push({ yAxis: mrCl, name: 'CL', lineStyle: { color: '#52c41a', type: 'solid', width: 1.5 }, label: { position: 'insideEndTop', formatter: 'MR-CL: {c}', fontSize: 10, color: '#52c41a' } })
 
   const mrOption = {
     title: { text: 'MR 图 - 移动极差', left: 'center', textStyle: { fontSize: 13, fontWeight: 600 }, top: 6 },
@@ -347,7 +347,7 @@ function renderXbarR(data) {
           ...allMarkLines,
           { yAxis: xbarUcl.toFixed(4), name: 'UCL', lineStyle: { color: '#f5222d', type: 'dashed', width: 2 }, label: { position: 'end', formatter: 'UCL: {c}', fontSize: 10 } },
           { yAxis: xbarLcl.toFixed(4), name: 'LCL', lineStyle: { color: '#f5222d', type: 'dashed', width: 2 }, label: { position: 'end', formatter: 'LCL: {c}', fontSize: 10 } },
-          { yAxis: grandMean.toFixed(4), name: 'CL', lineStyle: { color: '#52c41a', type: 'solid', width: 1.5 }, label: { position: 'end', formatter: 'CL: {c}', fontSize: 10 } }
+          { yAxis: grandMean.toFixed(4), name: 'CL', lineStyle: { color: '#52c41a', type: 'solid', width: 1.5 }, label: { position: 'insideEndTop', formatter: 'CL: {c}', fontSize: 10, color: '#52c41a' } }
         ]
       }
     }]
@@ -374,7 +374,7 @@ function renderXbarR(data) {
         data: [
           { yAxis: rUcl.toFixed(4), name: 'UCL', lineStyle: { color: '#f5222d', type: 'dashed', width: 2 }, label: { position: 'end', formatter: 'R-UCL: {c}', fontSize: 10 } },
           ...(rLcl > 0 ? [{ yAxis: rLcl.toFixed(4), name: 'LCL', lineStyle: { color: '#f5222d', type: 'dashed', width: 2 }, label: { position: 'end', formatter: 'R-LCL: {c}', fontSize: 10 } }] : []),
-          { yAxis: avgRange.toFixed(4), name: 'CL', lineStyle: { color: '#52c41a', type: 'solid', width: 1.5 }, label: { position: 'end', formatter: 'R-CL: {c}', fontSize: 10 } }
+          { yAxis: avgRange.toFixed(4), name: 'CL', lineStyle: { color: '#52c41a', type: 'solid', width: 1.5 }, label: { position: 'insideEndTop', formatter: 'R-CL: {c}', fontSize: 10, color: '#52c41a' } }
         ]
       }
     }]
@@ -683,9 +683,10 @@ defineExpose({ refresh: handleResize, getCurrentType: () => currentChartType.val
 .spc-capability-panel {
   margin-top: 12px;
   padding: 12px 16px;
-  background: linear-gradient(135deg, #f0f5ff 0%, #e6f7ff 100%);
+  background: var(--accent-lighter);
   border-radius: 8px;
-  border: 1px solid #bae7ff;
+  border: 1px solid var(--accent-primary);
+  opacity: 0.7;
 }
 .cap-row {
   display: flex;
@@ -696,14 +697,14 @@ defineExpose({ refresh: handleResize, getCurrentType: () => currentChartType.val
 }
 .cap-label {
   font-size: 12px;
-  color: #666;
+  color: var(--text-secondary);
   margin-right: 4px;
 }
 .cap-highlight {
-  background: #fff;
+  background: var(--bg-secondary);
   padding: 2px 8px;
   border-radius: 4px;
-  border: 1px solid #91d5ff;
+  border: 1px solid var(--accent-primary);
 }
 .cap-tag {
   display: inline-block;
@@ -713,14 +714,14 @@ defineExpose({ refresh: handleResize, getCurrentType: () => currentChartType.val
   font-weight: 600;
 }
 .tag-normal {
-  background: #f6ffed;
+  background: rgba(56,158,13,0.08);
   color: #389e0d;
-  border: 1px solid #b7eb8f;
+  border: 1px solid rgba(56,158,13,0.3);
 }
 .tag-non-normal {
-  background: #fff2f0;
+  background: rgba(207,19,34,0.06);
   color: #cf1322;
-  border: 1px solid #ffa39e;
+  border: 1px solid rgba(207,19,34,0.3);
 }
 .cpk-excellent { color: #389e0d; }
 .cpk-good { color: #1890ff; }
@@ -732,9 +733,9 @@ defineExpose({ refresh: handleResize, getCurrentType: () => currentChartType.val
 .chart-toolbar {
   margin-bottom: 12px;
   padding: 8px 12px;
-  background: #fafafa;
+  background: var(--bg-tertiary);
   border-radius: 6px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--border-color);
 }
 .chart-type-selector {
   display: flex;
@@ -743,22 +744,22 @@ defineExpose({ refresh: handleResize, getCurrentType: () => currentChartType.val
 }
 .type-btn {
   padding: 6px 16px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--border-input);
   border-radius: 4px;
-  background: #fff;
+  background: var(--bg-secondary);
   cursor: pointer;
   font-size: 13px;
   transition: all 0.2s;
-  color: #666;
+  color: var(--text-secondary);
 }
 .type-btn:hover {
-  border-color: #1890ff;
-  color: #1890ff;
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
 }
 .type-btn.active {
-  background: #1890ff;
-  border-color: #1890ff;
-  color: #fff;
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: var(--text-on-accent);
 }
 
 .spc-boxplot-stats {
@@ -768,26 +769,26 @@ defineExpose({ refresh: handleResize, getCurrentType: () => currentChartType.val
   gap: 12px 0;
   margin-top: 10px;
   padding: 10px 16px;
-  background: #fafbfc;
+  background: var(--bg-tertiary);
   border-radius: 8px;
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--border-color);
   font-size: 12px;
 }
 
 .stat-item {
-  color: #555;
+  color: var(--text-secondary);
   line-height: 1.8;
 }
 
 .stat-item strong {
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .stat-divider {
   width: 1px;
   height: 16px;
-  background: #d9d9d9;
+  background: var(--border-input);
   flex-shrink: 0;
 }
 

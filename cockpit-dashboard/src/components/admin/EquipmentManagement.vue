@@ -229,6 +229,7 @@ async function handleSubmit() {
 }
 
 async function handleDelete(item) {
+  // TODO 删除功能需要和后端一块联动，确认删除后需要更新前端列表
   if (!confirm(`确认删除设备 "${item.equipName}" 吗？`)) return
   deleting.value = true
   try {
@@ -399,7 +400,7 @@ onMounted(() => {
 
 .loading-overlay {
   position: absolute; inset: 0; z-index: 10;
-  background: rgba(255,255,255,.55); backdrop-filter: blur(2px);
+  background: var(--bg-primary); opacity: .55; backdrop-filter: blur(2px);
   display: flex; align-items: center; justify-content: center; border-radius: 12px;
 }
 .spinner {
@@ -420,8 +421,8 @@ onMounted(() => {
 
 .form-modal {
   width: 640px; max-width: 95vw; max-height: 90vh; overflow-y: auto;
-  padding: 28px; border-radius: 16px; background: var(--bg-card);
-  box-shadow: 0 25px 80px rgba(0,0,0,.22), 0 0 0 1px rgba(255,255,255,.05);
+  padding: 28px; border-radius: 16px; background: var(--bg-modal);
+  box-shadow: var(--shadow-lg);
   animation: slideUp .28s ease-out;
 }
 @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }

@@ -122,29 +122,52 @@
           </div>
 
           <div class="multi-value-section" v-if="uploadSelectedParamIds.length > 0">
-            <div class="multi-value-row" v-for="pid in uploadSelectedParamIds" :key="'val-' + pid">
-              <div class="param-col-left">
-                <div class="param-badge">{{ getParamName(pid) }}</div>
-                <span class="unit-tag">{{ getParamUnit(pid) }}</span>
+            <div class="batch-table-header">
+              <label class="multi-param-label">测量数据 <span class="req">*</span></label>
+              <div class="row-actions">
+                <button type="button" class="btn-add-row" @click="addRow" :disabled="uploadRows.length >= MAX_ROWS" title="添加一行">+ 添加一行</button>
+                <span class="row-count-hint">{{ uploadRows.length }}/{{ MAX_ROWS }} 行</span>
               </div>
-              <div class="param-col-right">
-                <input v-model.number="uploadMultiValues[pid]" type="number" step="0.000001"
-                       class="form-input value-input" placeholder="测量值 (必填)" />
-                <div class="param-limit-info" v-if="uploadParamVersionMap[pid]">
-                  <span class="limit-item">USL={{ uploadParamVersionMap[pid].usl ?? '-' }}</span>
-                  <span class="limit-item">LSL={{ uploadParamVersionMap[pid].lsl ?? '-' }}</span>
-                  <span class="limit-item">T={{ uploadParamVersionMap[pid].target ?? '-' }}</span>
-                  <span class="limit-sep">|</span>
-                  <span class="limit-item">UCL={{ uploadParamVersionMap[pid].ucl ?? '-' }}</span>
-                  <span class="limit-item">LCL={{ uploadParamVersionMap[pid].lcl ?? '-' }}</span>
-                </div>
-                <div class="param-limit-info loading-hint" v-else-if="uploadLoadingVersions.has(pid)">
-                  加载标准中...
-                </div>
-                <div class="param-limit-info no-version-hint" v-else>
-                  暂无版本，提交时将自动创建
-                </div>
-              </div>
+            </div>
+            <div class="batch-table-wrap">
+              <table class="batch-table">
+                <thead>
+                  <tr>
+                    <th class="col-row-num">#</th>
+                    <th v-for="pid in uploadSelectedParamIds" :key="'h-' + pid">
+                      {{ getParamName(pid) }}
+                      <span v-if="getParamUnit(pid)" class="th-unit">[{{ getParamUnit(pid) }}]</span>
+                    </th>
+                    <th class="col-action"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(row, ri) in uploadRows" :key="'r-' + ri" :class="{ 'row-empty': !hasRowValue(ri) }">
+                    <td class="cell-row-num">{{ ri + 1 }}</td>
+                    <td v-for="pid in uploadSelectedParamIds" :key="'c-' + ri + '-' + pid" class="cell-value">
+                      <input :model-value="getRowValue(ri, pid)"
+                             @input="setRowValue(ri, pid, $event.target.valueAsNumber || null)"
+                             type="number" step="0.000001"
+                             class="form-input value-input cell-input"
+                             placeholder="-"
+                             :class="{ 'input-empty': submitAttempted && (getRowValue(ri, pid) === null || getRowValue(ri, pid) === undefined || getRowValue(ri, pid) === '') }" />
+                    </td>
+                    <td class="cell-action">
+                      <button type="button" class="btn-del-row" @click="removeRow(ri)" :disabled="uploadRows.length <= 1" title="删除此行">✕</button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="param-limit-bar" v-if="uploadSelectedParamIds.some(pid => uploadParamVersionMap[pid])">
+              <span v-for="pid in uploadSelectedParamIds" :key="'lim-' + pid" class="limit-tag" v-if="uploadParamVersionMap[pid]">
+                <strong>{{ getParamName(pid) }}</strong>:
+                U={{ uploadParamVersionMap[pid].usl ?? '-' }} L={{ uploadParamVersionMap[pid].lsl ?? '-' }}
+                T={{ uploadParamVersionMap[pid].target ?? '-' }} | UCL={{ uploadParamVersionMap[pid].ucl ?? '-' }} LCL={{ uploadParamVersionMap[pid].lcl ?? '-' }}
+              </span>
+            </div>
+            <div class="param-limit-info no-version-hint" v-if="uploadSelectedParamIds.length > 0 && !uploadSelectedParamIds.some(pid => uploadParamVersionMap[pid]) && !Array.from(uploadLoadingVersions.value).some(pid => uploadSelectedParamIds.includes(pid))">
+              暂无版本标准，提交时将自动创建
             </div>
           </div>
 
@@ -180,7 +203,7 @@
           <div class="form-actions">
             <button class="btn-cancel" @click="showUploadForm = false">取消</button>
             <button class="btn-submit" @click="submitData" :disabled="uploading || uploadSelectedParamIds.length === 0 || !hasAnyValue">
-              {{ uploading ? '提交中...' : `批量提交 (${uploadSelectedParamIds.length} 项)` }}
+              {{ uploading ? '提交中...' : `提交 (${uploadRows.length}行 × ${uploadSelectedParamIds.length}项)` }}
             </button>
           </div>
           <div class="upload-result" v-if="uploadResult">
@@ -249,13 +272,35 @@ let html5QrCodeScanner = null
 const batchInputRef = ref(null)
 
 const uploadSelectedParamIds = ref([])
-const uploadMultiValues = reactive({})
+const uploadRows = ref([{}])
 const uploadParamVersionMap = reactive({})
 const uploadLoadingVersions = ref(new Set())
 
+const MAX_ROWS = 5
+
+function getRowValues(rowIndex) { return uploadRows.value[rowIndex] || {} }
+function setRowValue(rowIndex, pid, val) {
+  if (!uploadRows.value[rowIndex]) uploadRows.value[rowIndex] = {}
+  uploadRows.value[rowIndex][pid] = val
+}
+function getRowValue(rowIndex, pid) { return (uploadRows.value[rowIndex] || {})[pid] }
+
 const hasAnyValue = computed(() => {
-  return Object.values(uploadMultiValues).some(v => v !== null && v !== undefined && v !== '')
+  return uploadRows.value.some(row => row && Object.values(row).some(v => v !== null && v !== undefined && v !== ''))
 })
+
+function addRow() {
+  if (uploadRows.value.length < MAX_ROWS) uploadRows.value.push({})
+}
+
+function removeRow(index) {
+  if (uploadRows.value.length > 1) uploadRows.value.splice(index, 1)
+}
+
+function hasRowValue(rowIndex) {
+  const row = uploadRows.value[rowIndex]
+  return row && Object.values(row).some(v => v !== null && v !== undefined && v !== '')
+}
 
 function requireAuth(fn) {
   if (!props.isLoggedIn) {
@@ -467,8 +512,8 @@ async function onUploadProcessChange() {
   uploadData.value.paramId = null
   uploadParams.value = []
   uploadSelectedParamIds.value = []
+  uploadRows.value = [{}]
   uploadEquipmentList.value = []
-  Object.keys(uploadMultiValues).forEach(k => delete uploadMultiValues[k])
   Object.keys(uploadParamVersionMap).forEach(k => delete uploadParamVersionMap[k])
   uploadLoadingVersions.value = new Set()
 
@@ -499,8 +544,10 @@ function onMultiParamChange(param) {
   const isChecked = uploadSelectedParamIds.value.includes(param.id)
 
   if (!isChecked) {
-    delete uploadMultiValues[param.id]
     delete uploadParamVersionMap[param.id]
+    for (const row of uploadRows.value) {
+      if (row) delete row[param.id]
+    }
     return
   }
 
@@ -589,14 +636,16 @@ async function submitData() {
     return
   }
 
-  const emptyParams = []
-  for (const pid of uploadSelectedParamIds.value) {
-    const val = uploadMultiValues[pid]
-    if (val === null || val === undefined || val === '') emptyParams.push(getParamName(pid))
+  const emptyCells = []
+  for (let ri = 0; ri < uploadRows.value.length; ri++) {
+    for (const pid of uploadSelectedParamIds.value) {
+      const val = getRowValue(ri, pid)
+      if (val === null || val === undefined || val === '') emptyCells.push(`第${ri + 1}行-${getParamName(pid)}`)
+    }
   }
 
-  if (emptyParams.length > 0) {
-    uploadResult.value = { success: false, message: `以下参数的测量值不能为空: ${emptyParams.join(', ')}` }
+  if (emptyCells.length > 0) {
+    uploadResult.value = { success: false, message: `以下单元格不能为空: ${emptyCells.slice(0, 5).join(', ')}${emptyCells.length > 5 ? ` 等${emptyCells.length}处` : ''}` }
     return
   }
 
@@ -605,23 +654,26 @@ async function submitData() {
 
   try {
     const records = []
+    const normalizedFillTime = (function(t) {
+      if (!t) return new Date().toISOString().replace('T', ' ').slice(0, 19)
+      t = t.replace('T', ' ')
+      if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(t)) return t + ':00'
+      if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(t)) return t
+      return t
+    })(uploadData.value.fillTime)
 
-    for (const pid of uploadSelectedParamIds.value) {
-      records.push({
-        paramId: pid,
-        productId: uploadData.value.productId,
-        processId: uploadData.value.processId,
-        equipmentId: uploadData.value.equipmentId,
-        batchId: uploadData.value.batchId || null,
-        measuredValue: uploadMultiValues[pid],
-        fillTime: (function(t) {
-          if (!t) return new Date().toISOString().replace('T', ' ').slice(0, 19)
-          t = t.replace('T', ' ')
-          if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(t)) return t + ':00'
-          if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(t)) return t
-          return t
-        })(uploadData.value.fillTime)
-      })
+    for (let ri = 0; ri < uploadRows.value.length; ri++) {
+      for (const pid of uploadSelectedParamIds.value) {
+        records.push({
+          paramId: pid,
+          productId: uploadData.value.productId,
+          processId: uploadData.value.processId,
+          equipmentId: uploadData.value.equipmentId,
+          batchId: uploadData.value.batchId || null,
+          measuredValue: getRowValue(ri, pid),
+          fillTime: normalizedFillTime
+        })
+      }
     }
 
     const results = await Promise.allSettled(
@@ -731,20 +783,20 @@ onUnmounted(() => {
 }
 
 .modal-content {
-  background: white;
+  background: var(--bg-modal);
   border-radius: 16px;
   padding: 28px;
   width: 92%;
   max-width: 720px;
   max-height: 88vh;
   overflow-y: auto;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--shadow-lg);
 }
 
 .modal-content h3 {
   margin: 0 0 22px 0;
   font-size: 19px;
-  color: #1a1a1a;
+  color: var(--text-primary);
   font-weight: 700;
   letter-spacing: -0.02em;
 }
@@ -776,7 +828,7 @@ onUnmounted(() => {
 .form-field label {
   font-size: 13px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .req {
@@ -785,39 +837,41 @@ onUnmounted(() => {
 
 .form-input {
   padding: 9px 12px;
-  border: 1.5px solid #d9d9d9;
+  border: 1.5px solid var(--border-input);
   border-radius: 8px;
   font-size: 13.5px;
   outline: none;
   transition: all 0.25s;
-  background: #fafafa;
+  background: var(--bg-input);
+  color: var(--text-primary);
 }
 .form-input:focus {
-  border-color: #1890ff;
-  box-shadow: 0 0 0 3px rgba(24, 144, 255, 0.1);
-  background: white;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px var(--accent-light);
+  background: var(--bg-input);
 }
 .form-input.input-error {
   border-color: #f5222d;
-  background: #fff1f0;
+  background: rgba(245,34,45,0.06);
 }
 
 .file-input {
   padding: 10px;
-  border: 2px dashed #d9d9d9;
+  border: 2px dashed var(--border-input);
   border-radius: 8px;
   cursor: pointer;
   font-size: 13px;
-  background: #fafafa;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 .file-input:hover {
-  border-color: #1890ff;
-  background: #e6f7ff;
+  border-color: var(--accent-primary);
+  background: var(--accent-lighter);
 }
 
 .field-hint {
   font-size: 11.5px;
-  color: #999;
+  color: var(--text-tertiary);
   line-height: 1.4;
 }
 
@@ -831,10 +885,10 @@ onUnmounted(() => {
   margin-top: 8px;
   max-height: 220px;
   overflow: auto;
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 12px;
-  background: #fafbfc;
+  background: var(--bg-tertiary);
 }
 
 .preview-table {
@@ -844,11 +898,12 @@ onUnmounted(() => {
 }
 .preview-table th, .preview-table td {
   padding: 6px 8px;
-  border: 1px solid #eee;
+  border: 1px solid var(--border-color);
   text-align: left;
+  color: var(--text-primary);
 }
 .preview-table th {
-  background: #f0f0f0;
+  background: var(--bg-primary);
   font-weight: 600;
   position: sticky;
   top: 0;
@@ -878,23 +933,23 @@ onUnmounted(() => {
   gap: 10px;
   margin-top: 18px;
   padding-top: 16px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--border-color);
 }
 
 .btn-cancel {
   padding: 9px 22px;
-  border: 1.5px solid #d9d9d9;
+  border: 1.5px solid var(--border-input);
   border-radius: 8px;
-  background: white;
+  background: var(--bg-secondary);
   cursor: pointer;
   font-size: 13.5px;
   font-weight: 500;
-  color: #555;
+  color: var(--text-secondary);
   transition: all 0.2s;
 }
 .btn-cancel:hover {
-  border-color: #1890ff;
-  color: #1890ff;
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
 }
 
 .btn-submit {
@@ -910,7 +965,7 @@ onUnmounted(() => {
 }
 .btn-submit:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.35);
+  box-shadow: var(--shadow-md);
 }
 .btn-submit:disabled {
   opacity: 0.5;
@@ -926,7 +981,7 @@ onUnmounted(() => {
 .multi-param-label {
   font-size: 13px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .param-checkbox-grid {
@@ -940,24 +995,24 @@ onUnmounted(() => {
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  border: 2px solid #e8e8e8;
+  border: 2px solid var(--border-color);
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s;
-  background: #fafafa;
+  background: var(--bg-tertiary);
 }
 .param-checkbox-item:hover {
-  border-color: #bae7ff;
-  background: #e6f7ff;
+  border-color: var(--accent-primary);
+  background: var(--accent-lighter);
 }
 .param-checkbox-item.checked {
-  border-color: #1890ff;
-  background: #e6f7ff;
+  border-color: var(--accent-primary);
+  background: var(--accent-lighter);
 }
 .param-checkbox-item input[type='checkbox'] {
   width: 17px;
   height: 17px;
-  accent-color: #1890ff;
+  accent-color: var(--accent-primary);
 }
 
 .param-info {
@@ -967,11 +1022,11 @@ onUnmounted(() => {
 }
 .param-info strong {
   font-size: 13px;
-  color: #333;
+  color: var(--text-primary);
 }
 .param-info small {
   font-size: 11px;
-  color: #888;
+  color: var(--text-tertiary);
 }
 
 .multi-value-section {
@@ -981,60 +1036,138 @@ onUnmounted(() => {
   margin-top: 6px;
 }
 
-.multi-value-row {
+.batch-table-header {
   display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  padding: 12px;
-  background: #fafbfc;
-  border: 1px solid #e8e8e8;
-  border-radius: 10px;
+  justify-content: space-between;
+  align-items: center;
 }
 
-.param-col-left {
+.row-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
-  min-width: 90px;
+  gap: 8px;
 }
 
-.param-badge {
-  background: linear-gradient(135deg, #1890ff, #096dd9);
-  color: white;
-  padding: 4px 10px;
-  border-radius: 6px;
+.btn-add-row {
+  padding: 5px 12px;
+  border: 1.5px dashed var(--accent-primary);
+  border-radius: 8px;
+  background: var(--accent-lighter);
+  color: var(--accent-primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+.btn-add-row:hover:not(:disabled) { background: var(--accent-primary); color: var(--text-on-accent); }
+.btn-add-row:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.row-count-hint { font-size: 11px; color: var(--text-tertiary); }
+
+.batch-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-tertiary);
+}
+
+.batch-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.batch-table thead th {
+  background: var(--accent-lighter);
+  padding: 9px 8px;
   font-size: 12px;
   font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  border-bottom: 2px solid var(--border-color);
+  text-align: center;
 }
 
-.unit-tag {
-  font-size: 11px;
-  color: #888;
-  font-style: italic;
+.th-unit { font-weight: 400; color: var(--text-tertiary); font-size: 10px; }
+
+.col-row-num, .col-action { width: 42px; min-width: 42px; }
+.col-row-num { background: var(--bg-primary); }
+
+.batch-table tbody tr { transition: background 0.15s; }
+.batch-table tbody tr:hover { background: var(--accent-light); }
+.row-empty td { color: var(--text-tertiary); }
+
+.cell-row-num {
+  text-align: center;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--accent-primary);
+  padding: 8px 4px;
+  vertical-align: middle;
 }
 
-.param-col-right {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
+.cell-value { padding: 4px 3px; vertical-align: middle; }
 
-.value-input {
+.cell-input {
   width: 100% !important;
-  max-width: 280px;
+  max-width: none !important;
+  min-width: 70px;
+  height: 32px;
+  text-align: center;
+  font-size: 13px;
+  padding: 4px 6px !important;
+  background: var(--bg-input) !important;
+  color: var(--text-primary) !important;
+  border: 1.5px solid var(--border-input) !important;
 }
+.cell-input.input-empty { border-color: #ff4d4f !important; background: rgba(255,77,79,0.08) !important; }
+.cell-input:focus { border-color: var(--accent-primary) !important; box-shadow: 0 0 0 2px var(--accent-light); outline: none; }
+
+.cell-action { text-align: center; vertical-align: middle; padding: 4px 2px; }
+
+.btn-del-row {
+  width: 26px; height: 26px;
+  border: 1px solid var(--border-input);
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.btn-del-row:hover:not(:disabled) { border-color: #ff4d4f; color: #ff4d4f; background: rgba(255,77,79,0.08); }
+.btn-del-row:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.param-limit-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--bg-primary);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.limit-tag {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+.limit-tag strong { color: var(--text-primary); }
 
 .param-limit-info {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   font-size: 11px;
-  color: #666;
+  color: var(--text-secondary);
   padding: 6px 10px;
-  background: white;
+  background: var(--bg-secondary);
   border-radius: 6px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--border-color);
 }
 
 .limit-item {
@@ -1042,7 +1175,7 @@ onUnmounted(() => {
 }
 
 .limit-sep {
-  color: #ccc;
+  color: var(--text-tertiary);
 }
 
 .loading-hint {
@@ -1051,7 +1184,7 @@ onUnmounted(() => {
 }
 
 .no-version-hint {
-  color: #999 !important;
+  color: var(--text-tertiary) !important;
 }
 
 .batch-input-group {
@@ -1062,21 +1195,21 @@ onUnmounted(() => {
 
 .btn-scan {
   padding: 9px 14px;
-  border: 1.5px solid #d9d9d9;
+  border: 1.5px solid var(--border-input);
   border-radius: 8px;
-  background: white;
+  background: var(--bg-secondary);
   cursor: pointer;
   font-size: 16px;
   transition: all 0.2s;
 }
 .btn-scan:hover {
-  border-color: #1890ff;
-  background: #e6f7ff;
+  border-color: var(--accent-primary);
+  background: var(--accent-lighter);
 }
 
 .scanner-container {
   margin-top: 10px;
-  border: 2px solid #1890ff;
+  border: 2px solid var(--accent-primary);
   border-radius: 12px;
   overflow: hidden;
   background: black;
@@ -1117,8 +1250,8 @@ onUnmounted(() => {
   padding: 10px;
   text-align: center;
   font-size: 12px;
-  color: #999;
-  background: #fafafa;
+  color: var(--text-tertiary);
+  background: var(--bg-tertiary);
 }
 
 .datetime-row {
@@ -1129,19 +1262,19 @@ onUnmounted(() => {
 
 .btn-now {
   padding: 9px 14px;
-  border: 1.5px solid #d9d9d9;
+  border: 1.5px solid var(--border-input);
   border-radius: 8px;
-  background: white;
+  background: var(--bg-secondary);
   cursor: pointer;
   font-size: 12px;
   font-weight: 500;
-  color: #555;
+  color: var(--text-secondary);
   transition: all 0.2s;
   white-space: nowrap;
 }
 .btn-now:hover {
-  border-color: #1890ff;
-  color: #1890ff;
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
 }
 
 @media (max-width: 768px) {
@@ -1178,8 +1311,10 @@ onUnmounted(() => {
     grid-template-columns: 1fr;
   }
 
-  .multi-value-row {
-    flex-direction: column;
+  .batch-table-wrap {
+    max-width: 100%;
+    overflow-x: auto;
   }
+  .cell-input { min-width: 55px; font-size: 12px; height: 28px; }
 }
 </style>
