@@ -88,3 +88,14 @@ spc:
     push:
       enabled: false
       interval: 5000
+  security:
+    encryption:
+      enabled: true
+      key: SPC@2026#Secure!Key
+      iv: SPC2026SecureIV16
+      exclude-paths:
+        - /auth/login
+        - /auth/info
+        - /actuator/**
+        - /swagger-ui/**
+        - /v3/api-docs/**

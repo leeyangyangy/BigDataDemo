@@ -1,0 +1,21 @@
+spring:
+  profiles:
+    active: prod
+
+spc:
+  security:
+    encryption:
+      enabled: true
+      key: SPC@2026#Secure!Key
+      iv: SPC2026SecureIV16
+      exclude-paths:
+        - /auth/login
+        - /auth/info
+        - /actuator/**
+        - /swagger-ui/**
+        - /v3/api-docs/**
+
+logging:
+  level:
+    xyz.leeyangy.spc: info
+    com.baomidou.mybatisplus: warn

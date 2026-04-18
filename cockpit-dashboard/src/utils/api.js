@@ -3,6 +3,8 @@ const BASE_URL = '/api'
 const TOKEN_KEY = 'spc_token'
 const USER_KEY = 'spc_user'
 
+import { isEncryptionEnabled, getEncryptedBody, decryptResponse } from './crypto.js'
+
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY)
 }
@@ -102,7 +104,21 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${token}`
     }
 
-    const config = { headers, ...options }
+    if (isEncryptionEnabled()) {
+      headers['X-Encrypted'] = 'true'
+    }
+
+    let body = options.body
+    if (body && isEncryptionEnabled() && !url.includes('/auth/login') && headers['Content-Type']?.includes('json')) {
+      try {
+        body = JSON.stringify(getEncryptedBody(JSON.parse(body)))
+        console.log(`[Crypto] 请求已加密: ${url}`)
+      } catch (e) {
+        console.warn('[Crypto] 加密跳过（非JSON或登录请求）:', url)
+      }
+    }
+
+    const config = { headers, ...options, body }
 
     try {
       const response = await fetch(`${this.baseURL}${url}`, config)
@@ -127,7 +143,12 @@ class ApiClient {
         return null
       }
 
-      const result = await response.json()
+      let result = await response.json()
+
+      if (isEncryptionEnabled() && result.encrypted) {
+        result = decryptResponse(result)
+        console.log(`[Crypto] 响应已解密: ${url}`)
+      }
 
       if (result.code !== undefined && result.code !== 200) {
         const msg = getStatusMsg(result.code, result.msg)
