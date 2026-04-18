@@ -231,7 +231,7 @@ function renderIMR(data) {
   if (validMr.length > 0 && limits.cl != null) {
     const d2 = 1.128
     mrCl = validMr.reduce((a, b) => a + b, 0) / validMr.length
-    const sigma = (limits.ucl != null ? limits.ucl.subtract(limits.cl).doubleValue() / 3 : mrCl / d2)
+    const sigma = (limits.ucl != null && limits.cl != null ? (Number(limits.ucl) - Number(limits.cl)) / 3 : mrCl / d2)
     mrUcl = mrCl * 3.267
     mrLcl = 0
   }

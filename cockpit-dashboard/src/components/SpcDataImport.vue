@@ -99,7 +99,7 @@
               <label>设备 <span class="req">*</span></label>
               <select v-model.number="uploadData.equipmentId" class="form-input" :class="{ 'input-error': submitAttempted && !uploadData.equipmentId }">
                 <option :value="null">请选择设备 (必选)</option>
-                <option v-for="eq in equipmentList" :key="eq.id" :value="eq.id">{{ eq.name }}</option>
+                <option v-for="eq in uploadEquipmentList" :key="eq.id" :value="eq.id">{{ eq.name }}</option>
               </select>
               <span class="field-error" v-if="submitAttempted && !uploadData.equipmentId">请选择设备</span>
             </div>
@@ -227,6 +227,7 @@ const submitAttempted = ref(false)
 
 const uploadProcesses = ref([])
 const uploadParams = ref([])
+const uploadEquipmentList = ref([])
 
 const now = new Date()
 const pad = (n) => String(n).padStart(2, '0')
@@ -450,6 +451,7 @@ async function onUploadProductChange() {
   uploadData.value.paramId = null
   uploadProcesses.value = []
   uploadParams.value = []
+  uploadEquipmentList.value = []
 
   if (!uploadData.value.productId) return
 
@@ -465,6 +467,7 @@ async function onUploadProcessChange() {
   uploadData.value.paramId = null
   uploadParams.value = []
   uploadSelectedParamIds.value = []
+  uploadEquipmentList.value = []
   Object.keys(uploadMultiValues).forEach(k => delete uploadMultiValues[k])
   Object.keys(uploadParamVersionMap).forEach(k => delete uploadParamVersionMap[k])
   uploadLoadingVersions.value = new Set()
@@ -476,6 +479,19 @@ async function onUploadProcessChange() {
     if (res.code === 200) uploadParams.value = res.data.records.filter(p => p.processId === uploadData.value.processId)
   } catch (e) {
     console.error('加载参数失败', e)
+  }
+
+  try {
+    const equipRes = await spcApi.getProcessEquipment(uploadData.value.processId)
+    if (equipRes.code === 200 && equipRes.data) {
+      uploadEquipmentList.value = equipRes.data.map(eq => ({
+        id: eq.id,
+        name: eq.equipName || eq.equipCode,
+        code: eq.equipCode
+      }))
+    }
+  } catch (e) {
+    console.error('加载设备失败', e)
   }
 }
 
@@ -557,7 +573,7 @@ function stopScanner() {
 function setNowTime() {
   const now = new Date()
   const pad = (n) => String(n).padStart(2, '0')
-  uploadData.value.fillTime = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`
+  uploadData.value.fillTime = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:00`
 }
 
 async function submitData() {
@@ -598,7 +614,13 @@ async function submitData() {
         equipmentId: uploadData.value.equipmentId,
         batchId: uploadData.value.batchId || null,
         measuredValue: uploadMultiValues[pid],
-        fillTime: uploadData.value.fillTime || new Date().toISOString()
+        fillTime: (function(t) {
+          if (!t) return new Date().toISOString().replace('T', ' ').slice(0, 19)
+          t = t.replace('T', ' ')
+          if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(t)) return t + ':00'
+          if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(t)) return t
+          return t
+        })(uploadData.value.fillTime)
       })
     }
 

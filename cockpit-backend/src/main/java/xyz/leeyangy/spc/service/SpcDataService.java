@@ -92,7 +92,11 @@ public class SpcDataService extends ServiceImpl<SpcDataMapper, SpcData> {
 
         save(data);
 
-        cacheLatestData(data);
+        try {
+            cacheLatestData(data);
+        } catch (Throwable e) {
+            log.warn("[Redis] 缓存最新数据失败(不影响已写入数据): {}", e.getMessage());
+        }
 
         try {
             LambdaQueryWrapper<SpcData> recentWrapper = new LambdaQueryWrapper<SpcData>()
