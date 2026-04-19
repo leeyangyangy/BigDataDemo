@@ -201,7 +201,10 @@ export default api
 export const authApi = {
   login: (empNo, password) => api.post('/auth/login', { empNo, password }),
   getUserInfo: () => api.get('/auth/info'),
-  logout: () => api.post('/auth/logout')
+  logout: () => api.post('/auth/logout'),
+  getWeComConfig: () => api.get('/auth/wecom/config'),
+  weComCallback: (code) => api.post('/auth/wecom/callback', { code }),
+  weComBind: (wecomUserId, empNo) => api.post('/auth/wecom/bind', { wecomUserId, empNo })
 }
 
 export const spcApi = {

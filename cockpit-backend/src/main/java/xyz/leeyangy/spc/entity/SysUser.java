@@ -21,6 +21,7 @@ public class SysUser extends BaseEntity {
     private String avatar;
     private String role;
     private Long workshopId;
+    private String wecomUserId;
     private Integer status;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")

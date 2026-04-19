@@ -99,3 +99,8 @@ spc:
         - /actuator/**
         - /swagger-ui/**
         - /v3/api-docs/**
+  wecom:
+    corpId: wwYOUR_CORP_ID
+    agentId: YOUR_AGENT_ID
+    secret: YOUR_APP_SECRET
+    enabled: false
