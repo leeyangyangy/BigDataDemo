@@ -41,7 +41,9 @@ public class SpcDataImportExportController {
             @RequestParam("file") MultipartFile file,
             @RequestParam Long productId,
             @RequestParam(required = false) Long processId,
-            @RequestParam(required = false) Long equipmentId) {
+            @RequestParam(required = false) Long equipmentId,
+            @RequestAttribute Long userId,
+            @RequestAttribute String role) {
 
         if (file.isEmpty()) {
             return R.fail("文件不能为空");
@@ -100,7 +102,8 @@ public class SpcDataImportExportController {
                         data.setCollectTime(LocalDateTime.now());
                     }
 
-                    spcDataService.save(data);
+                    data.setCreatedBy(userId);
+                    spcDataService.uploadData(data, role);
                     successCount++;
                 } catch (Exception e) {
                     failCount++;

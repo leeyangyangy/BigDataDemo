@@ -965,15 +965,7 @@ watch(showVersionHistory, (val) => {
 })
 
 watch(() => props.isLoggedIn, (val) => {
-  if (val && selectedProduct.value) {
-    uploadData.value.productId = selectedProduct.value
-  }
-  if (val && selectedProcess.value) {
-    uploadData.value.processId = selectedProcess.value
-  }
-  if (val && selectedParam.value) {
-    uploadData.value.paramId = selectedParam.value
-  }
+  if (val) refreshAllCharts()
 })
 </script>
 

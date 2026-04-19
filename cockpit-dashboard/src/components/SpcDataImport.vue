@@ -3,7 +3,7 @@
     <div class="import-actions-bar">
       <button class="btn-upload" @click="requireAuth(() => showUploadForm = true)" v-if="canWriteData">填写数据</button>
       <button class="btn-import" @click="requireAuth(showImportDialog)" v-if="canWriteData && selectedProduct">导入数据</button>
-      <button class="btn-export" @click="exportDataReport" v-if="selectedParam && selectedProduct">导出报告</button>
+      <button class="btn-export" @click="exportDataReport" v-if="canExportReport && selectedParam && selectedProduct">导出报告</button>
       <button class="btn-template" @click="downloadTemplate" v-if="canWriteData">下载模板</button>
     </div>
 
@@ -159,14 +159,14 @@
                 </tbody>
               </table>
             </div>
-            <div class="param-limit-bar" v-if="uploadSelectedParamIds.some(pid => uploadParamVersionMap[pid])">
+            <div class="param-limit-bar" v-if="uploadSelectedParamIds.some(_pid => uploadParamVersionMap[_pid])">
               <span v-for="pid in uploadSelectedParamIds" :key="'lim-' + pid" class="limit-tag" v-if="uploadParamVersionMap[pid]">
                 <strong>{{ getParamName(pid) }}</strong>:
                 U={{ uploadParamVersionMap[pid].usl ?? '-' }} L={{ uploadParamVersionMap[pid].lsl ?? '-' }}
                 T={{ uploadParamVersionMap[pid].target ?? '-' }} | UCL={{ uploadParamVersionMap[pid].ucl ?? '-' }} LCL={{ uploadParamVersionMap[pid].lcl ?? '-' }}
               </span>
             </div>
-            <div class="param-limit-info no-version-hint" v-if="uploadSelectedParamIds.length > 0 && !uploadSelectedParamIds.some(pid => uploadParamVersionMap[pid]) && !Array.from(uploadLoadingVersions.value).some(pid => uploadSelectedParamIds.includes(pid))">
+            <div class="param-limit-info no-version-hint" v-if="uploadSelectedParamIds.length > 0 && !uploadSelectedParamIds.some(_p => uploadParamVersionMap[_p]) && !Array.from(uploadLoadingVersions.value).some(_p2 => uploadSelectedParamIds.includes(_p2))">
               暂无版本标准，提交时将自动创建
             </div>
           </div>
@@ -234,8 +234,9 @@ const props = defineProps({
 
 const emit = defineEmits(['require-login', 'refresh', 'data-imported'])
 
-const isViewer = computed(() => getUser()?.role === 'VIEWER')
+const isViewer = computed(() => (getUser()?.role || '').toUpperCase() === 'VIEWER')
 const canWriteData = computed(() => props.isLoggedIn && !isViewer.value)
+const canExportReport = computed(() => props.isLoggedIn && !isViewer.value)
 
 const showImport = ref(false)
 const importForm = ref({ productId: null, processId: null, equipmentId: null })
@@ -701,7 +702,8 @@ async function submitData() {
       uploadResult.value = { success: false, message: '全部提交失败，请检查网络或数据格式' }
     }
   } catch (e) {
-    uploadResult.value = { success: false, message: '提交异常: ' + e.message }
+    const errMsg = e.response?.data?.msg || e.message || '提交异常'
+    uploadResult.value = { success: false, message: errMsg }
   } finally {
     uploading.value = false
   }

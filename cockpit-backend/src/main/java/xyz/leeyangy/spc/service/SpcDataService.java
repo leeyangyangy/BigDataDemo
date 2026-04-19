@@ -78,7 +78,7 @@ public class SpcDataService extends ServiceImpl<SpcDataMapper, SpcData> {
                     paramVersionService.save(defaultVersion);
                     version = defaultVersion;
                 } else {
-                    throw new RuntimeException("该工艺参数尚未配置标准版本（上下限），请联系管理员在【后台管理-标准管理】中设置后再提交数据");
+                    throw new RuntimeException("该工艺参数尚未配置标准版本，请联系工程师在【后台管理-工艺参数管理-版本】中创建版本后再提交数据");
                 }
             }
         }
