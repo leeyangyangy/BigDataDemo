@@ -45,6 +45,8 @@ public class SecurityConfig {
                 .and()
                 .authorizeRequests(auth -> auth
                         .antMatchers("/api/auth/**").permitAll()
+                        .antMatchers("/api/auth/logout").authenticated()
+                        .antMatchers("/api/auth/change-password").authenticated()
                         .antMatchers("/actuator/**").permitAll()
                         .antMatchers(HttpMethod.GET, "/api/spc/chart/**").authenticated()
                         .antMatchers(HttpMethod.GET, "/api/spc/stat/**").authenticated()

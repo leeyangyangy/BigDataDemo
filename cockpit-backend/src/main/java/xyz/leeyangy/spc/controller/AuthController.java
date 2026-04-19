@@ -12,6 +12,7 @@ import xyz.leeyangy.spc.common.R;
 import xyz.leeyangy.spc.common.StatusCode;
 import xyz.leeyangy.spc.entity.SysUser;
 import xyz.leeyangy.spc.service.SysUserService;
+import xyz.leeyangy.spc.service.TokenBlacklistService;
 import xyz.leeyangy.spc.service.WeComService;
 
 import javax.servlet.http.HttpServletRequest;
@@ -28,6 +29,7 @@ public class AuthController {
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
     private final WeComService weComService;
+    private final TokenBlacklistService blacklistService;
 
     @PostMapping("/login")
     public R<Map<String, Object>> login(@RequestBody LoginRequest request, HttpServletRequest httpRequest) {
@@ -90,8 +92,45 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public R<Void> logout() {
+    public R<Void> logout(HttpServletRequest request) {
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String token = authHeader.substring(7);
+            blacklistService.blacklistToken(token);
+            log.info("[Auth] 用户已登出, Token已加入黑名单");
+        }
         return R.ok(null);
+    }
+
+    @PostMapping("/change-password")
+    public R<Void> changePassword(@RequestBody ChangePasswordRequest request,
+                                  @RequestAttribute("userId") Long userId) {
+        if (request.getOldPassword() == null || request.getOldPassword().trim().isEmpty()) {
+            return R.fail(StatusCode.PARAM_REQUIRED, "原密码不能为空");
+        }
+        if (request.getNewPassword() == null || request.getNewPassword().trim().isEmpty()) {
+            return R.fail(StatusCode.PARAM_REQUIRED, "新密码不能为空");
+        }
+        if (request.getNewPassword().length() < 6) {
+            return R.fail(StatusCode.PARAM_REQUIRED, "新密码长度不能少于6位");
+        }
+
+        SysUser user = sysUserService.getById(userId);
+        if (user == null) {
+            return R.fail(StatusCode.DATA_NOT_FOUND, "用户不存在");
+        }
+
+        if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
+            return R.fail(StatusCode.AUTH_LOGIN_FAILED, "原密码错误");
+        }
+
+        sysUserService.update(new LambdaUpdateWrapper<SysUser>()
+                .eq(SysUser::getId, userId)
+                .set(SysUser::getPassword, passwordEncoder.encode(request.getNewPassword())));
+
+        blacklistService.kickUser(userId);
+        log.info("[Auth] 用户{}修改密码成功, 所有Token已失效", userId);
+        return R.ok();
     }
 
     @GetMapping("/wecom/config")
@@ -241,5 +280,11 @@ public class AuthController {
     public static class WeComBindRequest {
         private String wecomUserId;
         private String empNo;
+    }
+
+    @Data
+    public static class ChangePasswordRequest {
+        private String oldPassword;
+        private String newPassword;
     }
 }

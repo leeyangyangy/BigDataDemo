@@ -104,3 +104,11 @@ spc:
     agentId: YOUR_AGENT_ID
     secret: YOUR_APP_SECRET
     enabled: false
+  jwt:
+    secret: SPC-Process-Control-System-JWT-Secret-Key-2026-Enterprise
+    random-secret-on-startup: true
+#    expiration: 7200000     # 2 H
+#    expiration: 28800000     # 8 H
+    expiration: 86400000  # 24 H
+#    expiration: 604800000      # 7 D
+#    expiration: 2592000000     # 30 D

@@ -11,6 +11,8 @@ import org.springframework.stereotype.Component;
 import javax.annotation.PostConstruct;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
+import java.util.Base64;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -25,11 +27,23 @@ public class JwtUtil {
     @Value("${spc.jwt.expiration:86400000}")
     private long expiration;
 
+    @Value("${spc.jwt.random-secret-on-startup:false}")
+    private boolean randomSecretOnStartup;
+
     private SecretKey key;
 
     @PostConstruct
     public void init() {
-        this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        byte[] keyBytes;
+        if (randomSecretOnStartup) {
+            SecureRandom sr = new SecureRandom();
+            keyBytes = new byte[32];
+            sr.nextBytes(keyBytes);
+            log.info("[JWT] 已生成随机密钥 ({} bytes), 重启后所有Token将失效", keyBytes.length);
+        } else {
+            keyBytes = secret.getBytes(StandardCharsets.UTF_8);
+        }
+        this.key = Keys.hmacShaKeyFor(keyBytes);
     }
 
     public String generateToken(Long userId, String empNo, String username, String role) {
