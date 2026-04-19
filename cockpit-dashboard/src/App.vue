@@ -38,13 +38,21 @@
         :userInfo="userInfo"
         @require-login="showLogin = true"
       />
-      <template v-else-if="loggedIn">
+      <template v-else-if="isAdmin">
         <UserManagement v-if="activeNav === 'admin-user'" :key="'admin-user'" />
         <ProductManagement v-else-if="activeNav === 'admin-product'" :key="'admin-product'" />
         <ProcessManagement v-else-if="activeNav === 'admin-process'" :key="'admin-process'" />
         <WorkshopManagement v-else-if="activeNav === 'admin-workshop'" :key="'admin-workshop'" />
         <AdminPanel v-else-if="activeNav === 'admin-standard' || activeNav === 'admin-equipment'" :key="activeNav" :defaultTab="activeNav === 'admin-standard' ? 'standard' : 'equipment'" />
       </template>
+      <div v-else-if="activeNav.startsWith('admin') && loggedIn" class="admin-gate">
+        <div class="gate-card">
+          <span class="gate-icon">🚫</span>
+          <h3>权限不足</h3>
+          <p>后台管理功能仅限管理员访问</p>
+          <button class="gate-btn" @click="handleNavigate('home')">返回首页</button>
+        </div>
+      </div>
       <div v-else-if="activeNav.startsWith('admin')" class="admin-gate">
         <div class="gate-card">
           <span class="gate-icon">🔐</span>
@@ -85,6 +93,7 @@ import { getToken, getUser, removeToken, isLoggedIn } from './utils/api.js'
 import './styles/theme.css'
 
 const NAV_KEY = 'spc_active_nav'
+const ADMIN_NAV_KEY = 'spc_admin_last_nav'
 
 const showLogin = ref(false)
 const showUserMenu = ref(false)
@@ -98,12 +107,18 @@ const roleLabel = computed(() => {
   return map[userInfo.value?.role] || userInfo.value?.role || ''
 })
 
+const isAdmin = computed(() => (userInfo.value?.role || '').toUpperCase() === 'ADMIN')
+
 function checkAuth() {
   loggedIn.value = isLoggedIn()
   if (loggedIn.value) {
     userInfo.value = getUser()
   } else {
     userInfo.value = null
+  }
+  if (activeNav.value.startsWith('admin') && !isAdmin.value) {
+    activeNav.value = 'home'
+    localStorage.setItem(NAV_KEY, 'home')
   }
 }
 
@@ -119,7 +134,16 @@ function handleLogout() {
 }
 
 function handleNavigate(key) {
-  if (key === 'admin') key = 'admin-product'
+  if (key.startsWith('admin') && !isAdmin.value) {
+    return
+  }
+  if (key === 'admin') {
+    const lastAdmin = localStorage.getItem(ADMIN_NAV_KEY)
+    key = lastAdmin || 'admin-product'
+  }
+  if (key.startsWith('admin')) {
+    localStorage.setItem(ADMIN_NAV_KEY, key)
+  }
   activeNav.value = key
   localStorage.setItem(NAV_KEY, key)
 }

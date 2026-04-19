@@ -69,7 +69,7 @@ const adminSubItems = [
 ]
 
 const navItems = computed(() => {
-  const isAdminMode = props.activeKey.startsWith('admin')
+  const isAdminMode = props.activeKey.startsWith('admin') && props.userRole === 'ADMIN'
   if (isAdminMode) {
     return [{ key: 'home', icon: '🏠', label: '首页' }, ...adminSubItems]
   }
