@@ -29,6 +29,7 @@
             <th>邮箱</th>
             <th>手机号</th>
             <th>角色</th>
+            <th>车间</th>
             <th>状态</th>
             <th>最后登录</th>
             <th>操作</th>
@@ -41,6 +42,7 @@
             <td class="text-muted">{{ item.email || '-' }}</td>
             <td>{{ item.phone || '-' }}</td>
             <td><span class="role-tag" :class="'role-' + item.role">{{ roleMap[item.role] || item.role }}</span></td>
+            <td>{{ getWorkshopName(item.workshopId) }}</td>
             <td>
               <span class="status-dot" :class="item.status === 1 ? 'on' : 'off'" @click="toggleStatus(item)"></span>
               {{ item.status === 1 ? '启用' : '停用' }}
@@ -100,6 +102,13 @@
               <option value="VIEWER">观察者</option>
             </select>
           </div>
+          <div class="form-field">
+            <label>所属车间</label>
+            <select v-model="form.workshopId" class="form-input">
+              <option :value="null">不绑定车间</option>
+              <option v-for="w in workshopList" :key="w.id" :value="w.id">{{ w.workshopName }}（{{ w.workshopCode }}）</option>
+            </select>
+          </div>
           <div class="form-field" v-if="!isEdit">
             <label>状态</label>
             <select v-model="form.status" class="form-input">
@@ -134,6 +143,8 @@ const keyword = ref('')
 const filterRole = ref('')
 const filterStatus = ref('')
 
+const workshopList = ref([])
+
 const showForm = ref(false)
 const isEdit = ref(false)
 const editId = ref(null)
@@ -143,9 +154,11 @@ const formMsgType = ref('')
 
 const form = ref({
   empNo: '', username: '', password: '',
-  email: '', phone: '', role: 'OPERATOR', status: 1
+  email: '', phone: '', role: 'OPERATOR', status: 1,
+  workshopId: null
 })
 
+// TODO 动态查询获取
 const roleMap = {
   ADMIN: '管理员',
   ENGINEER: '工程师',
@@ -179,7 +192,7 @@ async function loadData() {
 function openCreate() {
   isEdit.value = false
   editId.value = null
-  form.value = { empNo: '', username: '', password: '', email: '', phone: '', role: 'OPERATOR', status: 1 }
+  form.value = { empNo: '', username: '', password: '', email: '', phone: '', role: 'OPERATOR', status: 1, workshopId: null }
   formMsg.value = ''
   showForm.value = true
 }
@@ -193,7 +206,8 @@ function openEdit(item) {
     password: '',
     email: item.email || '',
     phone: item.phone || '',
-    role: item.role || 'OPERATOR'
+    role: item.role || 'OPERATOR',
+    workshopId: item.workshopId || null
   }
   formMsg.value = ''
   showForm.value = true
@@ -216,6 +230,7 @@ async function handleSubmit() {
     if (isEdit.value) {
       const payload = { ...form.value }
       if (!payload.password) delete payload.password
+      if (payload.workshopId === null) payload.clearWorkshop = true
       res = await adminApi.user.update(editId.value, payload)
     } else {
       res = await adminApi.user.create(form.value)
@@ -265,8 +280,17 @@ function formatTime(t) {
   return t.replace('T', ' ').substring(0, 16)
 }
 
+function getWorkshopName(workshopId) {
+  if (!workshopId) return '-'
+  const w = workshopList.value.find(item => item.id === workshopId)
+  return w ? w.workshopName : '-'
+}
+
 onMounted(() => {
   loadData()
+  adminApi.workshop.listAll().then(res => {
+    if (res.code === 200 && res.data) workshopList.value = res.data
+  }).catch(() => {})
 })
 </script>
 
@@ -617,4 +641,5 @@ onMounted(() => {
   .btn-cancel, .btn-submit { width: 100%; text-align: center; padding: 10px 16px; font-size: 13px; }
   .modal-card { width: 95vw; padding: 16px; padding-bottom: 100px; max-height: calc(100vh - 40px); overflow-y: auto; }
 }
+
 </style>

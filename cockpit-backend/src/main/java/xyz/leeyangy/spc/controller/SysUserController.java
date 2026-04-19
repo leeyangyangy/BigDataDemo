@@ -1,6 +1,7 @@
 package xyz.leeyangy.spc.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -95,32 +96,39 @@ public class SysUserController {
             return R.fail(StatusCode.DATA_NOT_FOUND, "用户不存在");
         }
 
+        LambdaUpdateWrapper<SysUser> wrapper = new LambdaUpdateWrapper<SysUser>()
+                .eq(SysUser::getId, id);
+
         if (req.getUsername() != null) {
-            existUser.setUsername(req.getUsername().trim());
+            wrapper.set(SysUser::getUsername, req.getUsername().trim());
         }
         if (req.getEmail() != null) {
-            existUser.setEmail(req.getEmail());
+            wrapper.set(SysUser::getEmail, req.getEmail());
         }
         if (req.getPhone() != null) {
-            existUser.setPhone(req.getPhone());
+            wrapper.set(SysUser::getPhone, req.getPhone());
         }
         if (req.getRole() != null) {
-            existUser.setRole(req.getRole());
+            wrapper.set(SysUser::getRole, req.getRole());
         }
         if (req.getWorkshopId() != null) {
-            existUser.setWorkshopId(req.getWorkshopId());
+            wrapper.set(SysUser::getWorkshopId, req.getWorkshopId());
+        } else if (req.isClearWorkshop()) {
+            wrapper.set(SysUser::getWorkshopId, null);;
         }
         if (req.getStatus() != null) {
-            existUser.setStatus(req.getStatus());
+            wrapper.set(SysUser::getStatus, req.getStatus());
         }
         if (req.getPassword() != null && !req.getPassword().trim().isEmpty()) {
-            existUser.setPassword(passwordEncoder.encode(req.getPassword()));
+            wrapper.set(SysUser::getPassword, passwordEncoder.encode(req.getPassword()));
         }
 
-        sysUserService.updateById(existUser);
-        existUser.setPassword(null);
+        sysUserService.update(wrapper);
         log.info("[Admin] 更新用户: id={} empNo={}", id, existUser.getEmpNo());
-        return R.ok("更新成功", existUser);
+
+        SysUser updated = sysUserService.getById(id);
+        updated.setPassword(null);
+        return R.ok("更新成功", updated);
     }
 
     @PutMapping("/{id}/status")
@@ -145,8 +153,9 @@ public class SysUserController {
         if (user == null) {
             return R.fail(StatusCode.DATA_NOT_FOUND, "用户不存在");
         }
-        user.setDeleted(1);
-        sysUserService.updateById(user);
+        sysUserService.update(new LambdaUpdateWrapper<SysUser>()
+                .eq(SysUser::getId, id)
+                .set(SysUser::getDeleted, 1));
         log.info("[Admin] 删除用户: id={} empNo={}", id, user.getEmpNo());
         return R.ok(null);
     }
@@ -171,6 +180,7 @@ public class SysUserController {
         private String phone;
         private String role;
         private Long workshopId;
+        private boolean clearWorkshop;
         private Integer status;
     }
 
