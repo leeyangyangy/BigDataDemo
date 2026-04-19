@@ -1,6 +1,7 @@
 package xyz.leeyangy.spc.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -75,8 +76,9 @@ public class AdminWorkshopController {
     public R<Void> delete(@PathVariable Long id) {
         Workshop workshop = workshopService.getById(id);
         if (workshop == null) return R.fail("车间不存在");
-        workshop.setDeleted(1);
-        workshopService.updateById(workshop);
+        workshopService.update(new LambdaUpdateWrapper<Workshop>()
+                .eq(Workshop::getId, id)
+                .set(Workshop::getDeleted, 1));
         return R.ok(null);
     }
 }

@@ -1,6 +1,7 @@
 package xyz.leeyangy.spc.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -114,8 +115,9 @@ public class AdminProcessController {
         if (process == null) {
             return R.fail(StatusCode.DATA_NOT_FOUND, "工序不存在");
         }
-        process.setDeleted(1);
-        processService.updateById(process);
+        processService.update(new LambdaUpdateWrapper<Process>()
+                .eq(Process::getId, id)
+                .set(Process::getDeleted, 1));
         log.info("[Admin] 删除工序: id={} code={}", id, process.getProcessCode());
         return R.ok(null);
     }

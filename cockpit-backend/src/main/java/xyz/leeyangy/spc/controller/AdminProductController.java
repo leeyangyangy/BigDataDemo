@@ -1,6 +1,7 @@
 package xyz.leeyangy.spc.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -104,8 +105,9 @@ public class AdminProductController {
         if (product == null) {
             return R.fail(StatusCode.DATA_NOT_FOUND, "产品不存在");
         }
-        product.setDeleted(1);
-        productService.updateById(product);
+        productService.update(new LambdaUpdateWrapper<Product>()
+                .eq(Product::getId, id)
+                .set(Product::getDeleted, 1));
         log.info("[Admin] 删除产品: id={} code={}", id, product.getProductCode());
         return R.ok(null);
     }

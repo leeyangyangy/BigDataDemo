@@ -263,7 +263,7 @@ import { ref, computed, onMounted, onUnmounted, watch, reactive} from 'vue'
 import SpcControlChart from './SpcControlChart.vue'
 import SpcAlertPanel from './SpcAlertPanel.vue'
 import SpcDataImport from './SpcDataImport.vue'
-import { spcApi, adminApi } from '../utils/api.js'
+import { spcApi, adminApi } from '@/utils/api.js'
 
 const props = defineProps({
   isLoggedIn: { type: Boolean, default: false }
@@ -368,7 +368,13 @@ function requireAuth(fn) {
   }
   fn()
 }
-
+// TODO
+// ① 参数✓ 设备✓ loadSingleChart() 单条控制图 
+// ② 参数✗ 设备✗ loadAllProcessCharts() 工序下全部参数图表 
+// ③ 参数✗ 设备✓ loadEquipAllParams() ✨新增 该设备全部参数图表【带设备名】 
+// ④ 参数✓ 设备✗ loadParamAcrossEquipments() 该参数全设备图表
+//  考虑是否要绑定用户到车间，车间关联工序，用户被限制只能加载该车间有关的工序、参数、设备选择
+//  数据预览不在向匿名用户开放，需要通过企业应用完成授权或者内网登录才能继续预览、填写、导出数据
 onMounted(async () => {
   await loadProducts()
   const saved = loadFilterState()
@@ -377,8 +383,9 @@ onMounted(async () => {
   if (saved.dataLimit != null) dataLimit.value = saved.dataLimit
   if (saved.timeRange != null) timeRange.value = saved.timeRange
 
-  let needsRefresh = false
   const pendingEquipId = saved.equipmentId || null
+  const pendingParamId = saved.paramId || null
+  let shouldRefresh = false
 
   if (saved.productId && products.value.some(p => p.id === saved.productId)) {
     selectedProduct.value = saved.productId
@@ -386,20 +393,22 @@ onMounted(async () => {
     if (saved.processId && processes.value.some(p => p.id === saved.processId)) {
       selectedProcess.value = saved.processId
       await onProcessChange(false)
-      if (pendingEquipId && equipmentList.value.some(e => e.id === pendingEquipId)) {
+
+      if (pendingEquipId && equipmentList.value.length > 0 && equipmentList.value.some(e => e.id === pendingEquipId)) {
         selectedEquipment.value = pendingEquipId
       }
-      if (saved.paramId && params.value.some(p => p.id === saved.paramId)) {
-        selectedParam.value = saved.paramId
+
+      if (pendingParamId && params.value.length > 0 && params.value.some(p => p.id === pendingParamId)) {
+        selectedParam.value = pendingParamId
         await onParamChange(false)
-      } else if (params.value.length > 0) {
-        needsRefresh = true
+      } else if (selectedProcess.value) {
+        shouldRefresh = true
       }
     }
   }
 
-  if (needsRefresh || (selectedProcess.value && !selectedParam.value)) {
-    refreshAllCharts()
+  if (shouldRefresh) {
+    await refreshAllCharts()
   }
 
   saveFilterState()
@@ -513,28 +522,34 @@ async function onProcessChange(save = true) {
   currentVersion.value = null
   processCharts.value = []
 
-  if (!selectedProcess.value || !selectedProduct.value) { if (save) saveFilterState(); return }
+  if (!selectedProcess.value || !selectedProduct.value) {
+    if (save) saveFilterState();
+    return
+  }
 
   try {
     const cacheKey = `params:${selectedProcess.value}`
     const cached = getCache(cacheKey)
     if (cached) {
       params.value = cached
-      if (params.value.length > 0) loadAllProcessCharts()
-      if (save) saveFilterState()
-      return
+    } else {
+      try {
+        const res = await spcApi.getParamPage({current: 1, size: 100})
+        if (res.code === 200) {
+          const filtered = res.data.records.filter(p => p.processId === selectedProcess.value)
+          params.value = filtered
+          setCache(cacheKey, filtered)
+        }
+      } catch (e) {
+        console.error('加载标准(参数)失败', e)
+      }
     }
-    const res = await spcApi.getParamPage({ current: 1, size: 100 })
-    if (res.code === 200) {
-      const filtered = res.data.records.filter(p => p.processId === selectedProcess.value)
-      params.value = filtered
-      setCache(cacheKey, filtered)
-      if (filtered.length > 0) loadAllProcessCharts()
-    }
-  } catch (e) { console.error('加载标准(参数)失败', e) }
 
-  await loadEquipmentByProcess()
-  if (save) saveFilterState()
+    await loadEquipmentByProcess()
+    if (save) saveFilterState()
+  } catch (e) {
+    console.error('onProcessChange 异常', e)
+  }
 }
 
 async function loadEquipmentByProcess() {
@@ -561,47 +576,74 @@ async function loadEquipmentByProcess() {
 
 async function loadAllProcessCharts() {
   processCharts.value = []
+  chartData.value = null
   if (!selectedProduct.value || !selectedProcess.value || !params.value.length) return
 
-  const chartPromises = params.value.map(async (param) => {
-    let version = null
+  let targetEquipList = equipmentList.value
+  if (!targetEquipList.length && selectedProcess.value) {
     try {
-      const verRes = await spcApi.getParamVersionCurrent({
-        paramId: param.id,
-        productId: selectedProduct.value
-      })
-      if (verRes.code === 200) version = verRes.data
-    } catch (e) { }
-
-    let chartD = null
-    try {
-      const baseParams = {
-        paramId: param.id,
-        productId: selectedProduct.value,
-        limit: dataLimit.value,
-        ...getTimeRangeParams()
+      const res = await spcApi.getProcessEquipment(selectedProcess.value)
+      if (res.code === 200 && res.data) {
+        targetEquipList = res.data.map(eq => ({
+          id: eq.id,
+          code: eq.equipCode,
+          name: eq.equipName || eq.equipCode
+        }))
       }
-      let res
-      if (selectedEquipment.value) {
-        res = await spcApi.getDataByEquipment({ ...baseParams, equipmentId: selectedEquipment.value })
-      } else {
-        res = await spcApi.getControlChart(baseParams)
-      }
-      if (res.code === 200) chartD = res.data
     } catch (e) { }
+  }
 
-    if (chartD && useManualLimits.value && hasManualLimit.value && chartD.limits) {
-      const m = manualLimits.value
-      if (m.usl != null) chartD.limits.usl = m.usl
-      if (m.lsl != null) chartD.limits.lsl = m.lsl
-      if (m.target != null) chartD.limits.target = m.target
-      if (m.ucl != null) chartD.limits.ucl = m.ucl
-      if (m.lcl != null) chartD.limits.lcl = m.lcl
-    }
+  const equipList = selectedEquipment.value
+    ? targetEquipList.filter(e => e.id === selectedEquipment.value)
+    : targetEquipList
 
-    ensureChronologicalOrder(chartD)
+  const chartPromises = []
+  params.value.forEach((param) => {
+    equipList.forEach((eq) => {
+      chartPromises.push((async () => {
+        let version = null
+        try {
+          const verRes = await spcApi.getParamVersionCurrent({
+            paramId: param.id,
+            productId: selectedProduct.value
+          })
+          if (verRes.code === 200) version = verRes.data
+        } catch (e) { }
 
-    return { paramId: param.id, paramName: param.paramName, unit: param.unit, version, chartData: chartD }
+        let chartD = null
+        try {
+          const res = await spcApi.getDataByEquipment({
+            paramId: param.id,
+            productId: selectedProduct.value,
+            equipmentId: eq.id,
+            limit: dataLimit.value,
+            ...getTimeRangeParams()
+          })
+          if (res.code === 200) chartD = res.data
+        } catch (e) { }
+
+        if (chartD && useManualLimits.value && hasManualLimit.value && chartD.limits) {
+          const m = manualLimits.value
+          if (m.usl != null) chartD.limits.usl = m.usl
+          if (m.lsl != null) chartD.limits.lsl = m.lsl
+          if (m.target != null) chartD.limits.target = m.target
+          if (m.ucl != null) chartD.limits.ucl = m.ucl
+          if (m.lcl != null) chartD.limits.lcl = m.lcl
+        }
+
+        ensureChronologicalOrder(chartD)
+
+        return {
+          paramId: param.id,
+          equipmentId: eq.id,
+          equipmentName: eq.name || eq.code,
+          paramName: param.paramName,
+          unit: param.unit,
+          version,
+          chartData: chartD
+        }
+      })())
+    })
   })
 
   try {
@@ -708,13 +750,72 @@ async function refreshAllCharts() {
   const hasParam = !!selectedParam.value
   const hasEquip = !!selectedEquipment.value
 
-  if (hasParam && !hasEquip) {
-    await loadParamAcrossEquipments()
-  } else if (hasParam && hasEquip) {
+  if (hasParam && hasEquip) {
     await loadSingleChart()
+  } else if (hasParam && !hasEquip) {
+    await loadParamAcrossEquipments()
+  } else if (!hasParam && hasEquip) {
+    await loadEquipAllParams()
   } else {
     await loadAllProcessCharts()
   }
+}
+
+async function loadEquipAllParams() {
+  processCharts.value = []
+  chartData.value = null
+  if (!selectedProduct.value || !selectedProcess.value || !selectedEquipment.value || !params.value.length) return
+
+  const equipInfo = equipmentList.value.find(e => e.id === selectedEquipment.value)
+  const equipName = equipInfo?.name || equipInfo?.code || ''
+
+  const chartPromises = params.value.map(async (param) => {
+    let version = null
+    try {
+      const verRes = await spcApi.getParamVersionCurrent({
+        paramId: param.id,
+        productId: selectedProduct.value
+      })
+      if (verRes.code === 200) version = verRes.data
+    } catch (e) { }
+
+    let chartD = null
+    try {
+      const res = await spcApi.getDataByEquipment({
+        paramId: param.id,
+        productId: selectedProduct.value,
+        equipmentId: selectedEquipment.value,
+        limit: dataLimit.value,
+        ...getTimeRangeParams()
+      })
+      if (res.code === 200) chartD = res.data
+    } catch (e) { }
+
+    if (chartD && useManualLimits.value && hasManualLimit.value && chartD.limits) {
+      const m = manualLimits.value
+      if (m.usl != null) chartD.limits.usl = m.usl
+      if (m.lsl != null) chartD.limits.lsl = m.lsl
+      if (m.target != null) chartD.limits.target = m.target
+      if (m.ucl != null) chartD.limits.ucl = m.ucl
+      if (m.lcl != null) chartD.limits.lcl = m.lcl
+    }
+
+    ensureChronologicalOrder(chartD)
+
+    return {
+      paramId: param.id,
+      equipmentId: selectedEquipment.value,
+      equipmentName: equipName,
+      paramName: param.paramName,
+      unit: param.unit,
+      version,
+      chartData: chartD
+    }
+  })
+
+  try {
+    processCharts.value = await Promise.all(chartPromises)
+  } catch (e) { console.error('加载设备全部参数控制图失败', e) }
 }
 
 async function loadParamAcrossEquipments() {

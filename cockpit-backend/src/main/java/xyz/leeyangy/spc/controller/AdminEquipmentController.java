@@ -104,8 +104,9 @@ public class AdminEquipmentController {
     public R<Void> delete(@PathVariable Long id) {
         Equipment equipment = equipmentService.getById(id);
         if (equipment == null) return R.fail("设备不存在");
-        equipment.setDeleted(1);
-        equipmentService.updateById(equipment);
+        equipmentService.update(new LambdaUpdateWrapper<Equipment>()
+                .eq(Equipment::getId, id)
+                .set(Equipment::getDeleted, 1));
         log.info("[Admin] 删除设备: id={} code={}", id, equipment.getEquipCode());
         return R.ok(null);
     }
