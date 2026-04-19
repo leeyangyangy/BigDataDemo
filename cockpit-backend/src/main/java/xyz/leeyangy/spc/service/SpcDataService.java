@@ -31,7 +31,7 @@ public class SpcDataService extends ServiceImpl<SpcDataMapper, SpcData> {
     private static final String LATEST_DATA_PREFIX = "spc:latest:";
 
     @Transactional(rollbackFor = Exception.class)
-    public SpcData uploadData(SpcData data) {
+    public SpcData uploadData(SpcData data, String role) {
         if (data.getEquipmentId() == null) {
             throw new RuntimeException("设备ID不能为空，请选择设备");
         }
@@ -63,19 +63,23 @@ public class SpcDataService extends ServiceImpl<SpcDataMapper, SpcData> {
             version = paramVersionService.getCurrentVersion(
                     data.getParamId(), data.getProductId());
             if (version == null) {
-                log.info("[DataUpload] 自动创建默认参数版本: paramId={} productId={}", data.getParamId(), data.getProductId());
-                ParamVersion defaultVersion = new ParamVersion();
-                defaultVersion.setParamId(data.getParamId());
-                defaultVersion.setProductId(data.getProductId() != null ? data.getProductId() : 0L);
-                defaultVersion.setVersionNo(1);
-                defaultVersion.setIsCurrent(1);
-                defaultVersion.setDeleted(0);
-                defaultVersion.setStatus(1);
-                defaultVersion.setEffectiveFrom(LocalDateTime.now());
-                defaultVersion.setChartType("I_MR");
-                defaultVersion.setChangeReason("系统自动创建(首次数据提交)");
-                paramVersionService.save(defaultVersion);
-                version = defaultVersion;
+                if ("ADMIN".equals(role) || "ENGINEER".equals(role)) {
+                    log.info("[DataUpload] 自动创建默认参数版本: paramId={} productId={} role={}", data.getParamId(), data.getProductId(), role);
+                    ParamVersion defaultVersion = new ParamVersion();
+                    defaultVersion.setParamId(data.getParamId());
+                    defaultVersion.setProductId(data.getProductId() != null ? data.getProductId() : 0L);
+                    defaultVersion.setVersionNo(1);
+                    defaultVersion.setIsCurrent(1);
+                    defaultVersion.setDeleted(0);
+                    defaultVersion.setStatus(1);
+                    defaultVersion.setEffectiveFrom(LocalDateTime.now());
+                    defaultVersion.setChartType("I_MR");
+                    defaultVersion.setChangeReason("系统自动创建(首次数据提交)");
+                    paramVersionService.save(defaultVersion);
+                    version = defaultVersion;
+                } else {
+                    throw new RuntimeException("该工艺参数尚未配置标准版本（上下限），请联系管理员在【后台管理-标准管理】中设置后再提交数据");
+                }
             }
         }
 
@@ -118,9 +122,9 @@ public class SpcDataService extends ServiceImpl<SpcDataMapper, SpcData> {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public List<SpcData> batchUpload(List<SpcData> dataList) {
+    public List<SpcData> batchUpload(List<SpcData> dataList, String role) {
         for (SpcData data : dataList) {
-            uploadData(data);
+            uploadData(data, role);
         }
         return dataList;
     }

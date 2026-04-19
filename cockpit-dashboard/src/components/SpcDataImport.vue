@@ -1,10 +1,10 @@
 <template>
   <div class="spc-data-import">
     <div class="import-actions-bar">
-      <button class="btn-upload" @click="requireAuth(() => showUploadForm = true)" v-if="isLoggedIn">填写数据</button>
-      <button class="btn-import" @click="requireAuth(showImportDialog)" v-if="isLoggedIn && selectedProduct">导入数据</button>
+      <button class="btn-upload" @click="requireAuth(() => showUploadForm = true)" v-if="canWriteData">填写数据</button>
+      <button class="btn-import" @click="requireAuth(showImportDialog)" v-if="canWriteData && selectedProduct">导入数据</button>
       <button class="btn-export" @click="exportDataReport" v-if="selectedParam && selectedProduct">导出报告</button>
-      <button class="btn-template" @click="downloadTemplate" v-if="isLoggedIn">下载模板</button>
+      <button class="btn-template" @click="downloadTemplate" v-if="canWriteData">下载模板</button>
     </div>
 
     <!-- 数据导入对话框 -->
@@ -217,7 +217,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
-import { spcApi, getToken } from '../utils/api'
+import { spcApi, getToken, getUser } from '@/utils/api'
 
 const props = defineProps({
   isLoggedIn: Boolean,
@@ -233,6 +233,9 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['require-login', 'refresh', 'data-imported'])
+
+const isViewer = computed(() => getUser()?.role === 'VIEWER')
+const canWriteData = computed(() => props.isLoggedIn && !isViewer.value)
 
 const showImport = ref(false)
 const importForm = ref({ productId: null, processId: null, equipmentId: null })

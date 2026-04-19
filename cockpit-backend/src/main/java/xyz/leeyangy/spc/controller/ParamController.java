@@ -19,35 +19,20 @@ public class ParamController {
     public R<Page<Param>> page(
             @RequestParam(defaultValue = "1") Integer current,
             @RequestParam(defaultValue = "20") Integer size,
-            @RequestParam(required = false) String keyword) {
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Long processId) {
         LambdaQueryWrapper<Param> wrapper = new LambdaQueryWrapper<Param>()
-                .like(keyword != null && !keyword.isBlank(), Param::getParamCode, keyword)
-                .or()
-                .like(keyword != null && !keyword.isBlank(), Param::getParamName, keyword)
+                .eq(Param::getStatus, 1)
+                .and(keyword != null && !keyword.isBlank(), w -> w
+                        .like(Param::getParamCode, keyword)
+                        .or().like(Param::getParamName, keyword))
+                .eq(processId != null, Param::getProcessId, processId)
                 .orderByDesc(Param::getCreatedAt);
         return R.ok(paramService.page(new Page<>(current, size), wrapper));
-    }
-
-    @PostMapping
-    public R<Param> create(@RequestBody Param param) {
-        paramService.save(param);
-        return R.ok(param);
     }
 
     @GetMapping("/{id}")
     public R<Param> getById(@PathVariable Long id) {
         return R.ok(paramService.getById(id));
-    }
-
-    @PutMapping("/{id}")
-    public R<Param> update(@PathVariable Long id, @RequestBody Param param) {
-        param.setId(id);
-        paramService.updateById(param);
-        return R.ok(paramService.getById(id));
-    }
-
-    @DeleteMapping("/{id}")
-    public R<Boolean> delete(@PathVariable Long id) {
-        return R.ok(paramService.removeById(id));
     }
 }

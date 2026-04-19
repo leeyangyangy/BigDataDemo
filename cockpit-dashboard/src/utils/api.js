@@ -262,11 +262,11 @@ export const adminApi = {
     delete: (id) => api.delete(`/admin/process/${id}`)
   },
   standard: {
-    getPage: (params) => api.get('/spc/param/page', params),
-    getById: (id) => api.get(`/spc/param/${id}`),
-    create: (data) => api.post('/spc/param', data),
-    update: (id, data) => api.put(`/spc/param/${id}`, data),
-    delete: (id) => api.delete(`/spc/param/${id}`)
+    getPage: (params) => api.get('/admin/standard/page', params),
+    getById: (id) => api.get(`/admin/standard/${id}`),
+    create: (data) => api.post('/admin/standard', data),
+    update: (id, data) => api.put(`/admin/standard/${id}`, data),
+    delete: (id) => api.delete(`/admin/standard/${id}`)
   },
   equipment: {
     getPage: (params) => api.get('/admin/equipment/page', params),

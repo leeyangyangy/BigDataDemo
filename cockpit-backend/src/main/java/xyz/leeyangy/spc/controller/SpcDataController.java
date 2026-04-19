@@ -20,15 +20,15 @@ public class SpcDataController {
     private final SpcDataService spcDataService;
 
     @PostMapping("/upload")
-    public R<SpcData> upload(@RequestBody SpcData data, @RequestAttribute Long userId) {
+    public R<SpcData> upload(@RequestBody SpcData data, @RequestAttribute Long userId, @RequestAttribute String role) {
         data.setCreatedBy(userId);
-        return R.ok(spcDataService.uploadData(data));
+        return R.ok(spcDataService.uploadData(data, role));
     }
 
     @PostMapping("/batch-upload")
-    public R<List<SpcData>> batchUpload(@RequestBody List<SpcData> dataList, @RequestAttribute Long userId) {
+    public R<List<SpcData>> batchUpload(@RequestBody List<SpcData> dataList, @RequestAttribute Long userId, @RequestAttribute String role) {
         dataList.forEach(d -> d.setCreatedBy(userId));
-        return R.ok(spcDataService.batchUpload(dataList));
+        return R.ok(spcDataService.batchUpload(dataList, role));
     }
 
     @GetMapping("/page")
