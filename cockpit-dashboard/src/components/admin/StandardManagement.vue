@@ -607,7 +607,7 @@ async function submitNewVersion() {
       isCurrent: 1
     }
 
-    const res = await spcApi.createParamVersion(payload)
+    const res = await adminApi.paramVersion.create(payload)
     if (res.code === 200) {
       await openVersionManage(versionItem.value)
     } else {
@@ -637,7 +637,7 @@ async function handleDelete(item) {
 
 async function handleEnableVersion(v) {
   try {
-    const res = await spcApi.enableParamVersion(v.id)
+    const res = await adminApi.paramVersion.enable(v.id)
     if (res.code === 200) {
       await openVersionManage(versionItem.value)
     }
@@ -647,7 +647,7 @@ async function handleEnableVersion(v) {
 async function handleDisableVersion(v) {
   if (!confirm(`确定停用版本 V${v.versionNo} 吗？`)) return
   try {
-    const res = await spcApi.disableParamVersion(v.id)
+    const res = await adminApi.paramVersion.disable(v.id)
     if (res.code === 200) {
       await openVersionManage(versionItem.value)
     }
@@ -657,7 +657,7 @@ async function handleDisableVersion(v) {
 async function handleDeleteVersion(v) {
   if (!confirm(`确定删除版本 V${v.versionNo} 吗？此操作不可恢复！`)) return
   try {
-    const res = await spcApi.deleteParamVersion(v.id)
+    const res = await adminApi.paramVersion.delete(v.id)
     if (res.code === 200) {
       await openVersionManage(versionItem.value)
     }
@@ -681,7 +681,7 @@ async function submitEditVersion() {
   if (!editingVersionId.value) return
   versionSubmitting.value = true
   try {
-    const res = await spcApi.updateParamVersion(editingVersionId.value, editVersionForm.value)
+    const res = await adminApi.paramVersion.update(editingVersionId.value, editVersionForm.value)
     if (res.code === 200) {
       editingVersionId.value = null
       await openVersionManage(versionItem.value)

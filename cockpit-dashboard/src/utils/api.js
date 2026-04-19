@@ -217,11 +217,6 @@ export const spcApi = {
   resolveAlert: (id, remark) => api.put(`/spc/alert/${id}/resolve?remark=${remark || ''}`),
   getParamVersionCurrent: (params) => api.get('/spc/param-version/current', params),
   getParamVersionHistory: (params) => api.get('/spc/param-version/history', params),
-  createParamVersion: (data) => api.post('/spc/param-version/create', data),
-  enableParamVersion: (id) => api.put(`/spc/param-version/${id}/enable`),
-  disableParamVersion: (id) => api.put(`/spc/param-version/${id}/disable`),
-  updateParamVersion: (id, data) => api.put(`/spc/param-version/${id}`, data),
-  deleteParamVersion: (id) => api.delete(`/spc/param-version/${id}`),
   getBatchPage: (params) => api.get('/spc/batch/page', params),
   createBatch: (data) => api.post('/spc/batch', data),
   getProductPage: (params) => api.get('/spc/product/page', params),
@@ -282,5 +277,14 @@ export const adminApi = {
     create: (data) => api.post('/admin/workshop', data),
     update: (id, data) => api.put(`/admin/workshop/${id}`, data),
     delete: (id) => api.delete(`/admin/workshop/${id}`)
+  },
+  paramVersion: {
+    getPage: (params) => api.get('/admin/param-version/page', params),
+    getById: (id) => api.get(`/admin/param-version/${id}`),
+    create: (data) => api.post('/admin/param-version/create', data),
+    enable: (id) => api.put(`/admin/param-version/${id}/enable`),
+    disable: (id) => api.put(`/admin/param-version/${id}/disable`),
+    update: (id, data) => api.put(`/admin/param-version/${id}`, data),
+    delete: (id) => api.delete(`/admin/param-version/${id}`)
   }
 }
