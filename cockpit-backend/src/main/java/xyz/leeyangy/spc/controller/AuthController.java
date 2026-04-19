@@ -60,6 +60,7 @@ public class AuthController {
         result.put("role", user.getRole());
         result.put("email", user.getEmail());
         result.put("phone", user.getPhone());
+        result.put("workshopId", user.getWorkshopId());
 
         log.info("[Auth] 用户登录成功: empNo={} username={} ip={}", user.getEmpNo(), user.getUsername(), ip);
         return R.ok("登录成功", result);
@@ -80,6 +81,7 @@ public class AuthController {
         result.put("email", user.getEmail());
         result.put("phone", user.getPhone());
         result.put("avatar", user.getAvatar());
+        result.put("workshopId", user.getWorkshopId());
         return R.ok(result);
     }
 

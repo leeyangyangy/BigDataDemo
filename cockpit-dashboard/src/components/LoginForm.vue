@@ -70,7 +70,8 @@ async function handleLogin() {
         username: res.data.username,
         role: res.data.role,
         email: res.data.email,
-        phone: res.data.phone
+        phone: res.data.phone,
+        workshopId: res.data.workshopId
       })
       emit('success', res.data)
     } else {
