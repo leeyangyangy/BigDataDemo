@@ -74,7 +74,17 @@ const chartRef = ref(null)
 let chartInstance = null
 let subChartInstance = null
 
-const currentChartType = ref('imr')
+function normalizeChartType(raw) {
+  if (!raw) return 'imr'
+  const map = { 'I_MR': 'imr', 'IMR': 'imr', 'XbarR': 'xbar_r', 'XBAR_R': 'xbar_r', 'XbarS': 'xbar_r' }
+  const lower = raw.replace(/[-_]/g, '').toUpperCase()
+  for (const [k, v] of Object.entries(map)) {
+    if (lower === k.replace(/[-_]/g, '')) return v
+  }
+  return 'imr'
+}
+
+const currentChartType = ref(normalizeChartType(props.chartType))
 const boxplotStats = ref(null)
 
 const chartTypes = [
@@ -112,6 +122,14 @@ onUnmounted(() => {
 watch(() => [props.chartData, currentChartType.value], ([newData]) => {
   if (newData) nextTick(() => updateChart(newData))
 }, { deep: true })
+
+watch(() => props.chartType, (val) => {
+  const normalized = normalizeChartType(val)
+  if (normalized !== currentChartType.value) {
+    currentChartType.value = normalized
+    if (props.chartData) nextTick(() => updateChart(props.chartData))
+  }
+})
 
 function switchChartType(type) {
   currentChartType.value = type

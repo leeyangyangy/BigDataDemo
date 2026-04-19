@@ -75,6 +75,8 @@ public class SpcChartController {
         result.put("paramId", paramId);
         result.put("productId", productId);
         result.put("versionNo", version.getVersionNo());
+        result.put("chartType", version.getChartType() != null ? version.getChartType() : "I_MR");
+        result.put("subgroupSize", version.getSubgroupSize() != null ? version.getSubgroupSize() : 1);
         result.put("timeSeries", timeSeries);
         result.put("values", values);
         result.put("zones", zones);
@@ -167,6 +169,8 @@ public class SpcChartController {
             result.put("limits", limits);
             result.put("paramVersionId", version.getId());
             result.put("versionNo", version.getVersionNo());
+            result.put("chartType", version.getChartType() != null ? version.getChartType() : "I_MR");
+            result.put("subgroupSize", version.getSubgroupSize() != null ? version.getSubgroupSize() : 1);
 
             SpcStatResult stat = spcStatService.getLatestStat(version.getId(), null);
             if (stat != null) {

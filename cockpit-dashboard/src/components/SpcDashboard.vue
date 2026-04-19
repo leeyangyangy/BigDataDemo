@@ -164,7 +164,7 @@
             <span class="chart-title">{{ pc.paramName }}<span class="chart-unit" v-if="pc.unit">({{ pc.unit }})</span><span class="chart-equip-tag" v-if="pc.equipmentName">【{{ pc.equipmentName }}】</span></span>
             <span class="chart-version-tag" v-if="pc.version">V{{ pc.version.versionNo }}</span>
           </div>
-          <SpcControlChart :ref="el => { if(el) chartRefs[pc.equipmentId ? `${pc.paramId}-${pc.equipmentId}` : pc.paramId] = el }" :chartData="pc.chartData" />
+          <SpcControlChart :ref="el => { if(el) chartRefs[pc.equipmentId ? `${pc.paramId}-${pc.equipmentId}` : pc.paramId] = el }" :chartData="pc.chartData" :chartType="pc.chartData?.chartType || ''" />
           <div class="chart-mini-stats" v-if="pc.chartData?.capability">
             <span>Cpk: <strong :class="getCpkClass(pc.chartData.capability.cpk)">{{ pc.chartData.capability.cpk ?? '-' }}</strong></span>
             <span>均值: {{ pc.chartData.capability.mean ?? '-' }}</span>
@@ -173,7 +173,7 @@
         </div>
       </div>
       <div v-else-if="selectedParam && chartData" class="chart-card">
-        <SpcControlChart ref="chartRef" :chartData="chartData" />
+        <SpcControlChart ref="chartRef" :chartData="chartData" :chartType="chartData?.chartType || ''" />
       </div>
       <div v-else class="chart-empty-hint">
         <span v-if="selectedProcess && !selectedParam && selectedEquipment">该设备下暂无工艺参数数据</span>
