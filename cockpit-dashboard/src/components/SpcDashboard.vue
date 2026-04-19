@@ -62,6 +62,7 @@
     <!-- 数据导入导出模块 -->
     <SpcDataImport
       :is-logged-in="isLoggedIn"
+      :userInfo="userInfo"
       :selected-product="selectedProduct"
       :selected-process="selectedProcess"
       :selected-param="selectedParam"
@@ -266,7 +267,8 @@ import SpcDataImport from './SpcDataImport.vue'
 import { spcApi, adminApi } from '@/utils/api.js'
 
 const props = defineProps({
-  isLoggedIn: { type: Boolean, default: false }
+  isLoggedIn: { type: Boolean, default: false },
+  userInfo: { type: Object, default: null }
 })
 
 const emit = defineEmits(['require-login'])

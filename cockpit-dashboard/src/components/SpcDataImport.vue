@@ -229,12 +229,13 @@ const props = defineProps({
   equipmentList: Array,
   params: Array,
   dataLimit: Number,
-  timeRange: String
+  timeRange: String,
+  userInfo: { type: Object, default: null }
 })
 
 const emit = defineEmits(['require-login', 'refresh', 'data-imported'])
 
-const isViewer = computed(() => (getUser()?.role || '').toUpperCase() === 'VIEWER')
+const isViewer = computed(() => ((props.userInfo?.role || getUser()?.role || '').toUpperCase() === 'VIEWER'))
 const canWriteData = computed(() => props.isLoggedIn && !isViewer.value)
 const canExportReport = computed(() => props.isLoggedIn && !isViewer.value)
 

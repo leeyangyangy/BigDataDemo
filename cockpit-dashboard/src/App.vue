@@ -35,6 +35,7 @@
         v-if="!activeNav.startsWith('admin')"
         :key="'dashboard'"
         :isLoggedIn="loggedIn"
+        :userInfo="userInfo"
         @require-login="showLogin = true"
       />
       <template v-else-if="loggedIn">
