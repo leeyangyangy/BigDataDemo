@@ -41,6 +41,8 @@
               <span class="status-tag" :class="item.status === 1 ? 'on' : 'off'">{{ item.status === 1 ? '启用' : '停用' }}</span>
             </td>
             <td class="actions">
+              <button class="btn-action btn-copy" @click="handleDuplicate(item)">复制</button>
+              <button class="btn-action btn-param" @click="openParamBind(item)">参数</button>
               <button class="btn-action btn-edit" @click="openEdit(item)">编辑</button>
               <button class="btn-action btn-equip" @click="openEquipModal(item)">设备</button>
               <button class="btn-action btn-del" @click="handleDelete(item)">删除</button>
@@ -236,6 +238,67 @@
         </div>
       </div>
     </div>
+
+    <!-- 工序参数绑定弹窗 -->
+    <div class="modal-overlay" v-if="showParamBind">
+      <div class="modal-card modal-lg">
+        <h3 class="modal-title">绑定参数 - {{ currentBindProcess?.processName }}</h3>
+        <p style="color:#888;font-size:13px;margin-bottom:12px">选择该工序需要检测的工艺参数（同一参数可被多个工序复用）</p>
+        <div class="toolbar-sm" style="margin-bottom:12px">
+          <input v-model="paramSearchKeyword" type="text" class="search-input" placeholder="搜索参数编码/名称..." @keyup.enter="searchAvailableParams" style="width:250px" />
+          <button class="btn-search btn-sm" @click="searchAvailableParams">搜索</button>
+        </div>
+
+        <!-- 已绑定参数列表 -->
+        <div style="margin-bottom:16px">
+          <h4 style="font-size:14px;margin:0 0 8px;color:#555">已绑定参数 ({{ boundParamList.length }})</h4>
+          <div class="bound-tags" v-if="boundParamList.length > 0">
+            <span class="bound-tag" v-for="bp in boundParamList" :key="bp.id">
+              {{ bp.paramCode }} - {{ bp.paramName }}
+              <button class="tag-remove" @click="removeBoundParam(bp)" title="移除">&times;</button>
+            </span>
+          </div>
+          <div v-else style="color:#999;font-size:13px;padding:8px 0">暂无已绑定参数，请在下方选择</div>
+        </div>
+
+        <!-- 可选参数列表 -->
+        <div class="table-wrap">
+          <table class="data-table" v-if="availableParamList.length > 0">
+            <thead>
+              <tr><th>参数编码</th><th>参数名称</th><th>类型</th><th>单位</th><th>数据类型</th><th>操作</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="p in availableParamList" :key="p.id" :class="{ 'row-selected': isParamBound(p.id) }">
+                <td><strong>{{ p.paramCode }}</strong></td>
+                <td>{{ p.paramName }}</td>
+                <td>{{ p.paramType || '-' }}</td>
+                <td>{{ p.unit || '-' }}</td>
+                <td>{{ p.dataType || '-' }}</td>
+                <td class="actions">
+                  <button
+                    class="btn-action"
+                    :class="isParamBound(p.id) ? 'btn-del' : 'btn-edit'"
+                    @click="toggleParam(p)">
+                    {{ isParamBound(p.id) ? '取消' : '添加' }}
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="empty-state" v-else>
+            <p v-if="!paramSearching">{{ paramSearchKeyword ? '未找到匹配的参数' : '暂无可选参数' }}</p>
+            <p v-else>搜索中...</p>
+          </div>
+        </div>
+
+        <div class="form-msg" v-if="paramMsg" :class="{ error: paramMsgType === 'error', success: paramMsgType === 'success' }">{{ paramMsg }}</div>
+
+        <div class="modal-actions">
+          <button class="btn-cancel" @click="showParamBind = false; paramMsg = ''">取消</button>
+          <button class="btn-submit" @click="submitParamBind" :disabled="paramSubmitting">{{ paramSubmitting ? '保存中...' : '保存绑定' }}</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -366,6 +429,19 @@ async function handleSubmit() {
     formMsgType.value = 'error'
   } finally {
     submitting.value = false
+  }
+}
+
+async function handleDuplicate(item) {
+  if (!confirm(`确定复制工序 "${item.processName}" (${item.processCode}) 吗？\n复制后将生成新的工序编码和名称。`)) return
+
+  try {
+    const res = await adminApi.process.duplicate(item.id)
+    if (res.code === 200) {
+      loadData()
+    }
+  } catch (e) {
+    console.error('复制失败:', e)
   }
 }
 
@@ -526,6 +602,98 @@ async function loadEquipCounts() {
     } catch (e) { map[p.id] = 0 }
   }
   processEquipCountMap.value = map
+}
+
+const showParamBind = ref(false)
+const currentBindProcess = ref(null)
+const boundParamList = ref([])
+const availableParamList = ref([])
+const paramSearchKeyword = ref('')
+const paramSearching = ref(false)
+const paramSubmitting = ref(false)
+const paramMsg = ref('')
+const paramMsgType = ref('')
+
+async function openParamBind(item) {
+  currentBindProcess.value = item
+  paramMsg.value = ''
+  paramSearchKeyword.value = ''
+  showParamBind.value = true
+  await loadBoundParams(item.id)
+  await searchAvailableParams()
+}
+
+async function loadBoundParams(processId) {
+  try {
+    const [bindRes, allParamRes] = await Promise.all([
+      adminApi.process.getParams(processId),
+      spcApi.getParamPage({ current: 1, size: 200 })
+    ])
+    if (bindRes.code === 200 && bindRes.data && allParamRes.code === 200) {
+      const boundIds = bindRes.data.map(b => b.paramId)
+      boundParamList.value = allParamRes.data.records.filter(p => boundIds.includes(p.id))
+    } else {
+      boundParamList.value = []
+    }
+  } catch (e) { console.error('加载已绑定参数失败:', e); boundParamList.value = [] }
+}
+
+async function searchAvailableParams() {
+  paramSearching.value = true
+  try {
+    const res = await spcApi.getParamPage({
+      keyword: paramSearchKeyword.value || undefined,
+      size: 100
+    })
+    if (res.code === 200 && res.data?.records) {
+      const boundIds = boundParamList.value.map(p => p.id)
+      availableParamList.value = res.data.records.filter(p => !boundIds.includes(p.id))
+    } else {
+      availableParamList.value = []
+    }
+  } catch (e) { console.error('搜索参数失败:', e); availableParamList.value = [] }
+  finally { paramSearching.value = false }
+}
+
+function isParamBound(paramId) {
+  return boundParamList.value.some(p => p.id === paramId)
+}
+
+function toggleParam(p) {
+  if (isParamBound(p.id)) {
+    boundParamList.value = boundParamList.value.filter(x => x.id !== p.id)
+    availableParamList.value.unshift(p)
+  } else {
+    boundParamList.value.push(p)
+    availableParamList.value = availableParamList.value.filter(x => x.id !== p.id)
+  }
+}
+
+function removeBoundParam(bp) {
+  boundParamList.value = boundParamList.value.filter(x => x.id !== bp.id)
+  availableParamList.value.unshift(bp)
+}
+
+async function submitParamBind() {
+  paramSubmitting.value = true
+  paramMsg.value = ''
+  try {
+    const items = boundParamList.value.map((p) => ({ paramId: p.id }))
+    const res = await adminApi.process.bindParams(currentBindProcess.value.id, items)
+    if (res.code === 200) {
+      paramMsg.value = '绑定成功'
+      paramMsgType.value = 'success'
+      setTimeout(() => { showParamBind.value = false }, 800)
+    } else {
+      paramMsg.value = res.msg || '绑定失败'
+      paramMsgType.value = 'error'
+    }
+  } catch (e) {
+    paramMsg.value = e.message || '网络错误'
+    paramMsgType.value = 'error'
+  } finally {
+    paramSubmitting.value = false
+  }
 }
 </script>
 
@@ -688,6 +856,12 @@ async function loadEquipCounts() {
 .btn-edit:hover { background: #bae7ff; }
 .btn-del { background: #fff1f0; color: #cf1322; }
 .btn-del:hover { background: #ffa39e; }
+
+.btn-param { background: #f6ffed; color: #389e0d; }
+.btn-param:hover { background: #b7eb8f; }
+
+.btn-copy { background: #e6f7ff; color: #096dd9; }
+.btn-copy:hover { background: #91d5ff; }
 
 .btn-equip { background: #fff7e6; color: #d46b08; }
 .btn-equip:hover { background: #ffd591; }
@@ -890,5 +1064,11 @@ async function loadEquipCounts() {
   .modal-actions { flex-direction: column-reverse; width: 100%; }
   .btn-cancel, .btn-submit { width: 100%; text-align: center; padding: 10px 16px; font-size: 13px; }
   .modal-card { width: 95vw; padding: 16px; padding-bottom: 100px; max-height: calc(100vh - 40px); overflow-y: auto; }
+
+  .bound-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .bound-tag { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: var(--accent-primary); color: #fff; border-radius: 6px; font-size: 12px; }
+  .tag-remove { background: none; border: none; color: inherit; cursor: pointer; font-size: 14px; line-height: 1; opacity: 0.8; }
+  .tag-remove:hover { opacity: 1; }
+  .row-selected { background-color: rgba(var(--accent-rgb), 0.06); }
 }
 </style>

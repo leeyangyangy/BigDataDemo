@@ -37,6 +37,7 @@
             </td>
             <td class="text-muted text-sm">{{ formatTime(item.createdAt) }}</td>
             <td class="actions">
+              <button class="btn-action btn-bind" @click="openBindProcess(item)">绑定工序</button>
               <button class="btn-action btn-edit" @click="openEdit(item)">编辑</button>
               <button class="btn-action btn-del" @click="handleDelete(item)">删除</button>
             </td>
@@ -87,12 +88,61 @@
         </div>
       </div>
     </div>
+
+    <!-- 工序绑定弹窗 -->
+    <div class="modal-overlay" v-if="showBindProcess">
+      <div class="modal-card bind-modal">
+        <h3 class="modal-title">绑定工序 - {{ bindProductName }}</h3>
+
+        <div class="bind-hint">
+          <span>选择该产品需要经过的工序（可多选，支持复用）</span>
+        </div>
+
+        <div class="bind-list" v-if="!bindLoading">
+          <label
+            v-for="p in allProcesses"
+            :key="p.id"
+            class="bind-item"
+            :class="{ checked: selectedProcessIds.includes(p.id) }"
+          >
+            <input
+              type="checkbox"
+              :value="p.id"
+              v-model="selectedProcessIds"
+              class="bind-checkbox"
+            />
+            <div class="bind-info">
+              <span class="bind-name">{{ p.processName }}</span>
+              <span class="bind-code">{{ p.processCode }}</span>
+              <span class="bind-type" v-if="p.processType">{{ p.processType }}</span>
+            </div>
+            <div class="bind-sort" v-if="selectedProcessIds.includes(p.id)">
+              <label class="sort-label">排序</label>
+              <input type="number" v-model.number="processSortMap[p.id]" class="sort-input" min="0" />
+            </div>
+          </label>
+          <div class="bind-empty" v-if="allProcesses.length === 0">
+            暂无可用工序，请先在工序管理中创建
+          </div>
+        </div>
+        <div class="bind-loading" v-else>
+          <span>加载中...</span>
+        </div>
+
+        <div class="form-msg" v-if="bindMsg" :class="{ error: bindMsgType === 'error', success: bindMsgType === 'success' }">{{ bindMsg }}</div>
+
+        <div class="modal-actions">
+          <button class="btn-cancel" @click="showBindProcess = false">取消</button>
+          <button class="btn-submit" @click="handleBindSubmit" :disabled="bindSubmitting">{{ bindSubmitting ? '保存中...' : '保存绑定' }}</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { adminApi } from '@/utils/api.js'
+import { adminApi, spcApi } from '@/utils/api.js'
 
 const list = ref([])
 const total = ref(0)
@@ -113,6 +163,17 @@ const formMsgType = ref('')
 const form = ref({
   productCode: '', productName: '', productType: '', specification: '', status: 1
 })
+
+const showBindProcess = ref(false)
+const bindProductId = ref(null)
+const bindProductName = ref('')
+const allProcesses = ref([])
+const selectedProcessIds = ref([])
+const processSortMap = ref({})
+const bindLoading = ref(false)
+const bindSubmitting = ref(false)
+const bindMsg = ref('')
+const bindMsgType = ref('')
 
 const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
 
@@ -203,6 +264,69 @@ async function handleDelete(item) {
     }
   } catch (e) {
     console.error('删除失败:', e)
+  }
+}
+
+async function openBindProcess(item) {
+  bindProductId.value = item.id
+  bindProductName.value = item.productName
+  selectedProcessIds.value = []
+  processSortMap.value = {}
+  bindMsg.value = ''
+  showBindProcess.value = true
+  bindLoading.value = true
+
+  try {
+    const [processRes, boundRes] = await Promise.all([
+      adminApi.process.getPage({ current: 1, size: 200 }),
+      spcApi.getProductProcesses(item.id)
+    ])
+
+    if (processRes.code === 200) {
+      allProcesses.value = processRes.data.records || []
+    }
+
+    if (boundRes.code === 200 && boundRes.data) {
+      selectedProcessIds.value = boundRes.data.map(b => b.processId)
+      boundRes.data.forEach(b => {
+        processSortMap.value[b.processId] = b.sortOrder || 0
+      })
+    }
+  } catch (e) {
+    console.error('加载工序数据失败:', e)
+    bindMsg.value = '加载失败'
+    bindMsgType.value = 'error'
+  } finally {
+    bindLoading.value = false
+  }
+}
+
+async function handleBindSubmit() {
+  bindSubmitting.value = true
+  bindMsg.value = ''
+
+  try {
+    const items = selectedProcessIds.value.map((pid, idx) => ({
+      processId: pid,
+      isRequired: 1,
+      sortOrder: processSortMap.value[pid] ?? idx
+    }))
+
+    const res = await spcApi.bindProductProcesses(bindProductId.value, items)
+
+    if (res.code === 200) {
+      bindMsg.value = '绑定成功'
+      bindMsgType.value = 'success'
+      setTimeout(() => { showBindProcess.value = false }, 1000)
+    } else {
+      bindMsg.value = res.msg || '绑定失败'
+      bindMsgType.value = 'error'
+    }
+  } catch (e) {
+    bindMsg.value = e.message || '网络错误'
+    bindMsgType.value = 'error'
+  } finally {
+    bindSubmitting.value = false
   }
 }
 
@@ -353,6 +477,8 @@ onMounted(() => {
 .btn-edit:hover { background: #bae7ff; }
 .btn-del { background: #fff1f0; color: #cf1322; }
 .btn-del:hover { background: #ffa39e; }
+.btn-bind { background: #f0f5ff; color: #2f54eb; }
+.btn-bind:hover { background: #d6e4ff; }
 
 .empty-state {
   text-align: center;
@@ -495,6 +621,119 @@ onMounted(() => {
 }
 .btn-submit:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.35); }
 .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.bind-modal { width: 560px; max-height: 80vh; overflow-y: auto; }
+
+.bind-hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-bottom: 14px;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+}
+
+.bind-list {
+  max-height: 360px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bind-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--bg-secondary);
+}
+.bind-item:hover { border-color: var(--accent-primary); }
+.bind-item.checked {
+  border-color: var(--accent-primary);
+  background: rgba(var(--accent-rgb), 0.06);
+}
+
+.bind-checkbox {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.bind-info {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.bind-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.bind-code {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  background: var(--bg-tertiary);
+  padding: 1px 7px;
+  border-radius: 4px;
+}
+
+.bind-type {
+  font-size: 11px;
+  color: var(--accent-primary);
+  background: rgba(var(--accent-rgb), 0.08);
+  padding: 1px 7px;
+  border-radius: 4px;
+}
+
+.bind-sort {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.sort-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.sort-input {
+  width: 50px;
+  padding: 4px 6px;
+  border: 1px solid var(--border-input);
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 12px;
+  text-align: center;
+  outline: none;
+}
+.sort-input:focus { border-color: var(--accent-primary); }
+
+.bind-empty {
+  text-align: center;
+  padding: 30px;
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
+.bind-loading {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-tertiary);
+}
 
 @media (max-width: 768px) {
   .toolbar { flex-direction: column; align-items: stretch; gap: 8px; }

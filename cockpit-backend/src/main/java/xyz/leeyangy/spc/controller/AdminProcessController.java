@@ -109,6 +109,56 @@ public class AdminProcessController {
         return R.ok("更新成功", existProcess);
     }
 
+    @PostMapping("/{id}/duplicate")
+    public R<Process> duplicate(@PathVariable Long id) {
+        Process source = processService.getById(id);
+        if (source == null) {
+            return R.fail(StatusCode.DATA_NOT_FOUND, "工序不存在");
+        }
+
+        String baseCode = source.getProcessCode();
+        String baseName = source.getProcessName();
+        String newCode = generateUniqueCode(baseCode, "process");
+        String newName = generateUniqueName(baseName, "process");
+
+        Process copy = new Process();
+        copy.setProcessCode(newCode);
+        copy.setProcessName(newName);
+        copy.setProcessType(source.getProcessType());
+        copy.setWorkshopId(source.getWorkshopId());
+        copy.setDescription(source.getDescription() != null ? source.getDescription() + " (副本)" : "(副本)");
+        copy.setStatus(source.getStatus());
+        copy.setSortOrder(source.getSortOrder());
+
+        processService.save(copy);
+        log.info("[Admin] 复制工序: {} -> {}", source.getProcessCode(), newCode);
+        return R.ok("复制成功", copy);
+    }
+
+    private String generateUniqueCode(String baseCode, String type) {
+        String candidate = baseCode + "_副本";
+        for (int i = 2; i <= 100; i++) {
+            long count = processService.count(new LambdaQueryWrapper<Process>()
+                    .eq(Process::getProcessCode, candidate)
+                    .eq(Process::getDeleted, 0));
+            if (count == 0) return candidate;
+            candidate = baseCode + "_副本" + i;
+        }
+        return baseCode + "_copy_" + System.currentTimeMillis();
+    }
+
+    private String generateUniqueName(String baseName, String type) {
+        String candidate = baseName + " (副本)";
+        for (int i = 2; i <= 100; i++) {
+            long count = processService.count(new LambdaQueryWrapper<Process>()
+                    .eq(Process::getProcessName, candidate)
+                    .eq(Process::getDeleted, 0));
+            if (count == 0) return candidate;
+            candidate = baseName + " (副本" + i + ")";
+        }
+        return baseName + " (copy_" + System.currentTimeMillis() + ")";
+    }
+
     @DeleteMapping("/{id}")
     public R<Void> delete(@PathVariable Long id) {
         Process process = processService.getById(id);

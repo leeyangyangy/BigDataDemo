@@ -54,6 +54,7 @@
               <span class="status-tag" :class="item.status === 1 ? 'on' : 'off'">{{ item.status === 1 ? '启用' : '停用' }}</span>
             </td>
             <td class="actions">
+              <button class="btn-action btn-copy" @click="handleDuplicate(item)">复制</button>
               <button class="btn-action btn-edit" @click="openEdit(item)">编辑</button>
               <button class="btn-action btn-version" @click="openVersionManage(item)">版本</button>
               <button class="btn-action btn-del" @click="handleDelete(item)">删除</button>
@@ -622,6 +623,19 @@ async function submitNewVersion() {
   }
 }
 
+async function handleDuplicate(item) {
+  if (!confirm(`确定复制工艺参数 "${item.paramName}" (${item.paramCode}) 吗？\n复制后将生成新的参数编码和名称。`)) return
+
+  try {
+    const res = await adminApi.standard.duplicate(item.id)
+    if (res.code === 200) {
+      loadData()
+    }
+  } catch (e) {
+    console.error('复制失败:', e)
+  }
+}
+
 async function handleDelete(item) {
   if (!confirm(`确定删除标准 "${item.paramName}" (${item.paramCode}) 吗？\n关联的测量数据不会删除。`)) return
 
@@ -798,6 +812,9 @@ onMounted(async () => {
 }
 .btn-edit { background: #e6f7ff; color: #1890ff; }
 .btn-edit:hover { background: #bae7ff; }
+.btn-copy { background: #e6f7ff; color: #096dd9; }
+.btn-copy:hover { background: #91d5ff; }
+
 .btn-version { background: #fff7e6; color: #fa8c16; }
 .btn-version:hover { background: #ffe7ba; }
 .btn-del { background: #fff1f0; color: #cf1322; }

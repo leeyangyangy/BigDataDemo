@@ -93,6 +93,56 @@ public class AdminStandardController {
         return R.ok(paramService.getById(id));
     }
 
+    @PostMapping("/{id}/duplicate")
+    public R<Param> duplicate(@PathVariable Long id) {
+        Param source = paramService.getById(id);
+        if (source == null) {
+            return R.fail(StatusCode.DATA_NOT_FOUND, "工艺参数不存在");
+        }
+
+        String baseCode = source.getParamCode();
+        String baseName = source.getParamName();
+        String newCode = generateUniqueParamCode(baseCode);
+        String newName = generateUniqueParamName(baseName);
+
+        Param copy = new Param();
+        copy.setParamCode(newCode);
+        copy.setParamName(newName);
+        copy.setParamType(source.getParamType());
+        copy.setUnit(source.getUnit());
+        copy.setDataType(source.getDataType());
+        copy.setDecimalPlaces(source.getDecimalPlaces());
+        copy.setStatus(source.getStatus());
+
+        paramService.save(copy);
+        log.info("[Admin] 复制工艺参数: {} -> {}", source.getParamCode(), newCode);
+        return R.ok("复制成功", copy);
+    }
+
+    private String generateUniqueParamCode(String baseCode) {
+        String candidate = baseCode + "_副本";
+        for (int i = 2; i <= 100; i++) {
+            long count = paramService.count(new LambdaQueryWrapper<Param>()
+                    .eq(Param::getParamCode, candidate)
+                    .eq(Param::getDeleted, 0));
+            if (count == 0) return candidate;
+            candidate = baseCode + "_副本" + i;
+        }
+        return baseCode + "_copy_" + System.currentTimeMillis();
+    }
+
+    private String generateUniqueParamName(String baseName) {
+        String candidate = baseName + " (副本)";
+        for (int i = 2; i <= 100; i++) {
+            long count = paramService.count(new LambdaQueryWrapper<Param>()
+                    .eq(Param::getParamName, candidate)
+                    .eq(Param::getDeleted, 0));
+            if (count == 0) return candidate;
+            candidate = baseName + " (副本" + i + ")";
+        }
+        return baseName + " (copy_" + System.currentTimeMillis() + ")";
+    }
+
     @DeleteMapping("/{id}")
     public R<Void> delete(@PathVariable Long id) {
         Param exist = paramService.getById(id);

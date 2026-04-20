@@ -484,14 +484,26 @@ async function onProductChange(save = true) {
   if (!selectedProduct.value) { if (save) saveFilterState(); return }
 
   try {
-    const cached = getCache('processes')
+    const cacheKey = `product-processes:${selectedProduct.value}`
+    const cached = getCache(cacheKey)
     if (cached) { processes.value = cached; if (save) saveFilterState(); return }
-    const processRes = await spcApi.getProcessPage({ current: 1, size: 100 })
-    if (processRes.code === 200) {
-      processes.value = processRes.data.records
-      setCache('processes', processRes.data.records)
+
+    const res = await spcApi.getProductProcesses(selectedProduct.value)
+    if (res.code === 200 && res.data && res.data.length > 0) {
+      const processIds = res.data.map(p => p.processId)
+      const allProcessesRes = await spcApi.getProcessPage({ current: 1, size: 100 })
+      if (allProcessesRes.code === 200) {
+        const bound = allProcessesRes.data.records.filter(p => processIds.includes(p.id))
+          .sort((a, b) => {
+            const pa = res.data.find(pp => pp.processId === a.id)
+            const pb = res.data.find(pp => pp.processId === b.id)
+            return (pa?.sortOrder || 0) - (pb?.sortOrder || 0)
+          })
+        processes.value = bound
+        setCache(cacheKey, bound)
+      }
     }
-  } catch (e) { console.error('加载工序失败', e) }
+  } catch (e) { console.error('加载产品工序失败', e) }
   if (save) saveFilterState()
 }
 
@@ -536,14 +548,24 @@ async function onProcessChange(save = true) {
       params.value = cached
     } else {
       try {
-        const res = await spcApi.getParamPage({current: 1, size: 100})
-        if (res.code === 200) {
-          const filtered = res.data.records.filter(p => p.processId === selectedProcess.value)
-          params.value = filtered
-          setCache(cacheKey, filtered)
+        const [bindRes, allParamRes] = await Promise.all([
+          spcApi.getProcessParams(selectedProcess.value),
+          spcApi.getParamPage({ current: 1, size: 200 })
+        ])
+        if (bindRes.code === 200 && bindRes.data && allParamRes.code === 200) {
+          const boundIds = bindRes.data.map(b => b.paramId)
+          const bound = allParamRes.data.records
+            .filter(p => boundIds.includes(p.id))
+            .sort((a, b) => {
+              const ba = bindRes.data.find(bp => bp.paramId === a.id)
+              const bb = bindRes.data.find(bp => bp.paramId === b.id)
+              return (ba?.sortOrder || 0) - (bb?.sortOrder || 0)
+            })
+          params.value = bound
+          setCache(cacheKey, bound)
         }
       } catch (e) {
-        console.error('加载标准(参数)失败', e)
+        console.error('加载工序参数失败', e)
       }
     }
 

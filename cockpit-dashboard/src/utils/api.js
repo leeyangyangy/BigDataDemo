@@ -224,8 +224,18 @@ export const spcApi = {
   createBatch: (data) => api.post('/spc/batch', data),
   getProductPage: (params) => api.get('/spc/product/page', params),
   createProduct: (data) => api.post('/spc/product', data),
+  getProductProcesses: (productId) => api.get(`/spc/product/${productId}/processes`),
+  getProductProcessIds: (productId) => api.get(`/spc/product/${productId}/process-ids`),
+  bindProductProcesses: (productId, items) => api.post(`/spc/product/${productId}/processes/bind`, items),
+  bindProductProcess: (productId, processId) => api.post(`/spc/product/${productId}/processes/${processId}/bind`),
+  unbindProductProcess: (productId, processId) => api.delete(`/spc/product/${productId}/processes/${processId}`),
   getProcessPage: (params) => api.get('/spc/process/page', params),
   getProcessEquipment: (processId) => api.get(`/spc/process/${processId}/equipment`),
+  getProcessParams: (processId) => api.get(`/spc/process/${processId}/params`),
+  getProcessParamIds: (processId) => api.get(`/spc/process/${processId}/param-ids`),
+  bindProcessParams: (processId, items) => api.post(`/spc/process/${processId}/params/bind`, items),
+  bindProcessParam: (processId, paramId) => api.post(`/spc/process/${processId}/params/${paramId}/bind`),
+  unbindProcessParam: (processId, paramId) => api.delete(`/spc/process/${processId}/params/${paramId}`),
   getParamPage: (params) => api.get('/spc/param/page', params),
   getAlerts: (params) => api.get('/spc/chart/alerts', params),
   importData: (formData) => api.post('/spc/data/import', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
@@ -250,21 +260,27 @@ export const adminApi = {
     getById: (id) => api.get(`/admin/product/${id}`),
     create: (data) => api.post('/admin/product', data),
     update: (id, data) => api.put(`/admin/product/${id}`, data),
-    delete: (id) => api.delete(`/admin/product/${id}`)
+    delete: (id) => api.delete(`/admin/product/${id}`),
+    getProcesses: (productId) => api.get(`/spc/product/${productId}/processes`),
+    bindProcesses: (productId, items) => api.post(`/spc/product/${productId}/processes/bind`, items)
   },
   process: {
     getPage: (params) => api.get('/admin/process/page', params),
     getById: (id) => api.get(`/admin/process/${id}`),
     create: (data) => api.post('/admin/process', data),
     update: (id, data) => api.put(`/admin/process/${id}`, data),
-    delete: (id) => api.delete(`/admin/process/${id}`)
+    delete: (id) => api.delete(`/admin/process/${id}`),
+    duplicate: (id) => api.post(`/admin/process/${id}/duplicate`),
+    getParams: (processId) => api.get(`/spc/process/${processId}/params`),
+    bindParams: (processId, items) => api.post(`/spc/process/${processId}/params/bind`, items)
   },
   standard: {
     getPage: (params) => api.get('/admin/standard/page', params),
     getById: (id) => api.get(`/admin/standard/${id}`),
     create: (data) => api.post('/admin/standard', data),
     update: (id, data) => api.put(`/admin/standard/${id}`, data),
-    delete: (id) => api.delete(`/admin/standard/${id}`)
+    delete: (id) => api.delete(`/admin/standard/${id}`),
+    duplicate: (id) => api.post(`/admin/standard/${id}/duplicate`)
   },
   equipment: {
     getPage: (params) => api.get('/admin/equipment/page', params),
