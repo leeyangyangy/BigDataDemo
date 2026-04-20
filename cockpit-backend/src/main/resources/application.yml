@@ -112,3 +112,23 @@ spc:
     expiration: 86400000  # 24 H
 #    expiration: 604800000      # 7 D
 #    expiration: 2592000000     # 30 D
+
+  cors:
+    allowed-origins: http://localhost:5174,http://localhost:5173,http://127.0.0.1:5174,http://192.168.1.111:5174
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+
+  rate-limit:
+    login:
+      max-attempts: 20
+      window-seconds: 60
+    api:
+      max-requests: 500
+      window-seconds: 60

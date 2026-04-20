@@ -6,16 +6,37 @@ spc:
   security:
     encryption:
       enabled: true
-      key: SPC@2026#Secure!Key
-      iv: SPC2026SecureIV16
+      key: ${SPC_AES_KEY}
+      iv: ${SPC_AES_IV}
       exclude-paths:
         - /auth/login
         - /auth/info
         - /actuator/**
-        - /swagger-ui/**
-        - /v3/api-docs/**
+  jwt:
+    secret: ${SPC_JWT_SECRET}
+    random-secret-on-startup: false
+    expiration: 28800000
+  cors:
+    allowed-origins: ${SPC_ALLOWED_ORIGINS}
+  rate-limit:
+    login:
+      max-attempts: 5
+      window-seconds: 300
+    api:
+      max-requests: 100
+      window-seconds: 60
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
 
 logging:
   level:
     xyz.leeyangy.spc: info
     com.baomidou.mybatisplus: warn
+    org.springframework.security: warn

@@ -138,6 +138,8 @@ async function handleLogin() {
         workshopId: res.data.workshopId
       })
       emit('success', res.data)
+      blockBackNavigation()
+      window.location.replace(window.location.href)
     } else {
       errorMsg.value = res.msg || '登录失败'
     }
@@ -254,6 +256,8 @@ async function handleWecomCode(code) {
         workshopId: res.data.workshopId
       })
       emit('success', res.data)
+      blockBackNavigation()
+      window.location.replace(window.location.href)
     } else {
       pendingWecomUserId.value = res.data.wecomUserId
       wecomStatus.value = 'bind_required'
@@ -287,6 +291,8 @@ async function handleBind() {
         workshopId: res.data.workshopId
       })
       emit('success', res.data)
+      blockBackNavigation()
+      window.location.replace(window.location.href)
     } else {
       bindErrorMsg.value = res.msg || '绑定失败'
     }
@@ -322,6 +328,13 @@ function destroyWwLogin() {
     }
   } catch (e) {}
   wwLoginObj = null
+}
+
+function blockBackNavigation() {
+  window.history.pushState(null, '', window.location.href)
+  window.addEventListener('popstate', function onPop() {
+    window.history.pushState(null, '', window.location.href)
+  })
 }
 
 onUnmounted(() => {

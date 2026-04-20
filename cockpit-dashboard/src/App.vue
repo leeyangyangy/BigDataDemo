@@ -130,7 +130,11 @@ function onLoginSuccess(data) {
 function handleLogout() {
   removeToken()
   showUserMenu.value = false
-  checkAuth()
+  window.history.pushState(null, '', window.location.href)
+  window.addEventListener('popstate', function onPop() {
+    window.history.pushState(null, '', window.location.href)
+  })
+  window.location.replace(window.location.href)
 }
 
 function handleNavigate(key) {
