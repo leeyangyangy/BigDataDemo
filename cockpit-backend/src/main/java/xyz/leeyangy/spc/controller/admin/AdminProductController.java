@@ -1,4 +1,4 @@
-package xyz.leeyangy.spc.controller;
+package xyz.leeyangy.spc.controller.admin;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;

@@ -1,4 +1,4 @@
-package xyz.leeyangy.spc.controller;
+package xyz.leeyangy.spc.controller.admin;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.Data;
@@ -7,11 +7,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 import xyz.leeyangy.spc.common.R;
 import xyz.leeyangy.spc.entity.ParamVersion;
-import xyz.leeyangy.spc.entity.StandardChangeLog;
 import xyz.leeyangy.spc.service.ParamVersionService;
 import xyz.leeyangy.spc.service.StandardChangeLogService;
-
-import java.util.List;
 
 @Slf4j
 @RestController
@@ -50,6 +47,7 @@ public class AdminParamVersionController {
         newVersion.setChartType(req.getChartType() != null ? req.getChartType() : "I_MR");
         newVersion.setChangeReason(req.getChangeReason());
         newVersion.setChangeType(req.getChangeType());
+        newVersion.setSubgroupSize(req.getSubgroupSize() != null ? req.getSubgroupSize(): 5);
 
         ParamVersion oldVersion = (newVersion.getProductId() != null)
                 ? paramVersionService.getCurrentVersion(newVersion.getParamId(), newVersion.getProductId())
@@ -69,13 +67,31 @@ public class AdminParamVersionController {
     @PutMapping("/{id}/enable")
     public R<Boolean> enableVersion(@PathVariable Long id) {
         log.info("[Admin] 启用标准版本: id={}", id);
-        return R.ok(paramVersionService.enableVersion(id));
+        boolean ok = paramVersionService.enableVersion(id);
+        if (ok) {
+            ParamVersion v = paramVersionService.getById(id);
+            try {
+                changeLogService.recordVersionSwitch(v, "VERSION_SWITCH", "管理员切换生效版本");
+            } catch (Exception e) {
+                log.warn("[Admin] 记录版本切换日志失败(不影响操作): {}", e.getMessage());
+            }
+        }
+        return R.ok(ok);
     }
 
     @PutMapping("/{id}/disable")
     public R<Boolean> disableVersion(@PathVariable Long id) {
         log.info("[Admin] 停用标准版本: id={}", id);
-        return R.ok(paramVersionService.disableVersion(id));
+        boolean ok = paramVersionService.disableVersion(id);
+        if (ok) {
+            ParamVersion v = paramVersionService.getById(id);
+            try {
+                changeLogService.recordVersionSwitch(v, "VERSION_DISABLE", "管理员停用版本");
+            } catch (Exception e) {
+                log.warn("[Admin] 记录版本停用日志失败(不影响操作): {}", e.getMessage());
+            }
+        }
+        return R.ok(ok);
     }
 
     @PutMapping("/{id}")
@@ -92,8 +108,20 @@ public class AdminParamVersionController {
         if (req.getCl() != null) updated.setCl(req.getCl());
         if (req.getChartType() != null) updated.setChartType(req.getChartType());
         if (req.getStatus() != null) updated.setStatus(req.getStatus());
+        if (req.getSubgroupSize() !=null) updated.setStatus(req.getSubgroupSize());
 
-        return R.ok(paramVersionService.updateVersion(id, updated));
+        boolean ok = paramVersionService.updateVersion(id, updated);
+
+        if (ok) {
+            ParamVersion v = paramVersionService.getById(id);
+            try {
+                changeLogService.recordVersionSwitch(v, "VERSION_UPDATE", req.getChangeReason() != null ? req.getChangeReason() : "管理员更新规格限");
+            } catch (Exception e) {
+                log.warn("[Admin] 记录版本更新日志失败(不影响操作): {}", e.getMessage());
+            }
+        }
+
+        return R.ok(ok);
     }
 
     @DeleteMapping("/{id}")
@@ -115,6 +143,7 @@ public class AdminParamVersionController {
         private String chartType;
         private String changeReason;
         private String changeType;
+        private Integer subgroupSize;
     }
 
     @Data
@@ -127,5 +156,7 @@ public class AdminParamVersionController {
         private java.math.BigDecimal cl;
         private String chartType;
         private Integer status;
+        private Integer subgroupSize;
+        private String changeReason;
     }
 }

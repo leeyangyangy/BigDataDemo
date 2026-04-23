@@ -1,4 +1,4 @@
-package xyz.leeyangy.spc.controller;
+package xyz.leeyangy.spc.controller.admin;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -87,6 +87,7 @@ public class AdminStandardController {
         if (req.getProcessId() != null) wrapper.set(Param::getProcessId, req.getProcessId());
         if (req.getUnit() != null) wrapper.set(Param::getUnit, req.getUnit());
         if (req.getStatus() != null) wrapper.set(Param::getStatus, req.getStatus());
+        if (req.getDataType() != null) wrapper.set(Param::getDataType, req.getDataType());
 
         paramService.update(wrapper);
         log.info("[Admin] 更新工艺参数: id={} code={}", id, exist.getParamCode());
@@ -162,6 +163,7 @@ public class AdminStandardController {
         private String paramName;
         private Long processId;
         private String unit;
+        private String dataType;
         private Integer status;
     }
 
@@ -171,6 +173,7 @@ public class AdminStandardController {
         private String paramName;
         private Long processId;
         private String unit;
+        private String dataType;
         private Integer status;
     }
 }
