@@ -249,45 +249,73 @@
           <button class="btn-search btn-sm" @click="searchAvailableParams">搜索</button>
         </div>
 
-        <!-- 已绑定参数列表 -->
-        <div style="margin-bottom:16px">
-          <h4 style="font-size:14px;margin:0 0 8px;color:#555">已绑定参数 ({{ boundParamList.length }})</h4>
-          <div class="bound-tags" v-if="boundParamList.length > 0">
-            <span class="bound-tag" v-for="bp in boundParamList" :key="bp.id">
-              {{ bp.paramCode }} - {{ bp.paramName }}
-              <button class="tag-remove" @click="removeBoundParam(bp)" title="移除">&times;</button>
-            </span>
+        <!-- 已绑定参数 -->
+        <div class="bind-panel">
+          <div class="bind-head">
+            <span class="bind-label">已绑定参数</span>
+            <span class="bind-count">{{ boundParamList.length }}</span>
+            <button v-if="boundParamList.length > 0" class="btn-action" :class="'btn-del'" @click="clearAllParams">清空</button>
           </div>
-          <div v-else style="color:#999;font-size:13px;padding:8px 0">暂无已绑定参数，请在下方选择</div>
+          <div class="table-wrap" v-if="boundParamList.length > 0">
+            <table class="data-table bind-table">
+              <thead>
+                <tr><th>参数编码</th><th>参数名称</th><th>类型</th><th>单位</th><th>数据类型</th><th style="width:56px"></th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="(bp, idx) in boundParamList" :key="bp.id" class="row-bind">
+                  <td><code>{{ bp.paramCode }}</code></td>
+                  <td>{{ bp.paramName }}</td>
+                  <td>{{ bp.paramType || '-' }}</td>
+                  <td>{{ bp.unit || '-' }}</td>
+                  <td>{{ bp.dataType || '-' }}</td>
+                  <td class="actions">
+                    <button
+                        class="btn-action"
+                        :class="'btn-del'"
+                        @click="removeBoundParam(bp)">移除</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="bind-empty" v-else>
+            <p>暂无已绑定参数，从下方表格中添加</p>
+          </div>
         </div>
 
         <!-- 可选参数列表 -->
-        <div class="table-wrap">
-          <table class="data-table" v-if="availableParamList.length > 0">
-            <thead>
-              <tr><th>参数编码</th><th>参数名称</th><th>类型</th><th>单位</th><th>数据类型</th><th>操作</th></tr>
-            </thead>
-            <tbody>
-              <tr v-for="p in availableParamList" :key="p.id" :class="{ 'row-selected': isParamBound(p.id) }">
-                <td><strong>{{ p.paramCode }}</strong></td>
-                <td>{{ p.paramName }}</td>
-                <td>{{ p.paramType || '-' }}</td>
-                <td>{{ p.unit || '-' }}</td>
-                <td>{{ p.dataType || '-' }}</td>
-                <td class="actions">
-                  <button
-                    class="btn-action"
-                    :class="isParamBound(p.id) ? 'btn-del' : 'btn-edit'"
-                    @click="toggleParam(p)">
-                    {{ isParamBound(p.id) ? '取消' : '添加' }}
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <div class="empty-state" v-else>
-            <p v-if="!paramSearching">{{ paramSearchKeyword ? '未找到匹配的参数' : '暂无可选参数' }}</p>
-            <p v-else>搜索中...</p>
+        <div class="avail-panel">
+          <div class="avail-head">
+            <span class="avail-label">可选参数</span>
+            <span class="avail-count">{{ availableParamList.length }}</span>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table avail-table" v-if="availableParamList.length > 0">
+              <thead>
+                <tr><th>参数编码</th><th>参数名称</th><th>类型</th><th>单位</th><th>数据类型</th><th style="width:56px"></th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="p in availableParamList" :key="p.id" :class="{ 'row-selected': isParamBound(p.id) }">
+                  <td><code>{{ p.paramCode }}</code></td>
+                  <td>{{ p.paramName }}</td>
+                  <td>{{ p.paramType || '-' }}</td>
+                  <td>{{ p.unit || '-' }}</td>
+                  <td>{{ p.dataType || '-' }}</td>
+                  <td class="actions">
+                    <button
+                      class="btn-action"
+                      :class="isParamBound(p.id) ? 'btn-del' : 'btn-edit'"
+                      @click="toggleParam(p)">
+                      {{ isParamBound(p.id) ? '取消' : '添加' }}
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="empty-state" v-else>
+              <p v-if="!paramSearching">{{ paramSearchKeyword ? '未找到匹配的参数' : '暂无可选参数' }}</p>
+              <p v-else>搜索中...</p>
+            </div>
           </div>
         </div>
 
@@ -304,7 +332,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { adminApi, spcApi } from '../../utils/api.js'
+import { adminApi, spcApi } from '@/utils/api.js'
 
 const list = ref([])
 const total = ref(0)
@@ -672,6 +700,12 @@ function toggleParam(p) {
 function removeBoundParam(bp) {
   boundParamList.value = boundParamList.value.filter(x => x.id !== bp.id)
   availableParamList.value.unshift(bp)
+}
+
+function clearAllParams() {
+  if (!confirm(`确定清空全部 ${boundParamList.value.length} 个已绑定参数吗？`)) return
+  availableParamList.value.unshift(...boundParamList.value)
+  boundParamList.value = []
 }
 
 async function submitParamBind() {
@@ -1065,10 +1099,62 @@ async function submitParamBind() {
   .btn-cancel, .btn-submit { width: 100%; text-align: center; padding: 10px 16px; font-size: 13px; }
   .modal-card { width: 95vw; padding: 16px; padding-bottom: 100px; max-height: calc(100vh - 40px); overflow-y: auto; }
 
-  .bound-tags { display: flex; flex-wrap: wrap; gap: 6px; }
-  .bound-tag { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: var(--accent-primary); color: #fff; border-radius: 6px; font-size: 12px; }
-  .tag-remove { background: none; border: none; color: inherit; cursor: pointer; font-size: 14px; line-height: 1; opacity: 0.8; }
-  .tag-remove:hover { opacity: 1; }
-  .row-selected { background-color: rgba(var(--accent-rgb), 0.06); }
+  .bind-panel {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    margin-bottom: 24px;
+    overflow: hidden;
+  }
+
+  .bind-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .bind-label { font-size: 13px; font-weight: 600; color: #334155; }
+  .bind-count {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 20px; height: 20px; padding: 0 6px;
+    background: var(--accent-primary); color: #fff;
+    border-radius: 10px; font-size: 11px; font-weight: 700;
+  }
+  .bind-table { border: none; border-radius: 0; }
+  .bind-table thead th { background: #fff; color: #64748b; font-size: 11px; padding: 7px 12px; border-bottom: 1px solid #f1f5f9; }
+  .bind-table td { padding: 7px 12px; font-size: 13px; }
+  .bind-table code {
+    font-family: 'SF Mono', 'Cascadia Code', Consolas, monospace;
+    font-size: 12px; font-weight: 600; color: var(--accent-primary);
+    background: #eff6ff; padding: 1px 5px; border-radius: 3px;
+  }
+  .bind-table tr.row-bind { transition: background 0.12s; }
+  .bind-table tr.row-bind:nth-child(even) { background: #fafbfc; }
+  .bind-table tr.row-bind:hover { background: #fef2f2; }
+
+  .bind-empty { padding: 18px 14px; text-align: center; color: #94a3b8; font-size: 13px; }
+
+  .avail-panel { margin-top: 4px; }
+  .avail-head {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 8px; padding: 0 2px;
+  }
+  .avail-label { font-size: 13px; font-weight: 600; color: #475569; }
+  .avail-count {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 20px; height: 20px; padding: 0 6px;
+    background: #e2e8f0; color: #64748b;
+    border-radius: 10px; font-size: 11px; font-weight: 600;
+  }
+
+  .avail-table code {
+    font-family: 'SF Mono', 'Cascadia Code', Consolas, monospace;
+    font-size: 12px; font-weight: 600; color: #334155;
+    background: #f1f5f9; padding: 1px 5px; border-radius: 3px;
+  }
+
+  .row-selected { background-color: rgba(var(--accent-rgb), 0.05); }
 }
 </style>

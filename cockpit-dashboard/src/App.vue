@@ -43,7 +43,7 @@
         <ProductManagement v-else-if="activeNav === 'admin-product'" :key="'admin-product'" />
         <ProcessManagement v-else-if="activeNav === 'admin-process'" :key="'admin-process'" />
         <WorkshopManagement v-else-if="activeNav === 'admin-workshop'" :key="'admin-workshop'" />
-        <AdminPanel v-else-if="activeNav === 'admin-standard' || activeNav === 'admin-equipment'" :key="activeNav" :defaultTab="activeNav === 'admin-standard' ? 'standard' : 'equipment'" />
+        <AdminPanel v-else-if="activeNav === 'admin-standard' || activeNav === 'admin-equipment' || activeNav === 'admin-changelog' || activeNav === 'admin-operationlog'" :key="activeNav" :defaultTab="activeNav === 'admin-changelog' ? 'changelog' : (activeNav === 'admin-operationlog' ? 'operationlog' : (activeNav === 'admin-standard' ? 'standard' : 'equipment'))" />
       </template>
       <div v-else-if="activeNav.startsWith('admin') && loggedIn" class="admin-gate">
         <div class="gate-card">
@@ -155,7 +155,7 @@ function handleNavigate(key) {
 function navKeyToIndex(key) {
   const isAdmin = key.startsWith('admin')
   if (isAdmin) {
-    const map = { 'home': 0, 'admin-product': 1, 'admin-process': 2, 'admin-standard': 3, 'admin-equipment': 4, 'admin-workshop': 5, 'admin-user': 6 }
+    const map = { 'home': 0, 'admin-product': 1, 'admin-process': 2, 'admin-standard': 3, 'admin-equipment': 4, 'admin-workshop': 5, 'admin-user': 6, 'admin-changelog': 7, 'admin-operationlog': 8 }
     return map[key] ?? 1
   }
   const map = { home: 0, data: 1, admin: 2 }

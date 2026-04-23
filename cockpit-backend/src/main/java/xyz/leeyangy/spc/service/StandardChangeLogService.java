@@ -71,7 +71,7 @@ public class StandardChangeLogService extends ServiceImpl<StandardChangeLogMappe
             changeLog.setRegenerateStartedAt(LocalDateTime.now());
             updateById(changeLog);
 
-            spcStatService.regenerateForNewVersion(changeLog.getNewVersionId());
+            spcStatService.regenerateForNewVersion(changeLog.getNewVersionId(), "VERSION_CREATE");
 
             changeLog.setRegenerateStatus("COMPLETED");
             changeLog.setRegenerateFinishedAt(LocalDateTime.now());
@@ -85,5 +85,27 @@ public class StandardChangeLogService extends ServiceImpl<StandardChangeLogMappe
             updateById(changeLog);
             log.error("[StandardChange] SPC重生成失败", e);
         }
+    }
+
+    public void recordVersionSwitch(ParamVersion version, String operation, String reason) {
+        StandardChangeLog record = new StandardChangeLog();
+        record.setParamId(version.getParamId());
+        record.setProductId(version.getProductId());
+        record.setNewVersionId(version.getId());
+        record.setNewVersionNo(version.getVersionNo());
+        record.setChangeType(operation);
+        record.setChangeReason(reason);
+        record.setNewUsl(version.getUsl());
+        record.setNewLsl(version.getLsl());
+        record.setNewTarget(version.getTarget());
+        record.setNewUcl(version.getUcl());
+        record.setNewLcl(version.getLcl());
+        record.setRegenerateSpc(1);
+        record.setRegenerateStatus("COMPLETED");
+
+        save(record);
+
+        log.info("[StandardChange] 版本操作已记录: operation={} versionId={} versionNo={}",
+                operation, version.getId(), version.getVersionNo());
     }
 }

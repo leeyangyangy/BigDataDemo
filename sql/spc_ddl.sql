@@ -263,13 +263,16 @@ CREATE TABLE `spc_batch` (
 
 -- -----------------------------------------------------------
 -- 4.2 SPC采集数据 (Data) - 高并发写入核心表
---     通过 param_version_id 关联具体标准版本
+--     param_version_id 绑定采集时刻生效的标准版本:
+--       - 数据上传时自动解析当前生效版本并绑定
+--       - 版本切换后新数据自动关联到新版本
+--       - 历史数据归属不变(属于当时生效的版本)
 --     建议按月分表: spc_data_202601, spc_data_202602 ...
 -- -----------------------------------------------------------
 
 CREATE TABLE `spc_data` (
     `id`                BIGINT        NOT NULL AUTO_INCREMENT,
-    `param_version_id`  BIGINT        NOT NULL COMMENT '参数标准版本ID',
+    `param_version_id`  BIGINT        NOT NULL COMMENT '采集时生效的标准版本ID(版本切换后新数据自动关联新版本)',
     `batch_id`          VARCHAR(64)   NULL     DEFAULT NULL COMMENT '批次号(可留空)',
     `product_id`        BIGINT        NOT NULL COMMENT '产品ID',
     `process_id`        BIGINT        NOT NULL COMMENT '工序ID',
@@ -311,6 +314,12 @@ CREATE TABLE `spc_data` (
 
 -- -----------------------------------------------------------
 -- 4.3 SPC统计结果 (StatResult) - 按版本隔离
+--     统计数据与版本一一对应:
+--       - VERSION_CREATE: 创建新版本时自动计算
+--       - VERSION_SWITCH: 切换生效版本时重新计算
+--       - VERSION_UPDATE: 更新规格限后重新计算
+--       - MANUAL:        手动触发
+--       - AUTO:          控制图查询时自动补偿(兜底)
 -- -----------------------------------------------------------
 
 CREATE TABLE `spc_stat_result` (
@@ -338,6 +347,7 @@ CREATE TABLE `spc_stat_result` (
     `normality_w`       DECIMAL(10,6) NULL     DEFAULT NULL COMMENT 'Shapiro-Wilk W统计量',
     `normality_p_value` DECIMAL(10,6) NULL     DEFAULT NULL COMMENT '正态性p值',
     `is_normal`         TINYINT(1)    NULL     DEFAULT NULL COMMENT '是否正态分布(1=是)',
+    `trigger_source`    VARCHAR(32)   NULL     DEFAULT NULL COMMENT '统计触发来源: VERSION_CREATE/VERSION_SWITCH/VERSION_UPDATE/MANUAL/AUTO',
     `stat_time`         DATETIME      NOT NULL COMMENT '统计时间点',
     `period_start`      DATETIME      NULL     DEFAULT NULL,
     `period_end`        DATETIME      NULL     DEFAULT NULL,
@@ -412,24 +422,40 @@ CREATE TABLE `spc_alert` (
 -- -----------------------------------------------------------
 
 CREATE TABLE `spc_standard_change_log` (
-    `id`                  BIGINT       NOT NULL AUTO_INCREMENT,
-    `param_id`            BIGINT       NOT NULL COMMENT '参数ID',
-    `param_version_id`    BIGINT       NULL     DEFAULT NULL COMMENT '新版本ID',
-    `prev_version_id`     BIGINT       NULL     DEFAULT NULL COMMENT '旧版本ID',
-    `change_type`         VARCHAR(32)  NOT NULL COMMENT 'NEW/LIMIT_ADJUST/CHART_TYPE_CHANGE',
-    `change_reason`       VARCHAR(512) NULL     DEFAULT NULL COMMENT '变更原因',
-    `old_usl`             DECIMAL(16,6) NULL    DEFAULT NULL,
-    `old_lsl`             DECIMAL(16,6) NULL    DEFAULT NULL,
-    `old_target`          DECIMAL(16,6) NULL    DEFAULT NULL,
-    `new_usl`             DECIMAL(16,6) NULL    DEFAULT NULL,
-    `new_lsl`             DECIMAL(16,6) NULL    DEFAULT NULL,
-    `new_target`          DECIMAL(16,6) NULL    DEFAULT NULL,
-    `is_auto_created`     TINYINT      NOT NULL DEFAULT 0 COMMENT '是否自动创建(首次提交数据时)',
-    `operator_id`         BIGINT       NULL     DEFAULT NULL COMMENT '操作人ID',
-    `operator_name`       VARCHAR(64)  NULL     DEFAULT NULL COMMENT '操作人姓名',
-    `created_at`          DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `id`                  BIGINT        NOT NULL AUTO_INCREMENT,
+    `param_id`            BIGINT        NOT NULL COMMENT '参数ID',
+    `product_id`          BIGINT        NULL     DEFAULT NULL COMMENT '产品ID',
+    `old_version_id`      BIGINT        NULL     DEFAULT NULL COMMENT '旧版本ID',
+    `new_version_id`      BIGINT        NULL     DEFAULT NULL COMMENT '新版本ID',
+    `old_version_no`      INT           NULL     DEFAULT NULL COMMENT '旧版本号',
+    `new_version_no`      INT           NULL     DEFAULT NULL COMMENT '新版本号',
+    `change_type`         VARCHAR(32)   NOT NULL COMMENT '变更类型: NEW/LIMIT_ADJUST/CHART_TYPE_CHANGE/VERSION_SWITCH/VERSION_UPDATE/VERSION_DISABLE',
+    `change_reason`       VARCHAR(512)  NULL     DEFAULT NULL COMMENT '变更原因',
+    `old_usl`             DECIMAL(16,6) NULL     DEFAULT NULL,
+    `new_usl`             DECIMAL(16,6) NULL     DEFAULT NULL,
+    `old_lsl`             DECIMAL(16,6) NULL     DEFAULT NULL,
+    `new_lsl`             DECIMAL(16,6) NULL     DEFAULT NULL,
+    `old_target`          DECIMAL(16,6) NULL     DEFAULT NULL,
+    `new_target`          DECIMAL(16,6) NULL     DEFAULT NULL,
+    `old_ucl`             DECIMAL(16,6) NULL     DEFAULT NULL,
+    `new_ucl`             DECIMAL(16,6) NULL     DEFAULT NULL,
+    `old_lcl`             DECIMAL(16,6) NULL     DEFAULT NULL,
+    `new_lcl`             DECIMAL(16,6) NULL     DEFAULT NULL,
+    `regenerate_spc`      TINYINT       NOT NULL DEFAULT 0 COMMENT '是否触发SPC重算: 0否 1是',
+    `regenerate_status`   VARCHAR(16)   NULL     DEFAULT NULL COMMENT '重算状态: PENDING/RUNNING/COMPLETED/FAILED',
+    `regenerate_started_at` DATETIME    NULL     DEFAULT NULL,
+    `regenerate_finished_at` DATETIME    NULL     DEFAULT NULL,
+    `affected_data_count`  BIGINT        NULL     DEFAULT NULL COMMENT '影响数据条数',
+    `status`              TINYINT       NOT NULL DEFAULT 1 COMMENT '1有效 0删除',
+    `created_by`          BIGINT        NULL     DEFAULT NULL,
+    `created_at`          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_by`          BIGINT        NULL     DEFAULT NULL,
+    `updated_at`          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`             TINYINT       NOT NULL DEFAULT 0,
     PRIMARY KEY (`id`),
     KEY `idx_param_id` (`param_id`),
+    KEY `idx_product_id` (`product_id`),
+    KEY `idx_new_version_id` (`new_version_id`),
     KEY `idx_change_type` (`change_type`),
     KEY `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='标准变更日志';
@@ -520,3 +546,31 @@ INSERT INTO `spc_equipment` (`equip_code`, `equip_name`, `equip_type`, `equip_mo
 UPDATE spc_param_version SET deleted = 0 WHERE deleted IS NULL;
 UPDATE spc_param_version SET status = 1 WHERE status = 0 AND is_current = 1;
 UPDATE spc_param_version SET status = 0 WHERE status = 1 AND is_current != 1;
+
+-- 如果表已存在旧结构，需要重建或 ALTER：
+ALTER TABLE `spc_standard_change_log`
+    ADD COLUMN `product_id`          BIGINT        NULL DEFAULT NULL COMMENT '产品ID' AFTER `param_id`,
+    CHANGE COLUMN `param_version_id` `new_version_id` BIGINT NULL DEFAULT NULL COMMENT '新版本ID',
+    CHANGE COLUMN `prev_version_id`  `old_version_id` BIGINT NULL DEFAULT NULL COMMENT '旧版本ID',
+    ADD COLUMN `old_version_no`      INT           NULL DEFAULT NULL COMMENT '旧版本号' AFTER `new_version_id`,
+    ADD COLUMN `new_version_no`      INT           NULL DEFAULT NULL COMMENT '新版本号' AFTER `old_version_no`,
+    MODIFY COLUMN `change_type`      VARCHAR(32)   NOT NULL COMMENT '变更类型: NEW/LIMIT_ADJUST/CHART_TYPE_CHANGE/VERSION_SWITCH/VERSION_UPDATE/VERSION_DISABLE',
+    ADD COLUMN `old_ucl`             DECIMAL(16,6) NULL DEFAULT NULL AFTER `new_target`,
+    ADD COLUMN `new_ucl`             DECIMAL(16,6) NULL DEFAULT NULL,
+    ADD COLUMN `old_lcl`             DECIMAL(16,6) NULL DEFAULT NULL,
+    ADD COLUMN `new_lcl`             DECIMAL(16,6) NULL DEFAULT NULL,
+    ADD COLUMN `regenerate_spc`      TINYINT       NOT NULL DEFAULT 0 COMMENT '是否触发SPC重算' AFTER `new_lcl`,
+    ADD COLUMN `regenerate_status`   VARCHAR(16)   NULL DEFAULT NULL COMMENT '重算状态',
+    ADD COLUMN `regenerate_started_at` DATETIME    NULL DEFAULT NULL,
+    ADD COLUMN `regenerate_finished_at` DATETIME    NULL DEFAULT NULL,
+    ADD COLUMN `affected_data_count`  BIGINT        NULL DEFAULT NULL COMMENT '影响数据条数',
+    ADD COLUMN `status`              TINYINT       NOT NULL DEFAULT 1 COMMENT '1有效 0删除',
+    ADD COLUMN `created_by`          BIGINT        NULL DEFAULT NULL,
+    ADD COLUMN `updated_by`          BIGINT        NULL DEFAULT NULL,
+    ADD COLUMN `updated_at`          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    ADD COLUMN `deleted`             TINYINT       NOT NULL DEFAULT 0,
+    DROP COLUMN `is_auto_created`,
+    DROP COLUMN `operator_id`,
+    DROP COLUMN `operator_name`,
+    ADD KEY `idx_product_id` (`product_id`),
+    ADD KEY `idx_new_version_id` (`new_version_id`);

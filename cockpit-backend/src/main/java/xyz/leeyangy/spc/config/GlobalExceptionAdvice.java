@@ -1,6 +1,8 @@
 package xyz.leeyangy.spc.config;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -10,15 +12,28 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import xyz.leeyangy.spc.common.R;
+import xyz.leeyangy.spc.service.OperationLogService;
+
+import javax.servlet.http.HttpServletRequest;
 
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionAdvice {
 
+    @Autowired
+    @Lazy
+    private OperationLogService operationLogService;
+
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-    public R<Void> handleException(Exception e) {
+    public R<Void> handleException(Exception e, HttpServletRequest request) {
+        String errorMsg = e.getClass().getSimpleName() + ": " + e.getMessage();
         log.error("[Global] 未捕获异常: {} - {}", e.getClass().getSimpleName(), e.getMessage(), e);
+        try {
+            operationLogService.record("SYSTEM", "ERROR", null, "EXCEPTION",
+                    errorMsg, "FAIL", getStackTraceSnippet(e), 0,
+                    request, null, null);
+        } catch (Exception ignored) { }
         return R.fail("系统内部错误，请稍后重试");
     }
 
@@ -66,8 +81,23 @@ public class GlobalExceptionAdvice {
 
     @ExceptionHandler(SecurityException.class)
     @ResponseStatus(HttpStatus.FORBIDDEN)
-    public R<Void> handleSecurity(SecurityException e) {
+    public R<Void> handleSecurity(SecurityException e, HttpServletRequest request) {
         log.warn("[Global] 安全异常: {}", e.getMessage());
+        try {
+            operationLogService.record("SYSTEM", "SECURITY", null, null,
+                    e.getMessage(), "FAIL", null, 0,
+                    request, null, null);
+        } catch (Exception ignored) { }
         return R.fail(403, "权限不足");
+    }
+
+    private String getStackTraceSnippet(Exception e) {
+        StackTraceElement[] stack = e.getStackTrace();
+        if (stack == null || stack.length == 0) return "";
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < Math.min(5, stack.length); i++) {
+            sb.append("\n    at ").append(stack[i].toString());
+        }
+        return sb.toString();
     }
 }

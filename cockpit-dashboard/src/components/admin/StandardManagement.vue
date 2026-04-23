@@ -305,7 +305,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { adminApi, spcApi } from '../../utils/api.js'
+import { adminApi, spcApi } from '@/utils/api.js'
 
 const list = ref([])
 const total = ref(0)
@@ -713,7 +713,7 @@ function hasEnabledSibling(v) {
 
 onMounted(async () => {
   await Promise.all([loadProducts(), loadProcesses()])
-  loadData()
+  await loadData()
 })
 </script>
 

@@ -69,6 +69,9 @@ public class SpcChartController {
         }
 
         SpcStatResult stat = spcStatService.getLatestStat(version.getId(), batchId);
+        if (stat == null && !dataList.isEmpty()) {
+            stat = spcStatService.calculateAndSave(version.getId(), batchId, "AUTO");
+        }
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("paramVersionId", version.getId());
@@ -173,6 +176,9 @@ public class SpcChartController {
             result.put("subgroupSize", version.getSubgroupSize() != null ? version.getSubgroupSize() : 1);
 
             SpcStatResult stat = spcStatService.getLatestStat(version.getId(), null);
+            if (stat == null && !allData.isEmpty()) {
+                stat = spcStatService.calculateAndSave(version.getId(), null, "AUTO");
+            }
             if (stat != null) {
                 Map<String, Object> capability = new LinkedHashMap<>();
                 capability.put("cp", stat.getCp());

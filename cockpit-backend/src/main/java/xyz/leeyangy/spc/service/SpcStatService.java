@@ -24,6 +24,10 @@ public class SpcStatService extends ServiceImpl<SpcStatResultMapper, SpcStatResu
     private final ParamVersionService paramVersionService;
 
     public SpcStatResult calculateAndSave(Long paramVersionId, String batchId) {
+        return calculateAndSave(paramVersionId, batchId, "MANUAL");
+    }
+
+    public SpcStatResult calculateAndSave(Long paramVersionId, String batchId, String triggerSource) {
         ParamVersion version = paramVersionService.getById(paramVersionId);
         if (version == null) {
             throw new RuntimeException("参数标准版本不存在: " + paramVersionId);
@@ -40,21 +44,33 @@ public class SpcStatService extends ServiceImpl<SpcStatResultMapper, SpcStatResu
             return null;
         }
 
-        SpcStatResult result = computeStatistics(dataList, version, paramVersionId, batchId);
+        SpcStatResult result = computeStatistics(dataList, version, paramVersionId, batchId, triggerSource);
         save(result);
         return result;
     }
 
     public void regenerateForNewVersion(Long newVersionId) {
+        regenerateForNewVersion(newVersionId, "VERSION_CREATE");
+    }
+
+    public void regenerateForNewVersion(Long newVersionId, String triggerSource) {
         ParamVersion newVersion = paramVersionService.getById(newVersionId);
         if (newVersion == null) return;
 
-        calculateAndSave(newVersionId, null);
-        log.info("[SPC-Regenerate] 已为新版本生成统计: versionId={}", newVersionId);
+        if (!"AUTO".equals(triggerSource)) {
+            LambdaQueryWrapper<SpcStatResult> cleanWrapper = new LambdaQueryWrapper<SpcStatResult>()
+                    .eq(SpcStatResult::getParamVersionId, newVersionId)
+                    .eq(SpcStatResult::getDeleted, 0);
+            remove(cleanWrapper);
+            log.info("[SPC-Regenerate] 已清除旧统计记录: versionId={} source={}", newVersionId, triggerSource);
+        }
+
+        calculateAndSave(newVersionId, null, triggerSource);
+        log.info("[SPC-Regenerate] 已为新版本生成统计: versionId={} source={}", newVersionId, triggerSource);
     }
 
     private SpcStatResult computeStatistics(List<SpcData> dataList, ParamVersion version,
-                                             Long paramVersionId, String batchId) {
+                                             Long paramVersionId, String batchId, String triggerSource) {
         SpcStatResult result = new SpcStatResult();
         result.setParamVersionId(paramVersionId);
         result.setBatchId(batchId);
@@ -64,6 +80,7 @@ public class SpcStatService extends ServiceImpl<SpcStatResultMapper, SpcStatResu
         result.setStatType(version.getChartType() != null ? version.getChartType() : "I_MR");
         result.setSampleCount(dataList.size());
         result.setStatTime(LocalDateTime.now());
+        result.setTriggerSource(triggerSource);
 
         BigDecimal sum = BigDecimal.ZERO;
         BigDecimal sumSq = BigDecimal.ZERO;

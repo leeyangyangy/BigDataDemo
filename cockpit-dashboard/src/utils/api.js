@@ -305,5 +305,16 @@ export const adminApi = {
     disable: (id) => api.put(`/admin/param-version/${id}/disable`),
     update: (id, data) => api.put(`/admin/param-version/${id}`, data),
     delete: (id) => api.delete(`/admin/param-version/${id}`)
+  },
+  changeLog: {
+    getPage: (params) => api.get('/admin/change-log/page', params),
+    getDetail: (id) => api.get(`/admin/change-log/${id}`),
+    delete: (id) => api.delete(`/admin/change-log/${id}`)
+  },
+  operationLog: {
+    getPage: (params) => api.get('/admin/operation-log/page', params),
+    getDetail: (id) => api.get(`/admin/operation-log/${id}`),
+    delete: (id) => api.delete(`/admin/operation-log/${id}`),
+    cleanBefore: (date) => api.delete(`/admin/operation-log/clean?beforeDate=${date}`)
   }
 }

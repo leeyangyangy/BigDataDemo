@@ -37,6 +37,7 @@ public class SpcStatResult extends BaseEntity {
     private BigDecimal normalityW;
     private BigDecimal normalityPValue;
     private Boolean isNormal;
+    private String triggerSource;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime statTime;

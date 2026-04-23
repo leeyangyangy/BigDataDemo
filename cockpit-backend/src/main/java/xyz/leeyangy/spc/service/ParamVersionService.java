@@ -4,6 +4,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import xyz.leeyangy.spc.entity.ParamVersion;
 import xyz.leeyangy.spc.mapper.ParamVersionMapper;
@@ -11,9 +14,14 @@ import xyz.leeyangy.spc.mapper.ParamVersionMapper;
 import java.time.LocalDateTime;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ParamVersionService extends ServiceImpl<ParamVersionMapper, ParamVersion> {
+
+    @Autowired
+    @Lazy
+    private SpcStatService spcStatService;
 
     public ParamVersion getCurrentVersion(Long paramId, Long productId) {
         ParamVersion version = baseMapper.selectCurrentVersion(paramId, productId);
@@ -112,7 +120,15 @@ public class ParamVersionService extends ServiceImpl<ParamVersionMapper, ParamVe
             updateById(sib);
         }
 
-        return updateById(version);
+        boolean ok = updateById(version);
+
+        try {
+            spcStatService.regenerateForNewVersion(id, "VERSION_SWITCH");
+        } catch (Exception e) {
+            log.error("[ParamVersion] 启用版本后统计重算失败(不影响版本切换): versionId={}", id, e);
+        }
+
+        return ok;
     }
 
     public boolean disableVersion(Long id) {
@@ -137,7 +153,15 @@ public class ParamVersionService extends ServiceImpl<ParamVersionMapper, ParamVe
         existing.setSigmaWidth(updated.getSigmaWidth());
         existing.setSubgroupSize(updated.getSubgroupSize());
         existing.setChartType(updated.getChartType());
-        return updateById(existing);
+        boolean ok = updateById(existing);
+
+        try {
+            spcStatService.regenerateForNewVersion(id, "VERSION_UPDATE");
+        } catch (Exception e) {
+            log.error("[ParamVersion] 更新版本后统计重算失败(不影响版本更新): versionId={}", id, e);
+        }
+
+        return ok;
     }
 
     public boolean deleteVersion(Long id) {

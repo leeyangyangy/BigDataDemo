@@ -11,6 +11,7 @@ import xyz.leeyangy.spc.common.JwtUtil;
 import xyz.leeyangy.spc.common.R;
 import xyz.leeyangy.spc.common.StatusCode;
 import xyz.leeyangy.spc.entity.SysUser;
+import xyz.leeyangy.spc.service.OperationLogService;
 import xyz.leeyangy.spc.service.SysUserService;
 import xyz.leeyangy.spc.service.TokenBlacklistService;
 import xyz.leeyangy.spc.service.WeComService;
@@ -30,6 +31,7 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final WeComService weComService;
     private final TokenBlacklistService blacklistService;
+    private final OperationLogService operationLogService;
 
     @PostMapping("/login")
     public R<Map<String, Object>> login(@RequestBody LoginRequest request, HttpServletRequest httpRequest) {
@@ -42,14 +44,17 @@ public class AuthController {
 
         SysUser user = sysUserService.getByEmpNo(request.getEmpNo());
         if (user == null) {
+            operationLogService.record("USER", "LOGIN", "FAIL", httpRequest, null, request.getEmpNo());
             return R.fail(StatusCode.AUTH_LOGIN_FAILED, "工号不存在或账号已停用");
         }
 
         if (user.getStatus() != null && user.getStatus() == 0) {
+            operationLogService.record("USER", "LOGIN", null, null, "账号已停用", "FAIL", null, 0, httpRequest, user.getId(), user.getUsername());
             return R.fail(StatusCode.AUTH_ACCOUNT_DISABLED, "账号已停用，请联系管理员");
         }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            operationLogService.record("USER", "LOGIN", null, null, null, "FAIL", "密码错误", 0, httpRequest, user.getId(), user.getUsername());
             return R.fail(StatusCode.AUTH_LOGIN_FAILED, "密码错误，请重新输入");
         }
 
@@ -69,6 +74,7 @@ public class AuthController {
         result.put("workshopId", user.getWorkshopId());
 
         log.info("[Auth] 用户登录成功: empNo={} username={} ip={}", user.getEmpNo(), user.getUsername(), ip);
+        operationLogService.record("USER", "LOGIN", "SUCCESS", httpRequest, user.getId(), user.getUsername());
         return R.ok("登录成功", result);
     }
 
@@ -98,6 +104,7 @@ public class AuthController {
             String token = authHeader.substring(7);
             blacklistService.blacklistToken(token);
             log.info("[Auth] 用户已登出, Token已加入黑名单");
+            operationLogService.record("USER", "LOGOUT", "SUCCESS", request, null, null);
         }
         return R.ok(null);
     }
