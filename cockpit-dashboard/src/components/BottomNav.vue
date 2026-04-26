@@ -1,7 +1,16 @@
 <template>
-  <div class="bottom-nav" :class="{ 'light-mode': isLightMode, 'dark-mode': !isLightMode }" ref="navRef">
+  <div class="bottom-nav"
+       :class="{
+         'light-mode': isLightMode,
+         'dark-mode': !isLightMode,
+         'scroll-mode': isAdminScrollMode
+       }"
+       ref="navRef">
     <div class="nav-glow-bg" v-if="isLightMode"></div>
     <div class="nav-indicator" :style="indicatorStyle" :class="{ 'light-indicator': isLightMode }"></div>
+    <div class="scroll-fade-left" v-if="showLeftFade"></div>
+    <div class="scroll-fade-right" v-if="showRightFade"></div>
+    <div class="nav-inner" ref="innerRef" @scroll="onScroll">
     <div
       v-for="(item, index) in navItems"
       :key="item.key"
@@ -26,6 +35,7 @@
       </span>
       <span class="nav-label" :class="{ 'light-label': isLightMode && activeKey === item.key }">{{ item.label }}</span>
     </div>
+    </div>
   </div>
 </template>
 
@@ -48,8 +58,11 @@ const hoveredIndex = ref(-1)
 const clickedIndex = ref(-1)
 const indicatorStyle = ref({})
 const navRef = ref(null)
+const innerRef = ref(null)
 const itemRefs = ref([])
 const rippleRefs = ref([])
+const showLeftFade = ref(false)
+const showRightFade = ref(false)
 
 const allNavItems = [
   { key: 'home', icon: '🏠', label: '首页' },
@@ -99,6 +112,44 @@ watch(() => props.activeKey, (key) => {
 
 const isLightMode = computed(() => !isDark.value)
 
+const isAdminMode = computed(() => {
+  return props.activeKey.startsWith('admin') && props.userRole === 'ADMIN'
+})
+
+const isAdminScrollMode = computed(() => {
+  return isAdminMode.value && navItems.value.length > 4
+})
+
+function updateFades() {
+  if (!innerRef.value || !isAdminScrollMode.value) return
+  const el = innerRef.value
+  showLeftFade.value = el.scrollLeft > 4
+  showRightFade.value = el.scrollLeft + el.clientWidth < el.scrollWidth - 4
+}
+
+function onScroll() {
+  updateFades()
+  if (isAdminScrollMode.value) {
+    const idx = findIndexByKey(activeKey.value)
+    if (idx >= 0) updateIndicator(idx)
+  }
+}
+
+function scrollToItem(index) {
+  if (!isAdminScrollMode.value || !innerRef.value) return
+  const item = itemRefs.value[index]
+  if (!item) return
+  const container = innerRef.value
+  const itemLeft = item.offsetLeft
+  const itemWidth = item.offsetWidth
+  const containerWidth = container.offsetWidth
+  const targetScroll = itemLeft - (containerWidth / 2) + (itemWidth / 2)
+  container.scrollTo({
+    left: Math.max(0, targetScroll),
+    behavior: 'smooth'
+  })
+}
+
 const updateIndicator = (index) => {
   nextTick(() => {
     if (itemRefs.value[index]) {
@@ -107,10 +158,17 @@ const updateIndicator = (index) => {
       if (item && nav) {
         const itemRect = item.getBoundingClientRect()
         const navRect = nav.getBoundingClientRect()
-        
+        const navWidth = navRect.width
+        const itemWidth = itemRect.width
+        let left = itemRect.left - navRect.left
+
+        if (isAdminScrollMode.value) {
+          left = Math.max(6, Math.min(left, navWidth - itemWidth - 6))
+        }
+
         indicatorStyle.value = {
-          width: `${itemRect.width}px`,
-          left: `${itemRect.left - navRect.left}px`,
+          width: `${itemWidth}px`,
+          left: `${left}px`,
           transition: 'all 0.45s cubic-bezier(0.68, -0.55, 0.265, 1.55)'
         }
       }
@@ -131,6 +189,7 @@ const handleClick = (key, event) => {
   }, 600)
 
   nextTick(() => updateIndicator(idx >= 0 ? idx : 0))
+  if (isAdminScrollMode.value) scrollToItem(idx >= 0 ? idx : 0)
 }
 
 const handleHover = (index) => {
@@ -170,12 +229,17 @@ const createRipple = (event, index) => {
 onMounted(() => {
   setTimeout(() => {
     const idx = findIndexByKey(activeKey.value)
-    if (idx >= 0) updateIndicator(idx)
+    if (idx >= 0) {
+      updateIndicator(idx)
+      if (isAdminScrollMode.value) scrollToItem(idx)
+    }
+    nextTick(updateFades)
   }, 150)
 
   window.addEventListener('resize', () => {
     const idx = findIndexByKey(activeKey.value)
     if (idx >= 0) updateIndicator(idx)
+    nextTick(updateFades)
   })
 })
 </script>
@@ -190,20 +254,20 @@ onMounted(() => {
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   display: flex;
-  justify-content: space-around;
-  padding: 8px 20px;
+  align-items: center;
+  padding: 8px 16px;
   border-radius: 30px;
   box-shadow: var(--shadow-nav);
   z-index: 1000;
-  gap: 5px;
-  transition: all 0.4s ease;
+  max-width: calc(100vw - 40px);
+  transition: background 0.4s ease, box-shadow 0.4s ease, border-color 0.4s ease, max-width 0.35s ease;
   overflow: hidden;
   border: 1px solid transparent;
 }
 
 .bottom-nav.light-mode {
   background: rgba(255, 255, 255, 0.92);
-  box-shadow: 
+  box-shadow:
     0 8px 32px rgba(24, 144, 255, 0.12),
     0 2px 8px rgba(0, 0, 0, 0.08),
     0 0 0 1px rgba(24, 144, 255, 0.08),
@@ -250,11 +314,26 @@ onMounted(() => {
     rgba(24, 144, 255, 0.25) 50%,
     rgba(64, 169, 255, 0.18) 100%
   );
-  box-shadow: 
+  box-shadow:
     inset 0 1px 3px rgba(255, 255, 255, 0.6),
     inset 0 -1px 3px rgba(24, 144, 255, 0.15),
     0 2px 8px rgba(24, 144, 255, 0.15);
   border: 1px solid rgba(24, 144, 255, 0.2);
+}
+
+.nav-inner {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.nav-inner::-webkit-scrollbar {
+  display: none;
 }
 
 .nav-item {
@@ -268,12 +347,14 @@ onMounted(() => {
   color: var(--text-tertiary);
   font-size: 11px;
   font-weight: 500;
-  padding: 10px 18px;
+  padding: 10px 14px;
   border-radius: 24px;
   z-index: 1;
+  flex: 0 0 auto;
+  scroll-snap-align: center;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
-  transition: color 0.35s ease, transform 0.35s ease;
+  transition: color 0.35s ease, transform 0.35s ease, background 0.3s ease;
 }
 
 .nav-item.light-item {
@@ -450,40 +531,40 @@ onMounted(() => {
 }
 
 @keyframes glow-pulse {
-  0%, 100% { 
-    opacity: 0.5; 
-    transform: scale(1); 
+  0%, 100% {
+    opacity: 0.5;
+    transform: scale(1);
   }
-  50% { 
-    opacity: 1; 
-    transform: scale(1.2); 
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
   }
 }
 
 @keyframes light-glow-pulse {
-  0%, 100% { 
-    opacity: 0.6; 
-    transform: scale(0.95); 
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(0.95);
   }
-  33% { 
-    opacity: 1; 
-    transform: scale(1.15); 
+  33% {
+    opacity: 1;
+    transform: scale(1.15);
   }
-  66% { 
-    opacity: 0.85; 
-    transform: scale(1.05); 
+  66% {
+    opacity: 0.85;
+    transform: scale(1.05);
   }
 }
 
 @keyframes ring-expand {
-  0%, 100% { 
-    transform: scale(0.95); 
-    opacity: 0.4; 
+  0%, 100% {
+    transform: scale(0.95);
+    opacity: 0.4;
     border-width: 2px;
   }
-  50% { 
-    transform: scale(1.25); 
-    opacity: 0.15; 
+  50% {
+    transform: scale(1.25);
+    opacity: 0.15;
     border-width: 1px;
   }
 }
@@ -509,60 +590,42 @@ onMounted(() => {
 }
 
 @keyframes bg-breathe {
-  0%, 100% { 
-    opacity: 0.6; 
+  0%, 100% {
+    opacity: 0.6;
     transform: scale(1);
   }
-  50% { 
-    opacity: 1; 
+  50% {
+    opacity: 1;
     transform: scale(1.02);
   }
 }
 
-@media (max-width: 600px) {
-  .bottom-nav {
-    padding: 6px 12px;
-    gap: 2px;
-    width: calc(100% - 40px);
-    justify-content: space-between;
-    bottom: 16px;
-  }
-  
-  .bottom-nav.light-mode {
-    box-shadow: 
-      0 6px 24px rgba(24, 144, 255, 0.1),
-      0 2px 6px rgba(0, 0, 0, 0.06),
-      0 0 0 1px rgba(24, 144, 255, 0.1);
-  }
-  
-  .nav-item {
-    padding: 8px 10px;
-    flex: 1;
-  }
+.scroll-fade-left,
+.scroll-fade-right {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  width: 28px;
+  pointer-events: none;
+  z-index: 2;
+}
 
-  .nav-label {
-    font-size: 9px;
-  }
+.scroll-fade-left {
+  left: 0;
+  background: linear-gradient(to right, var(--bg-nav) 30%, transparent);
+  border-radius: 30px 0 0 30px;
+}
 
-  .nav-icon {
-    font-size: 18px;
-    width: 20px;
-    height: 20px;
-  }
+.scroll-fade-right {
+  right: 0;
+  background: linear-gradient(to left, var(--bg-nav) 30%, transparent);
+  border-radius: 0 30px 30px 0;
+}
 
-  .icon-wrapper {
-    width: 24px;
-    height: 24px;
-  }
-
-  .icon-glow.light-glow {
-    width: 36px;
-    height: 36px;
-  }
-
-  .icon-ring {
-    width: 32px;
-    height: 32px;
-  }
+.scroll-mode.light-mode .scroll-fade-left {
+  background: linear-gradient(to right, rgba(255,255,255,0.95) 30%, transparent);
+}
+.scroll-mode.light-mode .scroll-fade-right {
+  background: linear-gradient(to left, rgba(255,255,255,0.95) 30%, transparent);
 }
 </style>

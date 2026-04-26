@@ -43,7 +43,13 @@
         <ProductManagement v-else-if="activeNav === 'admin-product'" :key="'admin-product'" />
         <ProcessManagement v-else-if="activeNav === 'admin-process'" :key="'admin-process'" />
         <WorkshopManagement v-else-if="activeNav === 'admin-workshop'" :key="'admin-workshop'" />
-        <AdminPanel v-else-if="activeNav === 'admin-standard' || activeNav === 'admin-equipment' || activeNav === 'admin-changelog' || activeNav === 'admin-operationlog'" :key="activeNav" :defaultTab="activeNav === 'admin-changelog' ? 'changelog' : (activeNav === 'admin-operationlog' ? 'operationlog' : (activeNav === 'admin-standard' ? 'standard' : 'equipment'))" />
+        <StandardManagement v-else-if="activeNav === 'admin-standard'" :key="'admin-standard'" />
+        <EquipmentManagement v-else-if="activeNav === 'admin-equipment'" :key="'admin-equipment'" />
+        <ChangeLogManagement v-else-if="activeNav === 'admin-changelog'" :key="'admin-changelog'" />
+        <OperationLogManagement v-else-if="activeNav === 'admin-operationlog'" :key="'admin-operationlog'" />
+
+<!--        <AdminPanel v-else-if="activeNav === 'admi' +-->
+<!--         'n-standard' || activeNav === 'admin-equipment' || activeNav === 'admin-changelog' || activeNav === 'admin-operationlog'" :key="activeNav" :defaultTab="activeNav === 'admin-changelog' ? 'changelog' : (activeNav === 'admin-operationlog' ? 'operationlog' : (activeNav === 'admin-standard' ? 'standard' : 'equipment'))" />-->
       </template>
       <div v-else-if="activeNav.startsWith('admin') && loggedIn" class="admin-gate">
         <div class="gate-card">
@@ -85,12 +91,15 @@ import UserManagement from './components/admin/UserManagement.vue'
 import ProductManagement from './components/admin/ProductManagement.vue'
 import ProcessManagement from './components/admin/ProcessManagement.vue'
 import WorkshopManagement from './components/admin/WorkshopManagement.vue'
-import AdminPanel from './components/AdminPanel.vue'
 import BottomNav from './components/BottomNav.vue'
 import ThemeSwitcher from './components/ThemeSwitcher.vue'
 import LoginForm from './components/LoginForm.vue'
 import { getToken, getUser, removeToken, isLoggedIn } from './utils/api.js'
 import './styles/theme.css'
+import OperationLogManagement from "@/components/admin/OperationLogManagement.vue";
+import ChangeLogManagement from "@/components/admin/ChangeLogManagement.vue";
+import EquipmentManagement from "@/components/admin/EquipmentManagement.vue";
+import StandardManagement from "@/components/admin/StandardManagement.vue";
 
 const NAV_KEY = 'spc_active_nav'
 const ADMIN_NAV_KEY = 'spc_admin_last_nav'
