@@ -185,17 +185,47 @@ function buildMarkLines(limits) {
 
 function buildSpecLines(limits) {
   const lines = []
-  if (limits.usl != null) lines.push({ yAxis: limits.usl, name: 'USL', lineStyle: { color: '#ff4d4f', type: 'dotted', width: 1.2 }, label: { position: 'insideEndTop', formatter: 'USL: {c}', fontSize: 9, color: '#ff4d4f' } })
-  if (limits.lsl != null) lines.push({ yAxis: limits.lsl, name: 'LSL', lineStyle: { color: '#ff4d4f', type: 'dotted', width: 1.2 }, label: { position: 'insideEndBottom', formatter: 'LSL: {c}', fontSize: 9, color: '#ff4d4f' } })
+  if (limits.usl != null) lines.push({ yAxis: limits.usl, name: 'USL', lineStyle: { color: '#ff4d4f', type: 'dotted', width: 1.5 }, label: { position: 'insideEndTop', formatter: 'USL: {c}', fontSize: 9, color: '#ff4d4f' } })
+  if (limits.lsl != null) lines.push({ yAxis: limits.lsl, name: 'LSL', lineStyle: { color: '#ff4d4f', type: 'dotted', width: 1.5 }, label: { position: 'insideEndBottom', formatter: 'LSL: {c}', fontSize: 9, color: '#ff4d4f' } })
   return lines
 }
 
-function getPointColors(values, oocFlags, zones) {
+function getPointColors(values, oocFlags, oosFlags, zones) {
   return values.map((v, i) => {
+    if (oosFlags && oosFlags[i] === 1) return '#cf1322'
     if (oocFlags && oocFlags[i] === 1) return '#f5222d'
     if (zones && zones[i] === 2) return '#faad14'
     if (zones && zones[i] === 3) return '#90CAF9'
     return '#1890ff'
+  })
+}
+
+function getPointSymbols(values, oocFlags, oosFlags, zones) {
+  return values.map((v, i) => {
+    if (oosFlags && oosFlags[i] === 1) return 'diamond'
+    if (oocFlags && oocFlags[i] === 1) return 'triangle'
+    if (zones && zones[i] >= 2) return 'circle'
+    return 'circle'
+  })
+}
+
+function getPointSizes(values, oocFlags, oosFlags, zones) {
+  return values.map((v, i) => {
+    if (oosFlags && oosFlags[i] === 1) return 11
+    if (oocFlags && oocFlags[i] === 1) return 9
+    return 6
+  })
+}
+
+function computeOosFlags(values, limits) {
+  if (!values || !limits) return null
+  const { usl, lsl } = limits
+  if (usl == null && lsl == null) return null
+  return values.map(v => {
+    if (v == null) return 0
+    if (usl != null && v > usl) return 1
+    if (lsl != null && v < lsl) return 1
+    return 0
   })
 }
 
@@ -215,7 +245,10 @@ function renderIMR(data) {
   if (!values || !values.length) return
 
   const allMarkLines = [...buildMarkLines(limits), ...buildSpecLines(limits)]
-  const pointColors = getPointColors(values, oocFlags, zones)
+  const oosFlags = computeOosFlags(values, limits)
+  const pointColors = getPointColors(values, oocFlags, oosFlags, zones)
+  const pointSymbols = getPointSymbols(values, oocFlags, oosFlags, zones)
+  const pointSizes = getPointSizes(values, oocFlags, oosFlags, zones)
 
   const iOption = {
     title: {
@@ -226,16 +259,37 @@ function renderIMR(data) {
     },
     tooltip: { trigger: 'axis', axisPointer: { type: 'cross' }, confine: true, extraCssText: 'z-index:999', formatter(params) {
       if (!Array.isArray(params)) params = [params]
+      const idx = params[0]?.dataIndex ?? 0
+      const val = values[idx]
       let html = `<strong>${formatTimeLabel(params[0]?.axisValue || '')}</strong>`
-      params.forEach(p => { html += `<br/>${p.marker}${p.seriesName}: ${p.data}` })
+      html += `<br/>${params[0].marker}${params[0].seriesName}: <strong>${val}</strong>`
+      if (oosFlags && oosFlags[idx] === 1) html += `<br/><span style="color:#cf1322;font-weight:600">⚠ 超规格限 (OOS)</span>`
+      else if (oocFlags && oocFlags[idx] === 1) html += `<br/><span style="color:#f5222d;font-weight:600">⚡ 超控制限 (OOC)</span>`
+      else if (limits) {
+        const inSpec = (limits.usl == null || val <= limits.usl) && (limits.lsl == null || val >= limits.lsl)
+        const inCtrl = (limits.ucl == null || val <= limits.ucl) && (limits.lcl == null || val >= limits.lcl)
+        if (inSpec && inCtrl) html += `<br/><span style="color:#52c41a">✓ 正常</span>`
+      }
       return html
     } },
-    legend: { data: ['测量值'], top: 30, itemGap: 16, textStyle: { fontSize: 12 } },
+    legend: {
+      data: ['测量值', '超规格(OOS)', '超控限(OOC)', '警告区'],
+      top: 32, itemGap: 16, textStyle: { fontSize: 11 },
+      icon: 'circle',
+      formatter(name) {
+        const colors = { '测量值': '#1890ff', '超规格(OOS)': '#cf1322', '超控限(OOC)': '#f5222d', '警告区': '#faad14' }
+        const c = colors[name] || '#1890ff'
+        return `{color|●} ${name}`
+      },
+      textStyle: { rich: { color: { color: '#1890ff' } } }
+    },
     grid: { left: 80, right: 45, top: 60, bottom: 55, containLabel: false },
     xAxis: { type: 'category', data: timeSeries, axisLabel: { rotate: 35, fontSize: 10, formatter: formatTimeLabel, interval: Math.floor(timeSeries.length / 15) || 0, margin: 10 }, axisTick: { alignWithLabel: true } },
     yAxis: { type: 'value', scale: true, name: '测量值', nameTextStyle: { fontSize: 11 }, nameGap: 16, splitLine: { lineStyle: { type: 'dashed', opacity: 0.4 } } },
     series: [{
-      name: '测量值', type: 'line', data: values, symbol: 'circle', symbolSize: 6,
+      name: '测量值', type: 'line', data: values,
+      symbol: (val, params) => pointSymbols[params.dataIndex] || 'circle',
+      symbolSize: (val, params) => pointSizes[params.dataIndex] || 6,
       lineStyle: { color: '#1890ff', width: 1.5 },
       itemStyle: { color(params) { return pointColors[params.dataIndex] || '#1890ff' } },
       markLine: { silent: true, symbol: 'none', data: allMarkLines }
@@ -335,7 +389,10 @@ function renderXbarR(data) {
   const rLcl = D3 * avgRange
 
   const allMarkLines = [...buildMarkLines(limits), ...buildSpecLines(limits)]
-  const pointColors = getPointColors(xbarData, null, zones)
+  const xbarOosFlags = computeOosFlags(xbarData, limits)
+  const pointColors = getPointColors(xbarData, null, xbarOosFlags, null)
+  const pointSymbols = getPointSymbols(xbarData, null, xbarOosFlags, null)
+  const pointSizes = getPointSizes(xbarData, null, xbarOosFlags, null)
 
   const xbarOption = {
     title: {
@@ -346,16 +403,24 @@ function renderXbarR(data) {
     },
     tooltip: { trigger: 'axis', axisPointer: { type: 'cross' }, confine: true, extraCssText: 'z-index:999', formatter(params) {
       if (!Array.isArray(params)) params = [params]
+      const idx = params[0]?.dataIndex ?? 0
       let html = `<strong>${formatTimeLabel(params[0]?.axisValue || '')}</strong>`
-      params.forEach(p => { html += `<br/>${p.marker}${p.seriesName}: ${p.data}` })
+      html += `<br/>${params[0].marker}${params[0].seriesName}: <strong>${xbarData[idx]}</strong>`
+      if (xbarOosFlags && xbarOosFlags[idx] === 1) html += `<br/><span style="color:#cf1322;font-weight:600">⚠ 超规格限 (OOS)</span>`
+      else html += `<br/><span style="color:#52c41a">✓ 正常</span>`
       return html
     } },
-    legend: { data: ['子组均值'], top: 30, itemGap: 16, textStyle: { fontSize: 12 } },
+    legend: {
+      data: ['子组均值', '超规格(OOS)'],
+      top: 32, itemGap: 16, textStyle: { fontSize: 11 }
+    },
     grid: { left: 80, right: 45, top: 60, bottom: 55, containLabel: false },
     xAxis: { type: 'category', data: xbarTimeLabels, axisLabel: { rotate: 35, fontSize: 10, formatter: formatTimeLabel, interval: Math.floor(xbarTimeLabels.length / 12) || 0, margin: 10 }, axisTick: { alignWithLabel: true } },
     yAxis: { type: 'value', scale: true, name: '均值 X̄', nameTextStyle: { fontSize: 11 }, nameGap: 16, splitLine: { lineStyle: { type: 'dashed', opacity: 0.4 } } },
     series: [{
-      name: '子组均值', type: 'line', data: xbarData, symbol: 'circle', symbolSize: 8,
+      name: '子组均值', type: 'line', data: xbarData,
+      symbol: (val, params) => pointSymbols[params.dataIndex] || 'circle',
+      symbolSize: (val, params) => pointSizes[params.dataIndex] || 8,
       lineStyle: { color: '#1890ff', width: 2 },
       itemStyle: { color(params) { return pointColors[params.dataIndex] || '#1890ff' } },
       markLine: {

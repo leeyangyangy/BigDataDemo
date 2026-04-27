@@ -135,8 +135,16 @@
                   <tr>
                     <th class="col-row-num">#</th>
                     <th v-for="pid in uploadSelectedParamIds" :key="'h-' + pid">
-                      {{ getParamName(pid) }}
-                      <span v-if="getParamUnit(pid)" class="th-unit">[{{ getParamUnit(pid) }}]</span>
+                      <div class="th-param-main">
+                        {{ getParamName(pid) }}
+                        <span v-if="getParamUnit(pid)" class="th-unit">[{{ getParamUnit(pid) }}]</span>
+                        <span class="th-type-badge" :class="'type-' + (getParamDataType(pid) || 'continuous')">{{ getParamDataTypeLabel(pid) }}</span>
+                      </div>
+                      <div class="th-limit-hint" v-if="uploadParamVersionMap[pid]">
+                        <span class="lim-spec">±{{ uploadParamVersionMap[pid].target ?? '-' }}</span>
+                        <span class="lim-range">[{{ uploadParamVersionMap[pid].lsl ?? '?' }} ~ {{ uploadParamVersionMap[pid].usl ?? '?' }}]</span>
+                      </div>
+                      <div class="th-limit-hint th-loading" v-else-if="uploadLoadingVersions.has(pid)">加载标准中...</div>
                     </th>
                     <th class="col-action"></th>
                   </tr>
@@ -144,13 +152,21 @@
                 <tbody>
                   <tr v-for="(row, ri) in uploadRows" :key="'r-' + ri" :class="{ 'row-empty': !hasRowValue(ri) }">
                     <td class="cell-row-num">{{ ri + 1 }}</td>
-                    <td v-for="pid in uploadSelectedParamIds" :key="'c-' + ri + '-' + pid" class="cell-value">
-                      <input :model-value="getRowValue(ri, pid)"
-                             @input="setRowValue(ri, pid, $event.target.valueAsNumber || null)"
-                             type="number" step="0.000001"
-                             class="form-input value-input cell-input"
-                             placeholder="-"
-                             :class="{ 'input-empty': submitAttempted && (getRowValue(ri, pid) === null || getRowValue(ri, pid) === undefined || getRowValue(ri, pid) === '') }" />
+                    <td v-for="pid in uploadSelectedParamIds" :key="'c-' + ri + '-' + pid" class="cell-value"
+                        :class="getCellLimitClass(ri, pid)">
+                      <div class="cell-input-wrap">
+                        <input :model-value="getRowValue(ri, pid)"
+                               @input="setRowValue(ri, pid, $event.target.valueAsNumber || null)"
+                               type="number" :step="getInputStep(pid)"
+                               class="form-input value-input cell-input"
+                               :placeholder="'.' + '0'.repeat(getParamDecimalPlaces(pid) || 2)"
+                               :class="{ 'input-empty': submitAttempted && (getRowValue(ri, pid) === null || getRowValue(ri, pid) === undefined || getRowValue(ri, pid) === ''),
+                                         'input-oos': isValueOOS(ri, pid),
+                                         'input-warning': isValueWarning(ri, pid) }" />
+                        <span class="cell-status-dot" v-if="getRowValue(ri, pid) != null && getRowValue(ri, pid) !== ''"
+                              :class="isValueOOS(ri, pid) ? 'dot-danger' : (isValueWarning(ri, pid) ? 'dot-warn' : 'dot-ok')"
+                              :title="getCellStatusText(ri, pid)"></span>
+                      </div>
                     </td>
                     <td class="cell-action">
                       <button type="button" class="btn-del-row" @click="removeRow(ri)" :disabled="uploadRows.length <= 1" title="删除此行">✕</button>
@@ -159,12 +175,31 @@
                 </tbody>
               </table>
             </div>
-            <div class="param-limit-bar" v-if="uploadSelectedParamIds.some(_pid => uploadParamVersionMap[_pid])">
-              <span v-for="pid in uploadSelectedParamIds" :key="'lim-' + pid" class="limit-tag" v-if="uploadParamVersionMap[pid]">
-                <strong>{{ getParamName(pid) }}</strong>:
-                U={{ uploadParamVersionMap[pid].usl ?? '-' }} L={{ uploadParamVersionMap[pid].lsl ?? '-' }}
-                T={{ uploadParamVersionMap[pid].target ?? '-' }} | UCL={{ uploadParamVersionMap[pid].ucl ?? '-' }} LCL={{ uploadParamVersionMap[pid].lcl ?? '-' }}
-              </span>
+            <div class="param-limit-bar enhanced" v-if="uploadSelectedParamIds.some(_pid => uploadParamVersionMap[_pid])">
+              <div v-for="pid in uploadSelectedParamIds" :key="'lim-' + pid" class="limit-card" v-if="uploadParamVersionMap[pid]">
+                <div class="limit-card-header">
+                  <strong>{{ getParamName(pid) }}</strong>
+                  <span class="limit-card-type" :class="'type-' + (getParamDataType(pid) || 'continuous')">{{ getParamDataTypeLabel(pid) }}</span>
+                </div>
+                <div class="limit-card-body">
+                  <div class="limit-item spec-limits">
+                    <span class="li-label">规格限</span>
+                    <span class="li-values">
+                      <em>LSL</em><strong>{{ uploadParamVersionMap[pid].lsl ?? '-' }}</strong>
+                      <em>Tgt</em><strong>{{ uploadParamVersionMap[pid].target ?? '-' }}</strong>
+                      <em>USL</em><strong>{{ uploadParamVersionMap[pid].usl ?? '-' }}</strong>
+                    </span>
+                  </div>
+                  <div class="limit-item ctrl-limits">
+                    <span class="li-label">控制限</span>
+                    <span class="li-values">
+                      <em>LCL</em><strong>{{ uploadParamVersionMap[pid].lcl ?? '-' }}</strong>
+                      <em>CL</em><strong>{{ uploadParamVersionMap[pid].cl ?? '-' }}</strong>
+                      <em>UCL</em><strong>{{ uploadParamVersionMap[pid].ucl ?? '-' }}</strong>
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
             <div class="param-limit-info no-version-hint" v-if="uploadSelectedParamIds.length > 0 && !uploadSelectedParamIds.some(_p => uploadParamVersionMap[_p]) && !Array.from(uploadLoadingVersions.value).some(_p2 => uploadSelectedParamIds.includes(_p2))">
               暂无版本标准，提交时将自动创建
@@ -328,6 +363,72 @@ function getParamName(id) {
 function getParamUnit(id) {
   const p = uploadParams.value.find(p => p.id === id)
   return p ? (p.unit || '') : ''
+}
+
+function getParamDataType(id) {
+  const p = uploadParams.value.find(p => p.id === id)
+  return p ? (p.dataType || 'continuous') : 'continuous'
+}
+
+function getParamDataTypeLabel(id) {
+  const t = getParamDataType(id)
+  const map = { continuous: '连续', discrete: '离散' }
+  return map[t] || t
+}
+
+function getParamDecimalPlaces(id) {
+  const p = uploadParams.value.find(p => p.id === id)
+  return p ? (p.decimalPlaces || 2) : 2
+}
+
+function getInputStep(pid) {
+  const dp = getParamDecimalPlaces(pid)
+  if (dp <= 0) return '1'
+  return Number('0.' + '0'.repeat(dp - 1) + '1').toFixed(dp)
+}
+
+function isValueOOS(ri, pid) {
+  const val = getRowValue(ri, pid)
+  if (val == null || val === '') return false
+  const ver = uploadParamVersionMap[pid]
+  if (!ver) return false
+  const numVal = Number(val)
+  if (ver.usl != null && numVal > Number(ver.usl)) return true
+  if (ver.lsl != null && numVal < Number(ver.lsl)) return true
+  return false
+}
+
+function isValueWarning(ri, pid) {
+  if (isValueOOS(ri, pid)) return false
+  const val = getRowValue(ri, pid)
+  if (val == null || val === '') return false
+  const ver = uploadParamVersionMap[pid]
+  if (!ver || !ver.ucl || !ver.lcl) return false
+  const numVal = Number(val)
+  const ucl = Number(ver.ucl), lcl = Number(ver.lcl)
+  const range = ucl - lcl
+  if (range <= 0) return false
+  const warnInner = range * 0.1
+  return numVal > ucl - warnInner || numVal < lcl + warnInner
+}
+
+function getCellLimitClass(ri, pid) {
+  if (isValueOOS(ri, pid)) return 'cell-oos'
+  if (isValueWarning(ri, pid)) return 'cell-warning'
+  return ''
+}
+
+function getCellStatusText(ri, pid) {
+  const val = getRowValue(ri, pid)
+  if (val == null || val === '') return ''
+  const ver = uploadParamVersionMap[pid]
+  if (!ver) return '暂无标准'
+  const numVal = Number(val)
+  if (ver.usl != null && numVal > Number(ver.usl)) return `⚠ 超规格上限 USL=${ver.usl}`
+  if (ver.lsl != null && numVal < Number(ver.lsl)) return `⚠ 超规格下限 LSL=${ver.lsl}`
+  if (ver.ucl != null && numVal > Number(ver.ucl)) return `接近控制上限 UCL=${ver.ucl}`
+  if (ver.lcl != null && numVal < Number(ver.lcl)) return `接近控制下限 LCL=${ver.lcl}`
+  return '✓ 在规格范围内'
 }
 
 function showImportDialog() {
@@ -1162,6 +1263,120 @@ onUnmounted(() => {
   line-height: 1.6;
 }
 .limit-tag strong { color: var(--text-primary); }
+
+.th-param-main {
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  white-space: nowrap;
+}
+
+.th-type-badge {
+  display: inline-block; font-size: 10px; font-weight: 500;
+  padding: 1px 6px; border-radius: 8px; line-height: 1.5;
+  letter-spacing: 0.3px;
+}
+.th-type-badge.type-continuous { background: #e6f4ff; color: #1677ff; }
+.th-type-badge.type-discrete { background: #f6ffed; color: #52c41a; }
+
+.th-limit-hint {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 3px; font-size: 9.5px; color: var(--text-tertiary);
+  justify-content: center;
+}
+.th-limit-hint .lim-spec { color: var(--accent-primary); font-weight: 500; }
+.th-limit-hint .lim-range { color: #8c8c8c; }
+.th-limit-hint.th-loading { color: #bfbfbf; font-style: italic; }
+
+.cell-input-wrap { position: relative; display: flex; align-items: center; }
+.cell-input-wrap .cell-input { padding-right: 22px !important; }
+
+.cell-status-dot {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  width: 7px; height: 7px; border-radius: 50%; pointer-events: none;
+  transition: all 0.2s ease;
+}
+.cell-status-dot.dot-ok { background: #52c41a; box-shadow: 0 0 4px rgba(82,196,26,0.35); }
+.cell-status-dot.dot-warn { background: #faad14; box-shadow: 0 0 4px rgba(250,173,20,0.35); animation: pulse-warn 1.5s infinite; }
+.cell-status-dot.dot-danger { background: #ff4d4f; box-shadow: 0 0 4px rgba(255,77,79,0.4); animation: pulse-danger 1s infinite; }
+
+@keyframes pulse-warn {
+  0%, 100% { transform: translateY(-50%) scale(1); opacity: 1; }
+  50% { transform: translateY(-50%) scale(1.35); opacity: 0.7; }
+}
+@keyframes pulse-danger {
+  0%, 100% { transform: translateY(-50%) scale(1); }
+  50% { transform: translateY(-50%) scale(1.45); }
+}
+
+.cell-input.input-oos {
+  border-color: #ff4d4f !important;
+  background: linear-gradient(135deg, rgba(255,77,79,0.06), rgba(255,77,79,0.02)) !important;
+  box-shadow: 0 0 0 3px rgba(255,77,79,0.08) !important;
+}
+.cell-input.input-warning {
+  border-color: #faad14 !important;
+  background: linear-gradient(135deg, rgba(250,173,20,0.05), rgba(250,173,20,0.01)) !important;
+}
+
+.cell-oos { background: rgba(255,77,79,0.04) !important; }
+.cell-warning { background: rgba(250,173,20,0.03) !important; transition: background 0.15s; }
+
+.param-limit-bar.enhanced {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 10px;
+  padding: 12px;
+  background: linear-gradient(to bottom, #fafbfc, #fff);
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.limit-card {
+  background: #fff;
+  border: 1px solid #e8ecf0;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+}
+.limit-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+
+.limit-card-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-bottom: 1px solid #edf2f7;
+  font-size: 13px;
+}
+.limit-card-header strong { color: #334155; font-weight: 600; }
+
+.limit-card-type {
+  display: inline-block; font-size: 10px; font-weight: 500;
+  padding: 1px 7px; border-radius: 8px; line-height: 1.5;
+}
+.limit-card-type.type-continuous { background: #dbeafe; color: #2563eb; }
+.limit-card-type.type-discrete { background: #dcfce7; color: #16a34a; }
+
+.limit-card-body { padding: 8px 12px; }
+
+.limit-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 4px 0;
+  font-size: 11.5px;
+}
+.li-label {
+  min-width: 40px; font-weight: 500; color: #64748b;
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.li-values { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.li-values em {
+  font-style: normal; font-size: 9.5px; color: #94a3b8;
+  font-weight: 500; letter-spacing: 0.3px;
+}
+.li-values strong {
+  font-size: 12px; color: #334155; font-weight: 600;
+  font-family: 'SF Mono', 'Cascadia Code', Consolas, monospace;
+}
+.spec-limits .li-values strong { color: #dc2626; }
+.ctrl-limits .li-values strong { color: #ea580c; }
 
 .param-limit-info {
   display: flex;

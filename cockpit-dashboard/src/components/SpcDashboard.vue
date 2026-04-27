@@ -145,6 +145,8 @@
         <span class="info-label">当前标准:</span>
         <strong>{{ selectedParamObj?.paramName || '-' }}</strong>
         <span class="info-unit" v-if="selectedParamObj?.unit">单位: {{ selectedParamObj.unit }}</span>
+        <span class="info-type-badge" :class="'type-' + (selectedParamObj?.dataType || 'continuous')">{{ selectedParamObj?.dataType === 'discrete' ? '离散' : '连续' }}</span>
+        <span class="info-dp" v-if="selectedParamObj?.decimalPlaces">精度: {{ selectedParamObj.decimalPlaces }}位</span>
         <span class="info-limits" v-if="currentVersion">
           USL={{ currentVersion.usl ?? '-' }}
           LSL={{ currentVersion.lsl ?? '-' }}
@@ -1511,6 +1513,22 @@ watch(() => props.isLoggedIn, (val) => {
   border-radius: 4px;
   font-size: 11px;
   font-weight: 600;
+}
+
+.info-type-badge {
+  display: inline-block; font-size: 10px; font-weight: 500;
+  padding: 2px 8px; border-radius: 10px; line-height: 1.5; letter-spacing: 0.3px;
+}
+.info-type-badge.type-continuous { background: #e6f4ff; color: #1677ff; }
+.info-type-badge.type-discrete { background: #f6ffed; color: #52c41a; }
+
+.info-dp {
+  background: rgba(250, 173, 20, 0.12);
+  color: #ad6800;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
 }
 
 .info-limits {
