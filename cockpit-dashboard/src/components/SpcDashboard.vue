@@ -166,11 +166,17 @@
             <span class="chart-title">{{ pc.paramName }}<span class="chart-unit" v-if="pc.unit">({{ pc.unit }})</span><span class="chart-equip-tag" v-if="pc.equipmentName">【{{ pc.equipmentName }}】</span></span>
             <span class="chart-version-tag" v-if="pc.version">V{{ pc.version.versionNo }}</span>
           </div>
+          <template v-if="pc.chartData && pc.chartData.values && pc.chartData.values.length > 0">
           <SpcControlChart :ref="el => { if(el) chartRefs[pc.equipmentId ? `${pc.paramId}-${pc.equipmentId}` : pc.paramId] = el }" :chartData="pc.chartData" :chartType="pc.chartData?.chartType || ''" />
           <div class="chart-mini-stats" v-if="pc.chartData?.capability">
             <span>Cpk: <strong :class="getCpkClass(pc.chartData.capability.cpk)">{{ pc.chartData.capability.cpk ?? '-' }}</strong></span>
             <span>均值: {{ pc.chartData.capability.mean ?? '-' }}</span>
             <span>样本: {{ pc.chartData.capability.sampleCount ?? 0 }}</span>
+          </div>
+          </template>
+          <div v-else class="chart-no-data-hint">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+            <span class="no-data-text"><strong>暂无数据</strong><small>该设备下此参数尚无测量记录</small></span>
           </div>
         </div>
       </div>
@@ -267,6 +273,7 @@ import SpcControlChart from './SpcControlChart.vue'
 import SpcAlertPanel from './SpcAlertPanel.vue'
 import SpcDataImport from './SpcDataImport.vue'
 import { spcApi, adminApi } from '@/utils/api.js'
+import { isValidRuleId, sanitizeRuleIds, formatValidRange } from '@/utils/spcRules'
 
 const props = defineProps({
   isLoggedIn: { type: Boolean, default: false },
@@ -931,15 +938,20 @@ async function loadAlerts() {
 
   loadingAlerts.value = true
   try {
+    const validRules = sanitizeRuleIds(enabledAlertRules.value)
+    if (validRules.length !== enabledAlertRules.value.length) {
+      console.warn(`[SPC] 检测到无效规则ID已过滤(有效范围${formatValidRange()}):`, enabledAlertRules.value.filter(id => !isValidRuleId(id)))
+    }
     const res = await spcApi.getAlerts({
       paramId: selectedParam.value,
       productId: selectedProduct.value,
       equipmentId: selectedEquipment.value || null,
       limit: dataLimit.value,
+      ruleIds: validRules.join(','),
       ...getTimeRangeParams()
     })
     if (res.code === 200 && res.data) {
-      alertList.value = res.data.filter(a => enabledAlertRules.value.includes(a.ruleId))
+      alertList.value = res.data
     } else {
       alertList.value = []
     }
@@ -953,9 +965,7 @@ async function loadAlerts() {
 
 function onRulesChange(rules) {
   enabledAlertRules.value = rules
-  if (alertList.value.length > 0) {
-    alertList.value = alertList.value.filter(a => enabledAlertRules.value.includes(a.ruleId))
-  }
+  loadAlerts()
 }
 
 function handleDataImported() {
@@ -1228,6 +1238,19 @@ watch(() => props.isLoggedIn, (val) => {
 .chart-mini-stats strong.good { color: #52c41a; }
 .chart-mini-stats strong.warning { color: #faad14; }
 .chart-mini-stats strong.danger { color: #f5222d; }
+
+.chart-no-data-hint {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; padding: 40px 20px;
+  background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+  border-radius: 0 0 12px 12px;
+  border-top: 1px dashed #e2e8f0;
+}
+.no-data-text {
+  text-align: center; display: flex; flex-direction: column; gap: 2px;
+}
+.no-data-text strong { font-size: 14px; color: #64748b; }
+.no-data-text small { font-size: 11.5px; color: #94a3b8; }
 
 .chart-empty-hint {
   text-align: center;

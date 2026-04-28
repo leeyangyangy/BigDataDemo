@@ -2,9 +2,11 @@ package xyz.leeyangy.spc.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 import xyz.leeyangy.spc.common.R;
+import xyz.leeyangy.spc.common.SpcRuleConstants;
 import xyz.leeyangy.spc.entity.SpcData;
 import xyz.leeyangy.spc.entity.SpcStatResult;
 import xyz.leeyangy.spc.entity.ParamVersion;
@@ -19,6 +21,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/spc/chart")
 @RequiredArgsConstructor
@@ -179,7 +182,7 @@ public class SpcChartController {
             if (stat == null && !allData.isEmpty()) {
                 stat = spcStatService.calculateAndSave(version.getId(), null, "AUTO");
             }
-            if (stat != null) {
+            if (stat != null && !allData.isEmpty()) {
                 Map<String, Object> capability = new LinkedHashMap<>();
                 capability.put("cp", stat.getCp());
                 capability.put("cpk", stat.getCpk());
@@ -219,7 +222,8 @@ public class SpcChartController {
             @RequestParam(required = false) Long equipmentId,
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startTime,
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime,
-            @RequestParam(defaultValue = "100") Integer limit) {
+            @RequestParam(defaultValue = "100") Integer limit,
+            @RequestParam(required = false) String ruleIds) {
 
         ParamVersion version = paramVersionService.getCurrentVersion(paramId, productId);
         if (version == null) {
@@ -234,7 +238,43 @@ public class SpcChartController {
                     .collect(Collectors.toList());
         }
 
-        List<SpcAlert> alerts = spcRuleEngine.detectRules(dataList, version);
+        Set<Integer> enabledRuleSet = null;
+        if (ruleIds != null && !ruleIds.isBlank()) {
+            final String rawRuleIds = ruleIds;
+            Set<String> invalidTokens = new HashSet<>();
+            Set<Integer> outOfRangeIds = new HashSet<>();
+            enabledRuleSet = Arrays.stream(rawRuleIds.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .map(s -> {
+                        try {
+                            int parsed = Integer.parseInt(s);
+                            if (!SpcRuleConstants.isValidRuleId(parsed)) {
+                                outOfRangeIds.add(parsed);
+                                return null;
+                            }
+                            return parsed;
+                        } catch (NumberFormatException e) {
+                            invalidTokens.add(s);
+                            return null;
+                        }
+                    })
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+            if (!invalidTokens.isEmpty() || !outOfRangeIds.isEmpty()) {
+                log.warn("[ChartController] ruleIds参数'{}'包含无效项: 非数字={}, 超范围{}, 有效范围: {}。实际启用规则: {}",
+                        rawRuleIds, invalidTokens.isEmpty() ? "无" : invalidTokens,
+                        outOfRangeIds.isEmpty() ? "无" : outOfRangeIds,
+                        SpcRuleConstants.formatValidRange(),
+                        enabledRuleSet.isEmpty() ? "(全量检测)" : enabledRuleSet);
+            }
+            if (enabledRuleSet.isEmpty() && (!invalidTokens.isEmpty() || !outOfRangeIds.isEmpty())) {
+                log.warn("[ChartController] ruleIds参数'{}'所有项均无效, 将执行全量检测", rawRuleIds);
+                enabledRuleSet = null;
+            }
+        }
+
+        List<SpcAlert> alerts = spcRuleEngine.detectRules(dataList, version, enabledRuleSet);
 
         List<Map<String, Object>> result = new ArrayList<>();
         for (int i = 0; i < alerts.size(); i++) {

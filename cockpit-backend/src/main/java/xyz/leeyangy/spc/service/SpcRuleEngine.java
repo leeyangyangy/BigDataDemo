@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import xyz.leeyangy.spc.common.SpcRuleConstants;
 import xyz.leeyangy.spc.entity.ParamVersion;
 import xyz.leeyangy.spc.entity.SpcAlert;
 import xyz.leeyangy.spc.entity.SpcData;
@@ -42,8 +43,15 @@ public class SpcRuleEngine {
     }
 
     public List<SpcAlert> detectRules(List<SpcData> dataList, ParamVersion version) {
+        return detectRules(dataList, version, null);
+    }
+
+    public List<SpcAlert> detectRules(List<SpcData> dataList, ParamVersion version, Set<Integer> enabledRuleIds) {
         List<SpcAlert> alerts = new ArrayList<>();
         if (dataList == null || dataList.size() < 2 || version == null) return alerts;
+
+        Set<Integer> validRuleIds = validateAndFilterRuleIds(enabledRuleIds);
+        boolean runAll = validRuleIds == null;
 
         BigDecimal cl = version.getCl();
         BigDecimal ucl = version.getUcl();
@@ -63,16 +71,52 @@ public class SpcRuleEngine {
 
         Set<Integer> flaggedIndices = new HashSet<>();
 
-        checkRule1(dataList, values, ucl, lcl, threeSigma, version, flaggedIndices, alerts);
-        checkRule2(dataList, values, cl, version, flaggedIndices, alerts);
-        checkRule3(dataList, values, cl, version, flaggedIndices, alerts);
-        checkRule4(dataList, values, cl, version, flaggedIndices, alerts);
-        checkRule5(dataList, values, cl, oneSigma, twoSigma, version, flaggedIndices, alerts);
-        checkRule6(dataList, values, cl, oneSigma, version, flaggedIndices, alerts);
-        checkRule7(dataList, values, cl, oneSigma, version, flaggedIndices, alerts);
-        checkRule8(dataList, values, cl, oneSigma, version, flaggedIndices, alerts);
+        if (runAll || validRuleIds.contains(1)) checkRule1(dataList, values, ucl, lcl, threeSigma, version, flaggedIndices, alerts);
+        if (runAll || validRuleIds.contains(2)) checkRule2(dataList, values, cl, version, flaggedIndices, alerts);
+        if (runAll || validRuleIds.contains(3)) checkRule3(dataList, values, cl, version, flaggedIndices, alerts);
+        if (runAll || validRuleIds.contains(4)) checkRule4(dataList, values, cl, version, flaggedIndices, alerts);
+        if (runAll || validRuleIds.contains(5)) checkRule5(dataList, values, cl, oneSigma, twoSigma, version, flaggedIndices, alerts);
+        if (runAll || validRuleIds.contains(6)) checkRule6(dataList, values, cl, oneSigma, version, flaggedIndices, alerts);
+        if (runAll || validRuleIds.contains(7)) checkRule7(dataList, values, cl, oneSigma, version, flaggedIndices, alerts);
+        if (runAll || validRuleIds.contains(8)) checkRule8(dataList, values, cl, oneSigma, version, flaggedIndices, alerts);
 
         return alerts;
+    }
+
+    private Set<Integer> validateAndFilterRuleIds(Set<Integer> rawRuleIds) {
+        if (rawRuleIds == null) {
+            log.debug("[RuleEngine] enabledRuleIds=null, 执行全量检测");
+            return null;
+        }
+        if (rawRuleIds.isEmpty()) {
+            log.info("[RuleEngine] enabledRuleIds为空集, 执行全量检测");
+            return null;
+        }
+        if (rawRuleIds.contains(SpcRuleConstants.SELECT_ALL_FLAG)) {
+            log.info("[RuleEngine] 检测到规则ID=0(全选标记), 将执行全部{}条规则", SpcRuleConstants.TOTAL_RULES);
+            return null;
+        }
+
+        Set<Integer> invalidIds = new TreeSet<>();
+        Set<Integer> validIds = new LinkedHashSet<>();
+        for (Integer id : rawRuleIds) {
+            if (SpcRuleConstants.isValidRuleId(id)) {
+                validIds.add(id);
+            } else {
+                invalidIds.add(id);
+            }
+        }
+
+        if (!invalidIds.isEmpty()) {
+            log.warn("[RuleEngine] 检测到无效规则ID: {}, 有效范围: {}, 已自动过滤。实际启用规则: [{}]",
+                    invalidIds, SpcRuleConstants.formatValidRange(),
+                    validIds.isEmpty() ? "(无,将全量检测)" : String.join(",", validIds.stream().map(String::valueOf).toArray(String[]::new)));
+        }
+        if (validIds.isEmpty()) {
+            log.warn("[RuleEngine] 所有传入的规则ID均无效({}), 将执行全量检测", rawRuleIds);
+            return null;
+        }
+        return validIds;
     }
 
     private void checkRule1(List<SpcData> dataList, double[] values,

@@ -229,6 +229,34 @@ function computeOosFlags(values, limits) {
   })
 }
 
+function computeOocFlags(values, limits) {
+  if (!values || !limits) return null
+  const { ucl, lcl } = limits
+  if (ucl == null && lcl == null) return null
+  return values.map(v => {
+    if (v == null) return 0
+    if (ucl != null && v > ucl) return 1
+    if (lcl != null && v < lcl) return 1
+    return 0
+  })
+}
+
+function mergeOocFlags(backendOoc, clientOoc, length) {
+  if (!backendOoc && !clientOoc) return null
+  const result = new Array(length).fill(0)
+  if (backendOoc) {
+    for (let i = 0; i < Math.min(backendOoc.length, length); i++) {
+      if (backendOoc[i]) result[i] = 1
+    }
+  }
+  if (clientOoc) {
+    for (let i = 0; i < Math.min(clientOoc.length, length); i++) {
+      if (clientOoc[i]) result[i] = 1
+    }
+  }
+  return result
+}
+
 function formatTimeLabel(val) {
   if (!val) return ''
   if (val.includes('T')) {
@@ -246,9 +274,11 @@ function renderIMR(data) {
 
   const allMarkLines = [...buildMarkLines(limits), ...buildSpecLines(limits)]
   const oosFlags = computeOosFlags(values, limits)
-  const pointColors = getPointColors(values, oocFlags, oosFlags, zones)
-  const pointSymbols = getPointSymbols(values, oocFlags, oosFlags, zones)
-  const pointSizes = getPointSizes(values, oocFlags, oosFlags, zones)
+  const clientOocFlags = computeOocFlags(values, limits)
+  const effectiveOocFlags = mergeOocFlags(oocFlags, clientOocFlags, values.length)
+  const pointColors = getPointColors(values, effectiveOocFlags, oosFlags, zones)
+  const pointSymbols = getPointSymbols(values, effectiveOocFlags, oosFlags, zones)
+  const pointSizes = getPointSizes(values, effectiveOocFlags, oosFlags, zones)
 
   const iOption = {
     title: {
@@ -263,25 +293,39 @@ function renderIMR(data) {
       const val = values[idx]
       let html = `<strong>${formatTimeLabel(params[0]?.axisValue || '')}</strong>`
       html += `<br/>${params[0].marker}${params[0].seriesName}: <strong>${val}</strong>`
-      if (oosFlags && oosFlags[idx] === 1) html += `<br/><span style="color:#cf1322;font-weight:600">⚠ 超规格限 (OOS)</span>`
-      else if (oocFlags && oocFlags[idx] === 1) html += `<br/><span style="color:#f5222d;font-weight:600">⚡ 超控制限 (OOC)</span>`
-      else if (limits) {
+
+      const isOOS = oosFlags && oosFlags[idx] === 1
+      const isOOC = effectiveOocFlags && effectiveOocFlags[idx] === 1
+
+      if (isOOS) {
+        html += `<br/><span style="color:#cf1322;font-weight:600">⚠ 超规格限 (OOS)</span>`
+        if (limits) html += `<br/><small style="color:#8c8c8c">USL=${limits.usl ?? '-'} LSL=${limits.lsl ?? '-'}</small>`
+      } else if (isOOC) {
+        html += `<br/><span style="color:#f5222d;font-weight:600">⚡ 超控制限 (OOC)</span>`
+        if (limits) html += `<br/><small style="color:#8c8c8c">UCL=${limits.ucl ?? '-'} LCL=${limits.lcl ?? '-'}</small>`
+      } else if (limits) {
         const inSpec = (limits.usl == null || val <= limits.usl) && (limits.lsl == null || val >= limits.lsl)
         const inCtrl = (limits.ucl == null || val <= limits.ucl) && (limits.lcl == null || val >= limits.lcl)
-        if (inSpec && inCtrl) html += `<br/><span style="color:#52c41a">✓ 正常</span>`
+        if (inSpec && inCtrl) {
+          html += `<br/><span style="color:#52c41a">✓ 正常</span>`
+        } else if (inSpec && !inCtrl) {
+          html += `<br/><span style="color:#faad14;font-weight:500">⚠ 接近控制限</span>`
+          if (limits.ucl != null && limits.lcl != null) {
+            const range = limits.ucl - limits.lcl
+            const dist = Math.min(Math.abs(val - limits.ucl), Math.abs(val - limits.lcl))
+            html += `<br/><small style="color:#8c8c8c">距控限 ${(dist / range * 100).toFixed(1)}%</small>`
+          }
+        } else if (!inSpec && inCtrl) {
+          html += `<br/><span style="color:#faad14;font-weight:500">⚠ 偏离规格中心</span>`
+        } else {
+          html += `<br/><span style="color:#8c8c8c">待评估</span>`
+        }
       }
       return html
     } },
     legend: {
-      data: ['测量值', '超规格(OOS)', '超控限(OOC)', '警告区'],
-      top: 32, itemGap: 16, textStyle: { fontSize: 11 },
-      icon: 'circle',
-      formatter(name) {
-        const colors = { '测量值': '#1890ff', '超规格(OOS)': '#cf1322', '超控限(OOC)': '#f5222d', '警告区': '#faad14' }
-        const c = colors[name] || '#1890ff'
-        return `{color|●} ${name}`
-      },
-      textStyle: { rich: { color: { color: '#1890ff' } } }
+      data: ['测量值'],
+      top: 32, itemGap: 16, textStyle: { fontSize: 11 }
     },
     grid: { left: 80, right: 45, top: 60, bottom: 55, containLabel: false },
     xAxis: { type: 'category', data: timeSeries, axisLabel: { rotate: 35, fontSize: 10, formatter: formatTimeLabel, interval: Math.floor(timeSeries.length / 15) || 0, margin: 10 }, axisTick: { alignWithLabel: true } },
@@ -390,9 +434,11 @@ function renderXbarR(data) {
 
   const allMarkLines = [...buildMarkLines(limits), ...buildSpecLines(limits)]
   const xbarOosFlags = computeOosFlags(xbarData, limits)
-  const pointColors = getPointColors(xbarData, null, xbarOosFlags, null)
-  const pointSymbols = getPointSymbols(xbarData, null, xbarOosFlags, null)
-  const pointSizes = getPointSizes(xbarData, null, xbarOosFlags, null)
+  const xbarClientOocFlags = computeOocFlags(xbarData, limits)
+  const xbarEffectiveOoc = mergeOocFlags(null, xbarClientOocFlags, xbarData.length)
+  const pointColors = getPointColors(xbarData, xbarEffectiveOoc, xbarOosFlags, null)
+  const pointSymbols = getPointSymbols(xbarData, xbarEffectiveOoc, xbarOosFlags, null)
+  const pointSizes = getPointSizes(xbarData, xbarEffectiveOoc, xbarOosFlags, null)
 
   const xbarOption = {
     title: {
@@ -406,12 +452,29 @@ function renderXbarR(data) {
       const idx = params[0]?.dataIndex ?? 0
       let html = `<strong>${formatTimeLabel(params[0]?.axisValue || '')}</strong>`
       html += `<br/>${params[0].marker}${params[0].seriesName}: <strong>${xbarData[idx]}</strong>`
-      if (xbarOosFlags && xbarOosFlags[idx] === 1) html += `<br/><span style="color:#cf1322;font-weight:600">⚠ 超规格限 (OOS)</span>`
-      else html += `<br/><span style="color:#52c41a">✓ 正常</span>`
+
+      const isOOS = xbarOosFlags && xbarOosFlags[idx] === 1
+      const isOOC = xbarEffectiveOoc && xbarEffectiveOoc[idx] === 1
+
+      if (isOOS) {
+        html += `<br/><span style="color:#cf1322;font-weight:600">⚠ 超规格限 (OOS)</span>`
+      } else if (isOOC) {
+        html += `<br/><span style="color:#f5222d;font-weight:600">⚡ 超控制限 (OOC)</span>`
+      } else if (limits) {
+        const inSpec = (limits.usl == null || xbarData[idx] <= limits.usl) && (limits.lsl == null || xbarData[idx] >= limits.lsl)
+        const inCtrl = (limits.ucl == null || xbarData[idx] <= limits.ucl) && (limits.lcl == null || xbarData[idx] >= limits.lcl)
+        if (inSpec && inCtrl) {
+          html += `<br/><span style="color:#52c41a">✓ 正常</span>`
+        } else if (inSpec && !inCtrl) {
+          html += `<br/><span style="color:#faad14;font-weight:500">⚠ 接近控制限</span>`
+        } else {
+          html += `<br/><span style="color:#8c8c8c">待评估</span>`
+        }
+      }
       return html
     } },
     legend: {
-      data: ['子组均值', '超规格(OOS)'],
+      data: ['子组均值'],
       top: 32, itemGap: 16, textStyle: { fontSize: 11 }
     },
     grid: { left: 80, right: 45, top: 60, bottom: 55, containLabel: false },
