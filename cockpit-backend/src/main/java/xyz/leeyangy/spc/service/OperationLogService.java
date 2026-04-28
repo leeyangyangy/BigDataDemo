@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import xyz.leeyangy.spc.entity.OperationLog;
 import xyz.leeyangy.spc.mapper.OperationLogMapper;
+import xyz.leeyangy.spc.common.IpUtil;
 
 import javax.servlet.http.HttpServletRequest;
 import java.time.LocalDateTime;
@@ -42,7 +43,7 @@ public class OperationLogService extends ServiceImpl<OperationLogMapper, Operati
             logRecord.setCreatedAt(LocalDateTime.now());
 
             if (request != null) {
-                logRecord.setIpAddress(getClientIp(request));
+                logRecord.setIpAddress(IpUtil.getClientIp(request));
                 logRecord.setUserAgent(truncateUserAgent(request.getHeader("User-Agent")));
             }
 
@@ -63,21 +64,6 @@ public class OperationLogService extends ServiceImpl<OperationLogMapper, Operati
                 .le(endDate != null && !endDate.isEmpty(), OperationLog::getCreatedAt, endDate + " 23:59:59")
                 .orderByDesc(OperationLog::getCreatedAt);
         return page(page, wrapper);
-    }
-
-    private String getClientIp(HttpServletRequest request) {
-        if (request == null) return null;
-        String ip = request.getHeader("X-Forwarded-For");
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getHeader("X-Real-IP");
-        }
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getRemoteAddr();
-        }
-        if (ip != null && ip.contains(",")) {
-            ip = ip.split(",")[0].trim();
-        }
-        return ip;
     }
 
     private String truncateUserAgent(String ua) {

@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import xyz.leeyangy.spc.common.IpUtil;
 import xyz.leeyangy.spc.common.JwtUtil;
 import xyz.leeyangy.spc.common.R;
 import xyz.leeyangy.spc.common.StatusCode;
@@ -60,7 +61,7 @@ public class AuthController {
 
         String token = jwtUtil.generateToken(user.getId(), user.getEmpNo(), user.getUsername(), user.getRole());
 
-        String ip = getClientIp(httpRequest);
+        String ip = IpUtil.getClientIp(httpRequest);
         sysUserService.updateLoginInfo(user.getId(), ip);
 
         Map<String, Object> result = new HashMap<>();
@@ -182,7 +183,7 @@ public class AuthController {
             }
             String token = jwtUtil.generateToken(existingUser.getId(), existingUser.getEmpNo(), existingUser.getUsername(), existingUser.getRole());
 
-            String ip = getClientIp(httpRequest);
+            String ip = IpUtil.getClientIp(httpRequest);
             sysUserService.updateLoginInfo(existingUser.getId(), ip);
 
             result.put("bound", true);
@@ -241,7 +242,7 @@ public class AuthController {
 
         String token = jwtUtil.generateToken(user.getId(), user.getEmpNo(), user.getUsername(), user.getRole());
 
-        String ip = getClientIp(httpRequest);
+        String ip = IpUtil.getClientIp(httpRequest);
         sysUserService.updateLoginInfo(user.getId(), ip);
 
         Map<String, Object> result = new HashMap<>();
@@ -256,20 +257,6 @@ public class AuthController {
 
         log.info("[WeCom] 企业微信绑定并登录成功: wecomUserId={} empNo={}", request.getWecomUserId(), user.getEmpNo());
         return R.ok("绑定成功", result);
-    }
-
-    private String getClientIp(HttpServletRequest request) {
-        String ip = request.getHeader("X-Forwarded-For");
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getHeader("X-Real-IP");
-        }
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getRemoteAddr();
-        }
-        if (ip != null && ip.contains(",")) {
-            ip = ip.split(",")[0].trim();
-        }
-        return ip;
     }
 
     @Data

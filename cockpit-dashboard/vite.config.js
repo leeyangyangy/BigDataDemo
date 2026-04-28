@@ -26,13 +26,27 @@ export default defineConfig({
             console.warn('[vite] http proxy error:', req.url, err.message)
           })
           proxy.on('proxyReq', (proxyReq, req, res) => {
-            console.log('Proxying:', req.method, req.url, '->', options.target + req.url)
+            const clientIp = req.socket.remoteAddress || req.connection?.remoteAddress
+            if (clientIp && clientIp !== '127.0.0.1' && clientIp !== '::1' && clientIp !== '::ffff:127.0.0.1') {
+              proxyReq.setHeader('X-Forwarded-For', clientIp)
+              proxyReq.setHeader('X-Real-IP', clientIp)
+            }
+            console.log('Proxying:', req.method, req.url, '->', options.target + req.url, '| client:', clientIp)
           })
         }
       },
       '/actuator': {
         target: 'http://localhost:8080',
-        changeOrigin: true
+        changeOrigin: true,
+        configure: (proxy, options) => {
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            const clientIp = req.socket.remoteAddress || req.connection?.remoteAddress
+            if (clientIp && clientIp !== '127.0.0.1' && clientIp !== '::1') {
+              proxyReq.setHeader('X-Forwarded-For', clientIp)
+              proxyReq.setHeader('X-Real-IP', clientIp)
+            }
+          })
+        }
       }
     }
   },
