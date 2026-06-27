@@ -87,6 +87,19 @@
             <groupId>org.redisson</groupId>
             <artifactId>redisson-spring-boot-starter</artifactId>
             <version>${redisson.version}</version>
+            <exclusions>
+                <!-- 默认适配 Spring Data Redis 3.1+, 但本项目是 Spring Boot 2.7.18 -->
+                <!-- = Spring Data Redis 2.7.x, 需用 redisson-spring-data-27 -->
+                <exclusion>
+                    <groupId>org.redisson</groupId>
+                    <artifactId>redisson-spring-data-31</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.redisson</groupId>
+            <artifactId>redisson-spring-data-27</artifactId>
+            <version>${redisson.version}</version>
         </dependency>
 
         <dependency>

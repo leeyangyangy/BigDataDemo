@@ -22,7 +22,11 @@ services:
       # ----- external Redis -----
       SPRING_REDIS_HOST: ${REDIS_HOST:-192.168.1.106}
       SPRING_REDIS_PORT: ${REDIS_PORT:-6379}
-      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      # SPRING_REDIS_PASSWORD 仅在 Redis 启用了认证时通过 .env 注入；
+      # 此处置空会让 Spring Boot 把 spring.redis.password 当作 "" 而非 null,
+      # Redisson 会对无密码的 Redis 发起 AUTH 并报错,因此默认不设置。
+      # 如需启用,在 .env 中设置 REDIS_PASSWORD 并取消下一行注释:
+      # SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
       # ----- external RabbitMQ -----
       SPRING_RABBITMQ_HOST: ${RABBITMQ_HOST:-192.168.1.106}
       SPRING_RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
@@ -34,6 +38,17 @@ services:
       SPC_AES_IV: ${SPC_AES_IV}
       SPC_JWT_SECRET: ${SPC_JWT_SECRET}
       SPC_ALLOWED_ORIGINS: ${SPC_ALLOWED_ORIGINS}
+      # ----- example -----
+      # ----- secrets (read by application-prod.yml) -----
+      # 以下为本地开发默认值, 生产环境务必在 .env 中覆盖:
+      #   SPC_AES_KEY       需 16/24/32 字节 (AES-128/192/256)
+      #   SPC_AES_IV        需 16 字节 (AES-CBC IV)
+      #   SPC_JWT_SECRET    需 >= 32 字节 (HS256)
+      #   SPC_ALLOWED_ORIGINS  逗号分隔的 CORS 允许来源
+      #   SPC_AES_KEY: ${SPC_AES_KEY:-SPC@2026SecureK1}
+      #   SPC_AES_IV: ${SPC_AES_IV:-SPC2026SecureIV1}
+      #   SPC_JWT_SECRET: ${SPC_JWT_SECRET:-SPC-Process-Control-System-JWT-Secret-Key-2026-Enterprise}
+      #   SPC_ALLOWED_ORIGINS: ${SPC_ALLOWED_ORIGINS:-http://localhost,http://127.0.0.1}
     ports:
       - "8080:8080"
 
