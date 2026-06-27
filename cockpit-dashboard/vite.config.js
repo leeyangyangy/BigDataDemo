@@ -68,9 +68,10 @@ export default defineConfig({
         chunkFileNames: 'assets/js/[name]-[hash].js',
         entryFileNames: 'assets/js/[name]-[hash].js',
         assetFileNames: '[ext]/[name]-[hash].[ext]',
-        manualChunks: {
-          echarts: ['echarts'],
-          vue: ['vue']
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return
+          if (id.includes('echarts') || id.includes('zrender')) return 'echarts'
+          if (id.includes('@vue') || /[/\\]vue[/\\]/.test(id)) return 'vue'
         }
       }
     }
