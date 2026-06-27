@@ -12,6 +12,7 @@ import org.springframework.util.AntPathMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 import xyz.leeyangy.spc.common.JwtUtil;
 import xyz.leeyangy.spc.common.R;
+import xyz.leeyangy.spc.common.constants.RoleConstants;
 import xyz.leeyangy.spc.service.TokenBlacklistService;
 
 import javax.servlet.FilterChain;
@@ -38,7 +39,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String uri = request.getRequestURI();
-        return uri.startsWith("/api/auth/")
+        return uri.equals("/api/auth/login")
+                || uri.equals("/api/auth/wechat-login")
                 || uri.startsWith("/actuator")
                 || uri.equals("/error");
     }
@@ -82,7 +84,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(
                                 empNo, null,
-                                Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + role))
+                                Collections.singletonList(new SimpleGrantedAuthority(RoleConstants.ROLE_PREFIX + role))
                         );
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             }

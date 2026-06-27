@@ -7,6 +7,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 import xyz.leeyangy.spc.common.R;
 import xyz.leeyangy.spc.common.SpcRuleConstants;
+import xyz.leeyangy.spc.common.annotation.OperationLog;
 import xyz.leeyangy.spc.entity.SpcData;
 import xyz.leeyangy.spc.entity.SpcStatResult;
 import xyz.leeyangy.spc.entity.ParamVersion;
@@ -16,6 +17,7 @@ import xyz.leeyangy.spc.service.SpcStatService;
 import xyz.leeyangy.spc.service.SpcRuleEngine;
 import xyz.leeyangy.spc.entity.SpcAlert;
 
+import javax.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -32,6 +34,8 @@ public class SpcChartController {
     private final ParamVersionService paramVersionService;
     private final SpcRuleEngine spcRuleEngine;
 
+    @OperationLog(module = "SPC_CHART", action = "QUERY_CONTROL", targetType = "ParamVersion",
+            content = "'查询控制图: paramId=' + #paramId + ' productId=' + #productId + ' dataPoints=' + #result.data['totalPoints']")
     @GetMapping("/control")
     public R<Map<String, Object>> getControlChart(
             @RequestParam Long paramId,
@@ -129,7 +133,8 @@ public class SpcChartController {
             @RequestParam(required = false) Long productId,
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startTime,
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime,
-            @RequestParam(defaultValue = "100") Integer limit) {
+            @RequestParam(defaultValue = "100") Integer limit,
+            HttpServletRequest request) {
 
         Page<SpcData> pageResult = spcDataService.pageByCondition(
                 new Page<>(1, limit), null, null, productId, paramId, startTime, endTime);
@@ -215,6 +220,8 @@ public class SpcChartController {
         return R.ok(result);
     }
 
+    @OperationLog(module = "SPC_CHART", action = "DETECT_ALERTS", targetType = "ParamVersion",
+            content = "'异常检测: paramId=' + #paramId + ' productId=' + #productId + ' dataPoints=' + #result.data.size() + (#ruleIds != null ? ' rules=' + #ruleIds : '')")
     @GetMapping("/alerts")
     public R<List<Map<String, Object>>> getAlerts(
             @RequestParam Long paramId,

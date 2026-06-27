@@ -1,28 +1,30 @@
 package xyz.leeyangy.spc.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
+import com.baomidou.mybatisplus.extension.service.IService;
 import xyz.leeyangy.spc.entity.SpcAlert;
-import xyz.leeyangy.spc.mapper.SpcAlertMapper;
+import xyz.leeyangy.spc.vo.AlertHandleResultVO;
 
-@Service
-@RequiredArgsConstructor
-public class SpcAlertService extends ServiceImpl<SpcAlertMapper, SpcAlert> {
+import java.time.LocalDateTime;
 
-    public Page<SpcAlert> pageByCondition(Page<SpcAlert> page,
-                                           Long paramVersionId, String batchId,
-                                           String status, String alertType,
-                                           Integer alertLevel) {
-        return page(page, new LambdaQueryWrapper<SpcAlert>()
-                .eq(paramVersionId != null, SpcAlert::getParamVersionId, paramVersionId)
-                .eq(batchId != null, SpcAlert::getBatchId, batchId)
-                .eq(status != null, SpcAlert::getStatus, status)
-                .eq(alertType != null, SpcAlert::getAlertType, alertType)
-                .eq(alertLevel != null, SpcAlert::getAlertLevel, alertLevel)
-                .eq(SpcAlert::getDeleted, 0)
-                .orderByDesc(SpcAlert::getAlertTime));
-    }
+/**
+ * SPC 报警 Service 接口
+ */
+public interface SpcAlertService extends IService<SpcAlert> {
+
+    Page<SpcAlert> pageByCondition(Page<SpcAlert> page,
+                                    Long paramVersionId, Long paramId,
+                                    String status,
+                                    LocalDateTime startTime, LocalDateTime endTime);
+
+    Page<SpcAlert> pageByCondition(Page<SpcAlert> page,
+                                    Long paramVersionId, String batchId,
+                                    String status, String alertType,
+                                    Integer alertLevel);
+
+    boolean confirmAlert(Long id, Long userId);
+
+    AlertHandleResultVO handleAlertWithResult(Long id, String handleResult, String handleRemark, Long userId);
+
+    boolean handleAlert(Long id, String handleResult, String handleRemark, Long userId);
 }

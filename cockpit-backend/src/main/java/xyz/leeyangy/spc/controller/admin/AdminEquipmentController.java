@@ -3,13 +3,19 @@ package xyz.leeyangy.spc.controller.admin;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
+import xyz.leeyangy.spc.common.PageConvert;
 import xyz.leeyangy.spc.common.R;
+import xyz.leeyangy.spc.common.annotation.OperationLog;
+import xyz.leeyangy.spc.dto.EquipmentCreateDTO;
+import xyz.leeyangy.spc.dto.EquipmentUpdateDTO;
 import xyz.leeyangy.spc.entity.Equipment;
 import xyz.leeyangy.spc.service.EquipmentService;
+import xyz.leeyangy.spc.vo.EquipmentVO;
+
+import javax.validation.Valid;
 
 @Slf4j
 @RestController
@@ -20,7 +26,7 @@ public class AdminEquipmentController {
     private final EquipmentService equipmentService;
 
     @GetMapping("/page")
-    public R<Page<Equipment>> page(
+    public R<Page<EquipmentVO>> page(
             @RequestParam(defaultValue = "1") Integer current,
             @RequestParam(defaultValue = "20") Integer size,
             @RequestParam(required = false) String keyword,
@@ -33,18 +39,21 @@ public class AdminEquipmentController {
                         .or().like(Equipment::getEquipModel, keyword))
                 .eq(processId != null, Equipment::getProcessId, processId)
                 .orderByDesc(Equipment::getCreatedAt);
-        return R.ok(equipmentService.page(page, wrapper));
+        return R.ok(PageConvert.convert(equipmentService.page(page, wrapper), EquipmentVO::from));
     }
 
     @GetMapping("/{id}")
-    public R<Equipment> getById(@PathVariable Long id) {
+    public R<EquipmentVO> getById(@PathVariable Long id) {
         Equipment equipment = equipmentService.getById(id);
         if (equipment == null) return R.fail("设备不存在");
-        return R.ok(equipment);
+        return R.ok(EquipmentVO.from(equipment));
     }
 
+    @OperationLog(module = "EQUIPMENT", action = "CREATE", targetType = "Equipment",
+            content = "'创建设备: ' + #result.data.equipCode + ' - ' + #result.data.equipName",
+            targetId = "#result.data.id")
     @PostMapping
-    public R<Equipment> create(@RequestBody EquipmentCreateRequest req) {
+    public R<EquipmentVO> create(@Valid @RequestBody EquipmentCreateDTO req) {
         if (req.getEquipCode() == null || req.getEquipCode().trim().isEmpty()) {
             return R.fail("设备编码不能为空");
         }
@@ -70,11 +79,14 @@ public class AdminEquipmentController {
 
         equipmentService.save(equipment);
         log.info("[Admin] 创建设备: code={} name={}", equipment.getEquipCode(), equipment.getEquipName());
-        return R.ok("创建成功", equipment);
+        return R.ok("创建成功", EquipmentVO.from(equipment));
     }
 
+    @OperationLog(module = "EQUIPMENT", action = "UPDATE", targetType = "Equipment",
+            content = "'更新设备: ' + #result.data.equipCode + ' - ' + #result.data.equipName",
+            targetId = "#id")
     @PutMapping("/{id}")
-    public R<Equipment> update(@PathVariable Long id, @RequestBody EquipmentUpdateRequest req) {
+    public R<EquipmentVO> update(@PathVariable Long id, @Valid @RequestBody EquipmentUpdateDTO req) {
         Equipment exist = equipmentService.getById(id);
         if (exist == null) return R.fail("设备不存在");
 
@@ -97,9 +109,12 @@ public class AdminEquipmentController {
             log.info("[Admin] 更新设备: id={} code={} processId={}", id, exist.getEquipCode(), exist.getProcessId());
         }
 
-        return R.ok("更新成功", equipmentService.getById(id));
+        return R.ok("更新成功", EquipmentVO.from(equipmentService.getById(id)));
     }
 
+    @OperationLog(module = "EQUIPMENT", action = "DELETE", targetType = "Equipment",
+            content = "'删除设备 id=' + #id",
+            targetId = "#id")
     @DeleteMapping("/{id}")
     public R<Void> delete(@PathVariable Long id) {
         Equipment equipment = equipmentService.getById(id);
@@ -109,31 +124,5 @@ public class AdminEquipmentController {
                 .set(Equipment::getDeleted, 1));
         log.info("[Admin] 删除设备: id={} code={}", id, equipment.getEquipCode());
         return R.ok(null);
-    }
-
-    @Data
-    public static class EquipmentCreateRequest {
-        private String equipCode;
-        private String equipName;
-        private String equipType;
-        private String equipModel;
-        private Long lineId;
-        private Long processId;
-        private String location;
-        private String status;
-        private String remark;
-    }
-
-    @Data
-    public static class EquipmentUpdateRequest {
-        private String equipName;
-        private String equipType;
-        private String equipModel;
-        private Long lineId;
-        private Long processId;
-        private Boolean clearProcessId;
-        private String location;
-        private String status;
-        private String remark;
     }
 }

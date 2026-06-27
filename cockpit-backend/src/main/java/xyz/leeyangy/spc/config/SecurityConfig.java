@@ -15,6 +15,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import xyz.leeyangy.spc.common.R;
+import xyz.leeyangy.spc.common.constants.RoleConstants;
 
 import javax.servlet.http.HttpServletResponse;
 import java.util.Map;
@@ -44,11 +45,11 @@ public class SecurityConfig {
                 .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 .and()
                 .authorizeRequests(auth -> auth
-                        .antMatchers("/api/auth/**").permitAll()
                         .antMatchers("/api/auth/logout").authenticated()
                         .antMatchers("/api/auth/change-password").authenticated()
+                        .antMatchers("/api/auth/**").permitAll()
                         .antMatchers(HttpMethod.GET, "/actuator/health").permitAll()
-                        .antMatchers("/actuator/**").hasRole("ADMIN")
+                        .antMatchers("/actuator/**").hasRole(RoleConstants.ADMIN)
                         .antMatchers(HttpMethod.GET, "/api/spc/chart/**").authenticated()
                         .antMatchers(HttpMethod.GET, "/api/spc/stat/**").authenticated()
                         .antMatchers(HttpMethod.GET, "/api/spc/data/**").authenticated()
@@ -58,17 +59,17 @@ public class SecurityConfig {
                         .antMatchers(HttpMethod.GET, "/api/spc/param/**").authenticated()
                         .antMatchers(HttpMethod.GET, "/api/spc/batch/**").authenticated()
                         .antMatchers(HttpMethod.GET, "/api/spc/alert/**").authenticated()
-                        .antMatchers(HttpMethod.POST, "/api/spc/data/upload").hasAnyRole("ADMIN", "ENGINEER", "OPERATOR")
-                        .antMatchers(HttpMethod.POST, "/api/spc/data/batch-upload").hasAnyRole("ADMIN", "ENGINEER", "OPERATOR")
-                        .antMatchers(HttpMethod.POST, "/api/spc/data/import").hasAnyRole("ADMIN", "ENGINEER")
-                        .antMatchers(HttpMethod.GET, "/api/spc/data/export/report").hasAnyRole("ADMIN", "ENGINEER")
-                        .antMatchers(HttpMethod.POST, "/api/spc/stat/calculate").hasAnyRole("ADMIN", "ENGINEER","VIEWER")
-                        .antMatchers(HttpMethod.POST, "/api/spc/param-version/create").hasAnyRole("ADMIN", "ENGINEER")
-                        .antMatchers(HttpMethod.POST, "/api/spc/batch").hasAnyRole("ADMIN", "ENGINEER")
-                        .antMatchers(HttpMethod.POST, "/api/spc/product").hasRole("ADMIN")
-                        .antMatchers("/api/admin/**").hasRole("ADMIN")
+                        .antMatchers(HttpMethod.POST, "/api/spc/data/upload").hasAnyRole(RoleConstants.ADMIN, RoleConstants.ENGINEER, RoleConstants.OPERATOR)
+                        .antMatchers(HttpMethod.POST, "/api/spc/data/batch-upload").hasAnyRole(RoleConstants.ADMIN, RoleConstants.ENGINEER, RoleConstants.OPERATOR)
+                        .antMatchers(HttpMethod.POST, "/api/spc/data/import").hasAnyRole(RoleConstants.ADMIN, RoleConstants.ENGINEER)
+                        .antMatchers(HttpMethod.GET, "/api/spc/data/export/report").hasAnyRole(RoleConstants.ADMIN, RoleConstants.ENGINEER)
+                        .antMatchers(HttpMethod.POST, "/api/spc/stat/calculate").hasAnyRole(RoleConstants.ADMIN, RoleConstants.ENGINEER, RoleConstants.VIEWER)
+                        .antMatchers(HttpMethod.POST, "/api/spc/param-version/create").hasAnyRole(RoleConstants.ADMIN, RoleConstants.ENGINEER)
+                        .antMatchers(HttpMethod.POST, "/api/spc/batch").hasAnyRole(RoleConstants.ADMIN, RoleConstants.ENGINEER)
+                        .antMatchers(HttpMethod.POST, "/api/spc/product").hasRole(RoleConstants.ADMIN)
+                        .antMatchers("/api/admin/**").hasRole(RoleConstants.ADMIN)
                         .antMatchers(HttpMethod.PUT, "/api/spc/alert/**/ack").authenticated()
-                        .antMatchers(HttpMethod.PUT, "/api/spc/alert/**/resolve").hasAnyRole("ADMIN", "ENGINEER")
+                        .antMatchers(HttpMethod.PUT, "/api/spc/alert/**/resolve").hasAnyRole(RoleConstants.ADMIN, RoleConstants.ENGINEER)
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex

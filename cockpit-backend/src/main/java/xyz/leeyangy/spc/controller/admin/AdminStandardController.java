@@ -3,14 +3,20 @@ package xyz.leeyangy.spc.controller.admin;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
+import xyz.leeyangy.spc.common.PageConvert;
 import xyz.leeyangy.spc.common.R;
 import xyz.leeyangy.spc.common.StatusCode;
+import xyz.leeyangy.spc.common.annotation.OperationLog;
+import xyz.leeyangy.spc.dto.ParamCreateDTO;
+import xyz.leeyangy.spc.dto.ParamUpdateDTO;
 import xyz.leeyangy.spc.entity.Param;
 import xyz.leeyangy.spc.service.ParamService;
+import xyz.leeyangy.spc.vo.ParamVO;
+
+import javax.validation.Valid;
 
 @Slf4j
 @RestController
@@ -21,7 +27,7 @@ public class AdminStandardController {
     private final ParamService paramService;
 
     @GetMapping("/page")
-    public R<Page<Param>> page(
+    public R<Page<ParamVO>> page(
             @RequestParam(defaultValue = "1") Integer current,
             @RequestParam(defaultValue = "20") Integer size,
             @RequestParam(required = false) String keyword,
@@ -33,20 +39,23 @@ public class AdminStandardController {
                         .or().like(Param::getParamName, keyword))
                 .eq(processId != null, Param::getProcessId, processId)
                 .orderByDesc(Param::getCreatedAt);
-        return R.ok(paramService.page(page, wrapper));
+        return R.ok(PageConvert.convert(paramService.page(page, wrapper), ParamVO::from));
     }
 
     @GetMapping("/{id}")
-    public R<Param> getById(@PathVariable Long id) {
+    public R<ParamVO> getById(@PathVariable Long id) {
         Param param = paramService.getById(id);
         if (param == null) {
             return R.fail(StatusCode.DATA_NOT_FOUND, "工艺参数不存在");
         }
-        return R.ok(param);
+        return R.ok(ParamVO.from(param));
     }
 
+    @OperationLog(module = "PARAM", action = "CREATE", targetType = "Param",
+            content = "'创建工艺参数: ' + #result.data.paramCode + ' - ' + #result.data.paramName",
+            targetId = "#result.data.id")
     @PostMapping
-    public R<Param> create(@RequestBody CreateRequest req) {
+    public R<ParamVO> create(@Valid @RequestBody ParamCreateDTO req) {
         long count = paramService.count(new LambdaQueryWrapper<Param>()
                 .eq(Param::getParamCode, req.getParamCode())
                 .eq(Param::getDeleted, 0));
@@ -61,11 +70,14 @@ public class AdminStandardController {
         param.setStatus(req.getStatus() != null ? req.getStatus() : 1);
         paramService.save(param);
         log.info("[Admin] 创建工艺参数: id={} code={}", param.getId(), param.getParamCode());
-        return R.ok(param);
+        return R.ok(ParamVO.from(param));
     }
 
+    @OperationLog(module = "PARAM", action = "UPDATE", targetType = "Param",
+            content = "'更新工艺参数: ' + #result.data.paramCode + ' - ' + #result.data.paramName",
+            targetId = "#id")
     @PutMapping("/{id}")
-    public R<Param> update(@PathVariable Long id, @RequestBody UpdateRequest req) {
+    public R<ParamVO> update(@PathVariable Long id, @Valid @RequestBody ParamUpdateDTO req) {
         Param exist = paramService.getById(id);
         if (exist == null) {
             return R.fail(StatusCode.DATA_NOT_FOUND, "工艺参数不存在");
@@ -91,11 +103,14 @@ public class AdminStandardController {
 
         paramService.update(wrapper);
         log.info("[Admin] 更新工艺参数: id={} code={}", id, exist.getParamCode());
-        return R.ok(paramService.getById(id));
+        return R.ok(ParamVO.from(paramService.getById(id)));
     }
 
+    @OperationLog(module = "PARAM", action = "DUPLICATE", targetType = "Param",
+            content = "'复制工艺参数: ' + #result.data.paramCode",
+            targetId = "#result.data.id")
     @PostMapping("/{id}/duplicate")
-    public R<Param> duplicate(@PathVariable Long id) {
+    public R<ParamVO> duplicate(@PathVariable Long id) {
         Param source = paramService.getById(id);
         if (source == null) {
             return R.fail(StatusCode.DATA_NOT_FOUND, "工艺参数不存在");
@@ -117,7 +132,7 @@ public class AdminStandardController {
 
         paramService.save(copy);
         log.info("[Admin] 复制工艺参数: {} -> {}", source.getParamCode(), newCode);
-        return R.ok("复制成功", copy);
+        return R.ok("复制成功", ParamVO.from(copy));
     }
 
     private String generateUniqueParamCode(String baseCode) {
@@ -144,6 +159,9 @@ public class AdminStandardController {
         return baseName + " (copy_" + System.currentTimeMillis() + ")";
     }
 
+    @OperationLog(module = "PARAM", action = "DELETE", targetType = "Param",
+            content = "'删除工艺参数 id=' + #id",
+            targetId = "#id")
     @DeleteMapping("/{id}")
     public R<Void> delete(@PathVariable Long id) {
         Param exist = paramService.getById(id);
@@ -155,25 +173,5 @@ public class AdminStandardController {
                 .set(Param::getDeleted, 1));
         log.info("[Admin] 删除工艺参数: id={} code={}", id, exist.getParamCode());
         return R.ok(null);
-    }
-
-    @Data
-    public static class CreateRequest {
-        private String paramCode;
-        private String paramName;
-        private Long processId;
-        private String unit;
-        private String dataType;
-        private Integer status;
-    }
-
-    @Data
-    public static class UpdateRequest {
-        private String paramCode;
-        private String paramName;
-        private Long processId;
-        private String unit;
-        private String dataType;
-        private Integer status;
     }
 }

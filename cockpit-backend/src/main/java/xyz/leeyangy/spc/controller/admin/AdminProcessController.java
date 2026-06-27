@@ -3,14 +3,20 @@ package xyz.leeyangy.spc.controller.admin;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
+import xyz.leeyangy.spc.common.PageConvert;
 import xyz.leeyangy.spc.common.R;
 import xyz.leeyangy.spc.common.StatusCode;
+import xyz.leeyangy.spc.common.annotation.OperationLog;
+import xyz.leeyangy.spc.dto.ProcessCreateDTO;
+import xyz.leeyangy.spc.dto.ProcessUpdateDTO;
 import xyz.leeyangy.spc.entity.Process;
 import xyz.leeyangy.spc.service.ProcessService;
+import xyz.leeyangy.spc.vo.ProcessVO;
+
+import javax.validation.Valid;
 
 @Slf4j
 @RestController
@@ -21,7 +27,7 @@ public class AdminProcessController {
     private final ProcessService processService;
 
     @GetMapping("/page")
-    public R<Page<Process>> page(
+    public R<Page<ProcessVO>> page(
             @RequestParam(defaultValue = "1") Integer current,
             @RequestParam(defaultValue = "20") Integer size,
             @RequestParam(required = false) String keyword,
@@ -36,32 +42,35 @@ public class AdminProcessController {
                 .eq(status != null, Process::getStatus, status)
                 .orderByAsc(Process::getSortOrder)
                 .orderByDesc(Process::getCreatedAt);
-        return R.ok(processService.page(page, wrapper));
+        return R.ok(PageConvert.convert(processService.page(page, wrapper), ProcessVO::from));
     }
 
     @GetMapping("/{id}")
-    public R<Process> getById(@PathVariable Long id) {
+    public R<ProcessVO> getById(@PathVariable Long id) {
         Process process = processService.getById(id);
         if (process == null) {
             return R.fail(StatusCode.DATA_NOT_FOUND, "工序不存在");
         }
-        return R.ok(process);
+        return R.ok(ProcessVO.from(process));
     }
 
+    @OperationLog(module = "PROCESS", action = "CREATE", targetType = "Process",
+            content = "'创建工序: ' + #result.data.processCode + ' - ' + #result.data.processName",
+            targetId = "#result.data.id")
     @PostMapping
-    public R<Process> create(@RequestBody ProcessCreateRequest req) {
+    public R<ProcessVO> create(@Valid @RequestBody ProcessCreateDTO req) {
         if (req.getProcessCode() == null || req.getProcessCode().trim().isEmpty()) {
-            return R.fail(StatusCode.PARAM_REQUIRED, "工序编码不能为空");
+            return R.fail("工序编码不能为空");
         }
         if (req.getProcessName() == null || req.getProcessName().trim().isEmpty()) {
-            return R.fail(StatusCode.PARAM_REQUIRED, "工序名称不能为空");
+            return R.fail("工序名称不能为空");
         }
 
         long count = processService.count(new LambdaQueryWrapper<Process>()
                 .eq(Process::getProcessCode, req.getProcessCode())
                 .eq(Process::getDeleted, 0));
         if (count > 0) {
-            return R.fail(StatusCode.CONFLICT, "工序编码已存在");
+            return R.fail("工序编码已存在");
         }
 
         Process process = new Process();
@@ -75,14 +84,17 @@ public class AdminProcessController {
 
         processService.save(process);
         log.info("[Admin] 创建工序: code={} name={}", process.getProcessCode(), process.getProcessName());
-        return R.ok("创建成功", process);
+        return R.ok("创建成功", ProcessVO.from(process));
     }
 
+    @OperationLog(module = "PROCESS", action = "UPDATE", targetType = "Process",
+            content = "'更新工序: ' + #result.data.processCode + ' - ' + #result.data.processName",
+            targetId = "#id")
     @PutMapping("/{id}")
-    public R<Process> update(@PathVariable Long id, @RequestBody ProcessUpdateRequest req) {
+    public R<ProcessVO> update(@PathVariable Long id, @Valid @RequestBody ProcessUpdateDTO req) {
         Process existProcess = processService.getById(id);
         if (existProcess == null) {
-            return R.fail(StatusCode.DATA_NOT_FOUND, "工序不存在");
+            return R.fail("工序不存在");
         }
 
         if (req.getProcessName() != null) {
@@ -106,14 +118,17 @@ public class AdminProcessController {
 
         processService.updateById(existProcess);
         log.info("[Admin] 更新工序: id={} code={}", id, existProcess.getProcessCode());
-        return R.ok("更新成功", existProcess);
+        return R.ok("更新成功", ProcessVO.from(existProcess));
     }
 
+    @OperationLog(module = "PROCESS", action = "DUPLICATE", targetType = "Process",
+            content = "'复制工序: ' + #result.data.processCode",
+            targetId = "#result.data.id")
     @PostMapping("/{id}/duplicate")
-    public R<Process> duplicate(@PathVariable Long id) {
+    public R<ProcessVO> duplicate(@PathVariable Long id) {
         Process source = processService.getById(id);
         if (source == null) {
-            return R.fail(StatusCode.DATA_NOT_FOUND, "工序不存在");
+            return R.fail("工序不存在");
         }
 
         String baseCode = source.getProcessCode();
@@ -132,7 +147,7 @@ public class AdminProcessController {
 
         processService.save(copy);
         log.info("[Admin] 复制工序: {} -> {}", source.getProcessCode(), newCode);
-        return R.ok("复制成功", copy);
+        return R.ok("复制成功", ProcessVO.from(copy));
     }
 
     private String generateUniqueCode(String baseCode, String type) {
@@ -159,37 +174,19 @@ public class AdminProcessController {
         return baseName + " (copy_" + System.currentTimeMillis() + ")";
     }
 
+    @OperationLog(module = "PROCESS", action = "DELETE", targetType = "Process",
+            content = "'删除工序 id=' + #id",
+            targetId = "#id")
     @DeleteMapping("/{id}")
     public R<Void> delete(@PathVariable Long id) {
         Process process = processService.getById(id);
         if (process == null) {
-            return R.fail(StatusCode.DATA_NOT_FOUND, "工序不存在");
+            return R.fail("工序不存在");
         }
         processService.update(new LambdaUpdateWrapper<Process>()
                 .eq(Process::getId, id)
                 .set(Process::getDeleted, 1));
         log.info("[Admin] 删除工序: id={} code={}", id, process.getProcessCode());
         return R.ok(null);
-    }
-
-    @Data
-    public static class ProcessCreateRequest {
-        private String processCode;
-        private String processName;
-        private String processType;
-        private Long workshopId;
-        private String description;
-        private Integer status;
-        private Integer sortOrder;
-    }
-
-    @Data
-    public static class ProcessUpdateRequest {
-        private String processName;
-        private String processType;
-        private Long workshopId;
-        private String description;
-        private Integer status;
-        private Integer sortOrder;
     }
 }

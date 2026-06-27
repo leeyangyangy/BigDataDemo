@@ -42,6 +42,18 @@ public class SpcAlert extends BaseEntity {
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime acknowledgedAt;
 
+    private Long confirmedBy;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime confirmedAt;
+
+    private String handleResult;
+    private String handleRemark;
+    private Long handledBy;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime handledAt;
+
     private String resolveRemark;
     private String sourceChannel;
     private String mqMessageId;

@@ -4,9 +4,11 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import xyz.leeyangy.spc.common.PageConvert;
 import xyz.leeyangy.spc.common.R;
 import xyz.leeyangy.spc.entity.Param;
 import xyz.leeyangy.spc.service.ParamService;
+import xyz.leeyangy.spc.vo.ParamVO;
 
 @RestController
 @RequestMapping("/api/spc/param")
@@ -16,7 +18,7 @@ public class ParamController {
     private final ParamService paramService;
 
     @GetMapping("/page")
-    public R<Page<Param>> page(
+    public R<Page<ParamVO>> page(
             @RequestParam(defaultValue = "1") Integer current,
             @RequestParam(defaultValue = "20") Integer size,
             @RequestParam(required = false) String keyword,
@@ -28,11 +30,11 @@ public class ParamController {
                         .or().like(Param::getParamName, keyword))
                 .eq(processId != null, Param::getProcessId, processId)
                 .orderByDesc(Param::getCreatedAt);
-        return R.ok(paramService.page(new Page<>(current, size), wrapper));
+        return R.ok(PageConvert.convert(paramService.page(new Page<>(current, size), wrapper), ParamVO::from));
     }
 
     @GetMapping("/{id}")
-    public R<Param> getById(@PathVariable Long id) {
-        return R.ok(paramService.getById(id));
+    public R<ParamVO> getById(@PathVariable Long id) {
+        return R.ok(ParamVO.from(paramService.getById(id)));
     }
 }

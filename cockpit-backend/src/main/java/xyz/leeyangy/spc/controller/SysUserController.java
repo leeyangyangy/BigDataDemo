@@ -3,15 +3,23 @@ package xyz.leeyangy.spc.controller;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import xyz.leeyangy.spc.common.PageConvert;
 import xyz.leeyangy.spc.common.R;
 import xyz.leeyangy.spc.common.StatusCode;
+import xyz.leeyangy.spc.common.annotation.OperationLog;
+import xyz.leeyangy.spc.common.constants.RoleConstants;
+import xyz.leeyangy.spc.dto.UserCreateDTO;
+import xyz.leeyangy.spc.dto.UserStatusDTO;
+import xyz.leeyangy.spc.dto.UserUpdateDTO;
 import xyz.leeyangy.spc.entity.SysUser;
 import xyz.leeyangy.spc.service.SysUserService;
+import xyz.leeyangy.spc.vo.SysUserVO;
+
+import javax.validation.Valid;
 
 @Slf4j
 @RestController
@@ -23,7 +31,7 @@ public class SysUserController {
     private final PasswordEncoder passwordEncoder;
 
     @GetMapping("/page")
-    public R<Page<SysUser>> page(
+    public R<Page<SysUserVO>> page(
             @RequestParam(defaultValue = "1") Integer current,
             @RequestParam(defaultValue = "20") Integer size,
             @RequestParam(required = false) String keyword,
@@ -41,21 +49,23 @@ public class SysUserController {
                 .eq(status != null, SysUser::getStatus, status)
                 .orderByDesc(SysUser::getCreatedAt);
 
-        return R.ok(sysUserService.page(page, wrapper));
+        return R.ok(PageConvert.convert(sysUserService.page(page, wrapper), SysUserVO::from));
     }
 
     @GetMapping("/{id}")
-    public R<SysUser> getById(@PathVariable Long id) {
+    public R<SysUserVO> getById(@PathVariable Long id) {
         SysUser user = sysUserService.getById(id);
         if (user == null) {
             return R.fail(StatusCode.DATA_NOT_FOUND, "用户不存在");
         }
-        user.setPassword(null);
-        return R.ok(user);
+        return R.ok(SysUserVO.from(user));
     }
 
+    @OperationLog(module = "USER", action = "CREATE", targetType = "SysUser",
+            content = "'创建用户: ' + #result.data.empNo + ' - ' + #result.data.username + ' (角色:' + #result.data.role + ')'",
+            targetId = "#result.data.id")
     @PostMapping
-    public R<SysUser> create(@RequestBody UserCreateRequest req) {
+    public R<SysUserVO> create(@Valid @RequestBody UserCreateDTO req) {
         if (req.getEmpNo() == null || req.getEmpNo().trim().isEmpty()) {
             return R.fail(StatusCode.PARAM_REQUIRED, "工号不能为空");
         }
@@ -79,18 +89,20 @@ public class SysUserController {
         user.setPassword(passwordEncoder.encode(req.getPassword()));
         user.setEmail(req.getEmail());
         user.setPhone(req.getPhone());
-        user.setRole(req.getRole() != null ? req.getRole() : "OPERATOR");
+        user.setRole(req.getRole() != null ? req.getRole() : RoleConstants.OPERATOR);
         user.setWorkshopId(req.getWorkshopId());
         user.setStatus(req.getStatus() != null ? req.getStatus() : 1);
 
         sysUserService.save(user);
-        user.setPassword(null);
         log.info("[Admin] 创建用户: empNo={} username={}", user.getEmpNo(), user.getUsername());
-        return R.ok("创建成功", user);
+        return R.ok("创建成功", SysUserVO.from(user));
     }
 
+    @OperationLog(module = "USER", action = "UPDATE", targetType = "SysUser",
+            content = "'更新用户 id=' + #id",
+            targetId = "#id")
     @PutMapping("/{id}")
-    public R<SysUser> update(@PathVariable Long id, @RequestBody UserUpdateRequest req) {
+    public R<SysUserVO> update(@PathVariable Long id, @Valid @RequestBody UserUpdateDTO req) {
         SysUser existUser = sysUserService.getById(id);
         if (existUser == null) {
             return R.fail(StatusCode.DATA_NOT_FOUND, "用户不存在");
@@ -127,12 +139,14 @@ public class SysUserController {
         log.info("[Admin] 更新用户: id={} empNo={}", id, existUser.getEmpNo());
 
         SysUser updated = sysUserService.getById(id);
-        updated.setPassword(null);
-        return R.ok("更新成功", updated);
+        return R.ok("更新成功", SysUserVO.from(updated));
     }
 
+    @OperationLog(module = "USER", action = "STATUS_CHANGE", targetType = "SysUser",
+            content = "'用户状态变更 id=' + #id",
+            targetId = "#id")
     @PutMapping("/{id}/status")
-    public R<Void> toggleStatus(@PathVariable Long id, @RequestBody StatusRequest req) {
+    public R<Void> toggleStatus(@PathVariable Long id, @Valid @RequestBody UserStatusDTO req) {
         SysUser user = sysUserService.getById(id);
         if (user == null) {
             return R.fail(StatusCode.DATA_NOT_FOUND, "用户不存在");
@@ -141,12 +155,16 @@ public class SysUserController {
         if (newStatus == null) {
             newStatus = user.getStatus() == 1 ? 0 : 1;
         }
+        String statusDesc = newStatus == 1 ? "启用" : "停用";
         user.setStatus(newStatus);
         sysUserService.updateById(user);
         log.info("[Admin] 用户状态变更: id={} status={}", id, newStatus);
         return R.ok(null);
     }
 
+    @OperationLog(module = "USER", action = "DELETE", targetType = "SysUser",
+            content = "'删除用户 id=' + #id",
+            targetId = "#id")
     @DeleteMapping("/{id}")
     public R<Void> delete(@PathVariable Long id) {
         SysUser user = sysUserService.getById(id);
@@ -158,34 +176,5 @@ public class SysUserController {
                 .set(SysUser::getDeleted, 1));
         log.info("[Admin] 删除用户: id={} empNo={}", id, user.getEmpNo());
         return R.ok(null);
-    }
-
-    @Data
-    public static class UserCreateRequest {
-        private String empNo;
-        private String username;
-        private String password;
-        private String email;
-        private String phone;
-        private String role;
-        private Long workshopId;
-        private Integer status;
-    }
-
-    @Data
-    public static class UserUpdateRequest {
-        private String username;
-        private String password;
-        private String email;
-        private String phone;
-        private String role;
-        private Long workshopId;
-        private boolean clearWorkshop;
-        private Integer status;
-    }
-
-    @Data
-    public static class StatusRequest {
-        private Integer status;
     }
 }

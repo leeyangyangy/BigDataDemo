@@ -3,14 +3,20 @@ package xyz.leeyangy.spc.controller.admin;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
+import xyz.leeyangy.spc.common.PageConvert;
 import xyz.leeyangy.spc.common.R;
 import xyz.leeyangy.spc.common.StatusCode;
+import xyz.leeyangy.spc.common.annotation.OperationLog;
+import xyz.leeyangy.spc.dto.ProductCreateDTO;
+import xyz.leeyangy.spc.dto.ProductUpdateDTO;
 import xyz.leeyangy.spc.entity.Product;
 import xyz.leeyangy.spc.service.ProductService;
+import xyz.leeyangy.spc.vo.ProductVO;
+
+import javax.validation.Valid;
 
 @Slf4j
 @RestController
@@ -21,7 +27,7 @@ public class AdminProductController {
     private final ProductService productService;
 
     @GetMapping("/page")
-    public R<Page<Product>> page(
+    public R<Page<ProductVO>> page(
             @RequestParam(defaultValue = "1") Integer current,
             @RequestParam(defaultValue = "20") Integer size,
             @RequestParam(required = false) String keyword,
@@ -34,20 +40,23 @@ public class AdminProductController {
                         .or().like(Product::getProductType, keyword))
                 .eq(status != null, Product::getStatus, status)
                 .orderByDesc(Product::getCreatedAt);
-        return R.ok(productService.page(page, wrapper));
+        return R.ok(PageConvert.convert(productService.page(page, wrapper), ProductVO::from));
     }
 
     @GetMapping("/{id}")
-    public R<Product> getById(@PathVariable Long id) {
+    public R<ProductVO> getById(@PathVariable Long id) {
         Product product = productService.getById(id);
         if (product == null) {
             return R.fail(StatusCode.DATA_NOT_FOUND, "产品不存在");
         }
-        return R.ok(product);
+        return R.ok(ProductVO.from(product));
     }
 
+    @OperationLog(module = "PRODUCT", action = "CREATE", targetType = "Product",
+            content = "'创建产品: ' + #result.data.productCode + ' - ' + #result.data.productName",
+            targetId = "#result.data.id")
     @PostMapping
-    public R<Product> create(@RequestBody ProductCreateRequest req) {
+    public R<ProductVO> create(@Valid @RequestBody ProductCreateDTO req) {
         if (req.getProductCode() == null || req.getProductCode().trim().isEmpty()) {
             return R.fail(StatusCode.PARAM_REQUIRED, "产品编码不能为空");
         }
@@ -71,11 +80,14 @@ public class AdminProductController {
 
         productService.save(product);
         log.info("[Admin] 创建产品: code={} name={}", product.getProductCode(), product.getProductName());
-        return R.ok("创建成功", product);
+        return R.ok("创建成功", ProductVO.from(product));
     }
 
+    @OperationLog(module = "PRODUCT", action = "UPDATE", targetType = "Product",
+            content = "'更新产品: ' + #result.data.productCode + ' - ' + #result.data.productName",
+            targetId = "#id")
     @PutMapping("/{id}")
-    public R<Product> update(@PathVariable Long id, @RequestBody ProductUpdateRequest req) {
+    public R<ProductVO> update(@PathVariable Long id, @Valid @RequestBody ProductUpdateDTO req) {
         Product existProduct = productService.getById(id);
         if (existProduct == null) {
             return R.fail(StatusCode.DATA_NOT_FOUND, "产品不存在");
@@ -96,9 +108,12 @@ public class AdminProductController {
 
         productService.updateById(existProduct);
         log.info("[Admin] 更新产品: id={} code={}", id, existProduct.getProductCode());
-        return R.ok("更新成功", existProduct);
+        return R.ok("更新成功", ProductVO.from(existProduct));
     }
 
+    @OperationLog(module = "PRODUCT", action = "DELETE", targetType = "Product",
+            content = "'删除产品 id=' + #id",
+            targetId = "#id")
     @DeleteMapping("/{id}")
     public R<Void> delete(@PathVariable Long id) {
         Product product = productService.getById(id);
@@ -110,22 +125,5 @@ public class AdminProductController {
                 .set(Product::getDeleted, 1));
         log.info("[Admin] 删除产品: id={} code={}", id, product.getProductCode());
         return R.ok(null);
-    }
-
-    @Data
-    public static class ProductCreateRequest {
-        private String productCode;
-        private String productName;
-        private String productType;
-        private String specification;
-        private Integer status;
-    }
-
-    @Data
-    public static class ProductUpdateRequest {
-        private String productName;
-        private String productType;
-        private String specification;
-        private Integer status;
     }
 }

@@ -1,14 +1,19 @@
 package xyz.leeyangy.spc.controller.admin;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
+import xyz.leeyangy.spc.common.PageConvert;
 import xyz.leeyangy.spc.common.R;
+import xyz.leeyangy.spc.dto.ParamVersionCreateDTO;
+import xyz.leeyangy.spc.dto.ParamVersionUpdateDTO;
 import xyz.leeyangy.spc.entity.ParamVersion;
 import xyz.leeyangy.spc.service.ParamVersionService;
 import xyz.leeyangy.spc.service.StandardChangeLogService;
+import xyz.leeyangy.spc.vo.ParamVersionVO;
+
+import javax.validation.Valid;
 
 @Slf4j
 @RestController
@@ -20,21 +25,21 @@ public class AdminParamVersionController {
     private final StandardChangeLogService changeLogService;
 
     @GetMapping("/page")
-    public R<Page<ParamVersion>> pageVersions(
+    public R<Page<ParamVersionVO>> pageVersions(
             @RequestParam(defaultValue = "1") Integer current,
             @RequestParam(defaultValue = "10") Integer size,
             @RequestParam(required = false) Long paramId,
             @RequestParam(required = false) Long productId) {
-        return R.ok(paramVersionService.pageVersions(new Page<>(current, size), paramId, productId));
+        return R.ok(PageConvert.convert(paramVersionService.pageVersions(new Page<>(current, size), paramId, productId), ParamVersionVO::from));
     }
 
     @GetMapping("/{id}")
-    public R<ParamVersion> getById(@PathVariable Long id) {
-        return R.ok(paramVersionService.getById(id));
+    public R<ParamVersionVO> getById(@PathVariable Long id) {
+        return R.ok(ParamVersionVO.from(paramVersionService.getById(id)));
     }
 
     @PostMapping("/create")
-    public R<ParamVersion> createNewVersion(@RequestBody CreateRequest req) {
+    public R<ParamVersionVO> createNewVersion(@Valid @RequestBody ParamVersionCreateDTO req) {
         ParamVersion newVersion = new ParamVersion();
         newVersion.setParamId(req.getParamId());
         newVersion.setProductId(req.getProductId());
@@ -61,7 +66,7 @@ public class AdminParamVersionController {
                 true);
 
         log.info("[Admin] 创建标准版本: id={} paramId={}", created.getId(), created.getParamId());
-        return R.ok(created);
+        return R.ok(ParamVersionVO.from(created));
     }
 
     @PutMapping("/{id}/enable")
@@ -95,7 +100,7 @@ public class AdminParamVersionController {
     }
 
     @PutMapping("/{id}")
-    public R<Boolean> updateVersion(@PathVariable Long id, @RequestBody UpdateRequest req) {
+    public R<Boolean> updateVersion(@PathVariable Long id, @Valid @RequestBody ParamVersionUpdateDTO req) {
         log.info("[Admin] 更新标准版本: id={}", id);
 
         ParamVersion updated = new ParamVersion();
@@ -128,35 +133,5 @@ public class AdminParamVersionController {
     public R<Boolean> deleteVersion(@PathVariable Long id) {
         log.info("[Admin] 删除标准版本: id={}", id);
         return R.ok(paramVersionService.deleteVersion(id));
-    }
-
-    @Data
-    public static class CreateRequest {
-        private Long paramId;
-        private Long productId;
-        private java.math.BigDecimal usl;
-        private java.math.BigDecimal lsl;
-        private java.math.BigDecimal target;
-        private java.math.BigDecimal ucl;
-        private java.math.BigDecimal lcl;
-        private java.math.BigDecimal cl;
-        private String chartType;
-        private String changeReason;
-        private String changeType;
-        private Integer subgroupSize;
-    }
-
-    @Data
-    public static class UpdateRequest {
-        private java.math.BigDecimal usl;
-        private java.math.BigDecimal lsl;
-        private java.math.BigDecimal target;
-        private java.math.BigDecimal ucl;
-        private java.math.BigDecimal lcl;
-        private java.math.BigDecimal cl;
-        private String chartType;
-        private Integer status;
-        private Integer subgroupSize;
-        private String changeReason;
     }
 }

@@ -1,66 +1,34 @@
 package xyz.leeyangy.spc.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
+import com.baomidou.mybatisplus.extension.service.IService;
+import lombok.Data;
 import xyz.leeyangy.spc.entity.ProductProcess;
-import xyz.leeyangy.spc.mapper.ProductProcessMapper;
+import xyz.leeyangy.spc.vo.ProcessBindingVO;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
-@Service
-@RequiredArgsConstructor
-public class ProductProcessService extends ServiceImpl<ProductProcessMapper, ProductProcess> {
+/**
+ * 产品工序绑定 Service 接口
+ */
+public interface ProductProcessService extends IService<ProductProcess> {
 
-    public List<Long> getProcessIdsByProductId(Long productId) {
-        return list(new LambdaQueryWrapper<ProductProcess>()
-                .eq(ProductProcess::getProductId, productId)
-                .orderByAsc(ProductProcess::getSortOrder))
-                .stream()
-                .map(ProductProcess::getProcessId)
-                .collect(Collectors.toList());
-    }
+    List<Long> getProcessIdsByProductId(Long productId);
 
-    public List<ProductProcess> getBindingsByProductId(Long productId) {
-        return list(new LambdaQueryWrapper<ProductProcess>()
-                .eq(ProductProcess::getProductId, productId)
-                .orderByAsc(ProductProcess::getSortOrder));
-    }
+    List<ProductProcess> getBindingsByProductId(Long productId);
 
-    public boolean bindProcesses(Long productId, List<BindItem> items) {
-        baseMapper.physicalDeleteByProductId(productId);
-        if (items == null || items.isEmpty()) return true;
-        int sort = 0;
-        for (BindItem item : items) {
-            ProductProcess pp = new ProductProcess();
-            pp.setProductId(productId);
-            pp.setProcessId(item.getProcessId());
-            pp.setSortOrder(sort++);
-            save(pp);
-        }
-        return true;
-    }
+    List<ProcessBindingVO> getProductProcessBindings(Long productId);
 
-    public boolean bindProcess(Long productId, Long processId) {
-        long count = count(new LambdaQueryWrapper<ProductProcess>()
-                .eq(ProductProcess::getProductId, productId)
-                .eq(ProductProcess::getProcessId, processId));
-        if (count > 0) return true;
-        ProductProcess pp = new ProductProcess();
-        pp.setProductId(productId);
-        pp.setProcessId(processId);
-        pp.setSortOrder((int) count(new LambdaQueryWrapper<ProductProcess>().eq(ProductProcess::getProductId, productId)));
-        return save(pp);
-    }
+    boolean bindProcesses(Long productId, List<BindItem> items);
 
-    public boolean unbindProcess(Long productId, Long processId) {
-        return baseMapper.physicalDelete(productId, processId) > 0;
-    }
+    boolean bindProcess(Long productId, Long processId);
 
-    @lombok.Data
-    public static class BindItem {
+    boolean unbindProcess(Long productId, Long processId);
+
+    /**
+     * 工序绑定项
+     */
+    @Data
+    class BindItem {
         private Long processId;
     }
 }

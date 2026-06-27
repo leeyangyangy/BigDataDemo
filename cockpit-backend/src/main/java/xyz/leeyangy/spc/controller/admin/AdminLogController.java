@@ -5,10 +5,11 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
+import xyz.leeyangy.spc.common.PageConvert;
 import xyz.leeyangy.spc.common.R;
 import xyz.leeyangy.spc.entity.StandardChangeLog;
-import xyz.leeyangy.spc.service.ParamService;
 import xyz.leeyangy.spc.service.StandardChangeLogService;
+import xyz.leeyangy.spc.vo.StandardChangeLogVO;
 
 @Slf4j
 @RestController
@@ -17,10 +18,9 @@ import xyz.leeyangy.spc.service.StandardChangeLogService;
 public class AdminLogController {
 
     private final StandardChangeLogService changeLogService;
-    private final ParamService paramService;
 
     @GetMapping("/page")
-    public R<Page<StandardChangeLog>> page(
+    public R<Page<StandardChangeLogVO>> page(
             @RequestParam(defaultValue = "1") Integer current,
             @RequestParam(defaultValue = "20") Integer size,
             @RequestParam(required = false) Long paramId,
@@ -35,12 +35,12 @@ public class AdminLogController {
                 .le(endDate != null && !endDate.isEmpty(), StandardChangeLog::getCreatedAt, endDate + " 23:59:59")
                 .eq(StandardChangeLog::getDeleted, 0)
                 .orderByDesc(StandardChangeLog::getCreatedAt);
-        return R.ok(changeLogService.page(page, wrapper));
+        return R.ok(PageConvert.convert(changeLogService.page(page, wrapper), StandardChangeLogVO::from));
     }
 
     @GetMapping("/{id}")
-    public R<StandardChangeLog> detail(@PathVariable Long id) {
-        return R.ok(changeLogService.getById(id));
+    public R<StandardChangeLogVO> detail(@PathVariable Long id) {
+        return R.ok(StandardChangeLogVO.from(changeLogService.getById(id)));
     }
 
     @DeleteMapping("/{id}")
