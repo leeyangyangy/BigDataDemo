@@ -156,8 +156,11 @@ class ApiClient {
       let result = await response.json()
 
       if (isEncryptionEnabled() && result.encrypted) {
+        console.log(`[Crypto] 收到加密响应: ${url}, data长度=${result.data?.length || 0}`)
+        const before = result
         result = decryptResponse(result)
-        console.log(`[Crypto] 响应已解密: ${url}`)
+        const ok = result && typeof result === 'object' && result.code !== undefined
+        console.log(`[Crypto] 解密${ok ? '成功' : '失败/异常'}: ${url}`, ok ? '' : '返回类型=' + typeof result, '原文data前40字符=' + (before.data || '').substring(0, 40))
       }
 
       if (result.code !== undefined && result.code !== 200) {

@@ -154,7 +154,10 @@ export function decrypt(encryptedData) {
   if (!ENCRYPTION_ENABLED || !encryptedData) return encryptedData
   if (typeof encryptedData !== 'string') return encryptedData
   const kv = loadKv()
-  if (!kv) return encryptedData
+  if (!kv) {
+    console.warn('[Crypto] decrypt 跳过: sessionStorage 无 KV (spc_enc_kv). 可能未登录或 key-exchange 未完成')
+    return encryptedData
+  }
   try {
     const decrypted = CryptoJS.AES.decrypt(
       encryptedData,
@@ -167,7 +170,7 @@ export function decrypt(encryptedData) {
     )
     const decryptedStr = decrypted.toString(CryptoJS.enc.Utf8)
     if (!decryptedStr) {
-      console.warn('[Crypto] 解密结果为空，返回原始数据')
+      console.warn('[Crypto] 解密结果为空 (KV 可能不匹配), key=', kv.key?.substring(0, 8) + '...', 'iv=', kv.iv?.substring(0, 8) + '...')
       return encryptedData
     }
     try {
@@ -176,7 +179,7 @@ export function decrypt(encryptedData) {
       return decryptedStr
     }
   } catch (error) {
-    console.error('[Crypto] 解密失败:', error)
+    console.error('[Crypto] 解密失败:', error.message, 'key=', kv.key?.substring(0, 8) + '...', 'iv=', kv.iv?.substring(0, 8) + '...')
     return encryptedData
   }
 }

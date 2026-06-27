@@ -253,6 +253,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { spcApi, getToken, getUser } from '@/utils/api'
+import { decryptResponse, isEncryptionEnabled } from '@/utils/crypto.js'
 
 const props = defineProps({
   isLoggedIn: Boolean,
@@ -508,10 +509,15 @@ async function submitImport() {
       method: 'POST',
       body: formData,
       headers: {
-        'Authorization': `Bearer ${getToken()}`
+        'Authorization': `Bearer ${getToken()}`,
+        'X-Encrypted': 'true'
       }
     })
-    const result = await res.json()
+    let result = await res.json()
+    // 文件上传走 FormData 绕过了 api.js, 需手动解密响应
+    if (isEncryptionEnabled() && result.encrypted && result.data) {
+      result = decryptResponse(result)
+    }
 
     if (result.code === 200) {
       importResult.value = { success: true, message: `导入完成: 成功${result.data.successCount}条, 失败${result.data.failCount}条` }
@@ -562,7 +568,8 @@ async function exportDataReport() {
     const res = await fetch(`/api/spc/data/export/report?${params.toString()}`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${getToken()}`
+        'Authorization': `Bearer ${getToken()}`,
+        'X-Encrypted': 'true'
       }
     })
 

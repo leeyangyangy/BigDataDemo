@@ -99,6 +99,7 @@ spc:
         - /api/actuator/**
         - /api/swagger-ui/**
         - /api/v3/api-docs/**
+        - /api/spc/data/export/**
   wecom:
     corpId: wwYOUR_CORP_ID
     agentId: YOUR_AGENT_ID

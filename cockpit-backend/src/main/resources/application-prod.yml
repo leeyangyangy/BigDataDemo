@@ -8,6 +8,7 @@ spc:
         - /api/auth/public-key
         - /api/auth/key-exchange
         - /api/actuator/**
+        - /api/spc/data/export/**
   jwt:
     secret: ${SPC_JWT_SECRET}
     random-secret-on-startup: false
