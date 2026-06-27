@@ -91,14 +91,14 @@ spc:
   security:
     encryption:
       enabled: true
-      key: SPC@2026#Secure!Key
-      iv: SPC2026SecureIV16
       exclude-paths:
-        - /auth/login
-        - /auth/info
-        - /actuator/**
-        - /swagger-ui/**
-        - /v3/api-docs/**
+        - /api/auth/login
+        - /api/auth/info
+        - /api/auth/public-key
+        - /api/auth/key-exchange
+        - /api/actuator/**
+        - /api/swagger-ui/**
+        - /api/v3/api-docs/**
   wecom:
     corpId: wwYOUR_CORP_ID
     agentId: YOUR_AGENT_ID

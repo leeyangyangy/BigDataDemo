@@ -25,7 +25,8 @@ public class WeComServiceImpl implements WeComService {
     private final WeComProperties properties;
     private final StringRedisTemplate redisTemplate;
     private final RestTemplate restTemplate = new RestTemplate();
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    // 注入 Spring 容器的 ObjectMapper (自带 JavaTimeModule, 应用 application.yml 配置)
+    private final ObjectMapper objectMapper;
 
     private static final String ACCESS_TOKEN_KEY = "wecom:access_token";
     private static final String WECOM_TOKEN_URL = "https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=%s&corpsecret=%s";

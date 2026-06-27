@@ -18,11 +18,13 @@ import java.util.*;
 @Order(1)
 public class DecryptRequestFilter implements Filter {
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    // 用 Spring 注入的 ObjectMapper, 自带 JavaTimeModule 支持。
+    private final ObjectMapper objectMapper;
     private final AESUtil aesUtil;
 
     @Autowired
-    public DecryptRequestFilter(AESUtil aesUtil) {
+    public DecryptRequestFilter(ObjectMapper objectMapper, AESUtil aesUtil) {
+        this.objectMapper = objectMapper;
         this.aesUtil = aesUtil;
     }
 
@@ -63,23 +65,28 @@ public class DecryptRequestFilter implements Filter {
             return;
         }
 
+        // 读取过 body 后原始 InputStream 已被消费,
+        // 必须用 wrapper 重新包装 (无论是否解密), 否则下游 @RequestBody 会抛 Stream closed。
+        String finalBody = body;
+
+        // userId 由 JwtAuthFilter 提前写入 request attribute;
+        // 若拿不到 (如未登录), 跳过解密, 但仍需用原始 body 包装请求。
+        Long userId = (Long) httpRequest.getAttribute("userId");
+
         try {
             Map<String, Object> encryptedMap = objectMapper.readValue(body, Map.class);
             boolean isEncrypted = Boolean.TRUE.equals(encryptedMap.get("encrypted"));
             String encryptedData = (String) encryptedMap.get("data");
 
             if (isEncrypted && encryptedData != null && !encryptedData.isEmpty()) {
-                String decryptedJson = aesUtil.decrypt(encryptedData);
-                HttpServletRequestWrapper wrappedRequest = new DecryptedRequestWrapper(
-                        httpRequest, decryptedJson);
-                chain.doFilter(wrappedRequest, response);
-                return;
+                finalBody = aesUtil.decrypt(encryptedData, userId);
             }
         } catch (Exception e) {
             System.err.println("[Crypto] 请求解密失败，使用原始数据: " + e.getMessage());
         }
 
-        chain.doFilter(request, response);
+        HttpServletRequestWrapper wrappedRequest = new DecryptedRequestWrapper(httpRequest, finalBody);
+        chain.doFilter(wrappedRequest, response);
     }
 
     private String readBody(HttpServletRequest request) throws IOException {

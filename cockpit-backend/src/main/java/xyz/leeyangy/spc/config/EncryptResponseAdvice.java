@@ -7,20 +7,26 @@ import org.springframework.http.MediaType;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
+import org.springframework.http.server.ServletServerHttpRequest;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice;
 import xyz.leeyangy.spc.common.AESUtil;
 
+import javax.servlet.http.HttpServletRequest;
 import java.util.Map;
 
 @ControllerAdvice
 public class EncryptResponseAdvice implements ResponseBodyAdvice<Object> {
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    // 必须用 Spring 容器注入的 ObjectMapper, 它已自动注册 JavaTimeModule
+    // 并应用 application.yml 中的 date-format / time-zone 配置;
+    // new ObjectMapper() 不支持 LocalDateTime, 会导致响应加密失败。
+    private final ObjectMapper objectMapper;
     private final AESUtil aesUtil;
 
     @Autowired
-    public EncryptResponseAdvice(AESUtil aesUtil) {
+    public EncryptResponseAdvice(ObjectMapper objectMapper, AESUtil aesUtil) {
+        this.objectMapper = objectMapper;
         this.aesUtil = aesUtil;
     }
 
@@ -45,6 +51,21 @@ public class EncryptResponseAdvice implements ResponseBodyAdvice<Object> {
             return body;
         }
 
+        // 从原生 HttpServletRequest 取 userId (JwtAuthFilter 已写入)。
+        // 拿不到时直接返回原文, 避免登录/公开接口报错。
+        Long userId = null;
+        if (request instanceof ServletServerHttpRequest) {
+            HttpServletRequest servletRequest =
+                    ((ServletServerHttpRequest) request).getServletRequest();
+            Object attr = servletRequest.getAttribute("userId");
+            if (attr instanceof Long) {
+                userId = (Long) attr;
+            }
+        }
+        if (userId == null) {
+            return body;
+        }
+
         try {
             String jsonStr;
             if (body instanceof String) {
@@ -53,7 +74,12 @@ public class EncryptResponseAdvice implements ResponseBodyAdvice<Object> {
                 jsonStr = objectMapper.writeValueAsString(body);
             }
 
-            String encryptedData = aesUtil.encrypt(jsonStr);
+            String encryptedData = aesUtil.encrypt(jsonStr, userId);
+
+            // KV 不存在时 encrypt 返回原文, 此时不应包成 encrypted envelope, 否则前端无法解密
+            if (encryptedData == jsonStr || encryptedData.equals(jsonStr)) {
+                return body;
+            }
 
             Map<String, Object> result = new java.util.HashMap<>();
             result.put("encrypted", true);

@@ -89,7 +89,7 @@
 
 <script setup>
 import { ref, onUnmounted, nextTick } from 'vue'
-import { authApi, setToken, setUser } from '../utils/api.js'
+import { authApi, setToken, setUser, ensureCryptoReady, removeToken } from '../utils/api.js'
 
 const emit = defineEmits(['close', 'success'])
 
@@ -137,6 +137,16 @@ async function handleLogin() {
         phone: res.data.phone,
         workshopId: res.data.workshopId
       })
+      // 建立加密通道: 拉取 RSA 公钥, 生成随机 AES KV 上送后端。
+      // 失败则视为登录未完成, 清除 token 让用户重试。
+      try {
+        await ensureCryptoReady()
+      } catch (ce) {
+        console.error('[Crypto] 建立加密通道失败:', ce)
+        removeToken()
+        errorMsg.value = '加密通道建立失败, 请刷新后重试'
+        return
+      }
       emit('success', res.data)
       blockBackNavigation()
       window.location.replace(window.location.href)
@@ -255,6 +265,15 @@ async function handleWecomCode(code) {
         phone: res.data.phone,
         workshopId: res.data.workshopId
       })
+      try {
+        await ensureCryptoReady()
+      } catch (ce) {
+        console.error('[Crypto] 建立加密通道失败:', ce)
+        removeToken()
+        wecomStatus.value = 'error'
+        wecomErrorMsg.value = '加密通道建立失败, 请刷新后重试'
+        return
+      }
       emit('success', res.data)
       blockBackNavigation()
       window.location.replace(window.location.href)
@@ -290,6 +309,14 @@ async function handleBind() {
         phone: res.data.phone,
         workshopId: res.data.workshopId
       })
+      try {
+        await ensureCryptoReady()
+      } catch (ce) {
+        console.error('[Crypto] 建立加密通道失败:', ce)
+        removeToken()
+        bindErrorMsg.value = '加密通道建立失败, 请刷新后重试'
+        return
+      }
       emit('success', res.data)
       blockBackNavigation()
       window.location.replace(window.location.href)

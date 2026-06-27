@@ -2,12 +2,12 @@ spc:
   security:
     encryption:
       enabled: true
-      key: ${SPC_AES_KEY}
-      iv: ${SPC_AES_IV}
       exclude-paths:
-        - /auth/login
-        - /auth/info
-        - /actuator/**
+        - /api/auth/login
+        - /api/auth/info
+        - /api/auth/public-key
+        - /api/auth/key-exchange
+        - /api/actuator/**
   jwt:
     secret: ${SPC_JWT_SECRET}
     random-secret-on-startup: false

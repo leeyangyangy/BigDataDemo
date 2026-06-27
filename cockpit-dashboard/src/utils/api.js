@@ -3,7 +3,14 @@ const BASE_URL = '/api'
 const TOKEN_KEY = 'spc_token'
 const USER_KEY = 'spc_user'
 
-import { isEncryptionEnabled, getEncryptedBody, decryptResponse } from './crypto.js'
+import {
+  isEncryptionEnabled,
+  getEncryptedBody,
+  decryptResponse,
+  ensurePublicKey,
+  generateAndExchangeKey,
+  clearKey
+} from './crypto.js'
 
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY)
@@ -16,6 +23,7 @@ export function setToken(token) {
 export function removeToken() {
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(USER_KEY)
+  clearKey()
 }
 
 export function getUser() {
@@ -109,7 +117,9 @@ class ApiClient {
     }
 
     let body = options.body
-    if (body && isEncryptionEnabled() && !url.includes('/auth/login') && headers['Content-Type']?.includes('json')) {
+    // /auth/login 和 /auth/key-exchange 跳过加密: 登录时 KV 未建立, key-exchange 是 KV 建立本身
+    const skipEncrypt = url.includes('/auth/login') || url.includes('/auth/key-exchange')
+    if (body && isEncryptionEnabled() && !skipEncrypt && headers['Content-Type']?.includes('json')) {
       try {
         body = JSON.stringify(getEncryptedBody(JSON.parse(body)))
         console.log(`[Crypto] 请求已加密: ${url}`)
@@ -204,7 +214,22 @@ export const authApi = {
   logout: () => api.post('/auth/logout'),
   getWeComConfig: () => api.get('/auth/wecom/config'),
   weComCallback: (code) => api.post('/auth/wecom/callback', { code }),
-  weComBind: (wecomUserId, empNo) => api.post('/auth/wecom/bind', { wecomUserId, empNo })
+  weComBind: (wecomUserId, empNo) => api.post('/auth/wecom/bind', { wecomUserId, empNo }),
+  getPublicKey: () => api.get('/auth/public-key'),
+  keyExchange: (encKey, encIv) => api.post('/auth/key-exchange', { encKey, encIv })
+}
+
+/**
+ * 登录成功后调用: 拉取后端 RSA 公钥, 生成随机 AES KV 上送。
+ * 上送成功后, 后续请求/响应自动走加密通道。
+ *
+ * 注意: 调用此函数前必须先 setToken(), 因为 /auth/key-exchange 需要鉴权。
+ * 在 dev 环境下 (MODE === 'development') 此函数为 no-op。
+ */
+export async function ensureCryptoReady() {
+  if (!isEncryptionEnabled()) return
+  await ensurePublicKey(() => authApi.getPublicKey())
+  await generateAndExchangeKey((encKey, encIv) => authApi.keyExchange(encKey, encIv))
 }
 
 export const yieldApi = {

@@ -4,8 +4,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import xyz.leeyangy.spc.common.AESUtil;
+import xyz.leeyangy.spc.common.CryptoKeyService;
 import xyz.leeyangy.spc.common.IpUtil;
 import xyz.leeyangy.spc.common.R;
+import xyz.leeyangy.spc.common.RsaKeyHolder;
 import xyz.leeyangy.spc.common.annotation.OperationLog;
 import xyz.leeyangy.spc.dto.ChangePasswordDTO;
 import xyz.leeyangy.spc.dto.LoginDTO;
@@ -17,6 +20,7 @@ import xyz.leeyangy.spc.service.TokenBlacklistService;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
+import java.util.HashMap;
 import java.util.Map;
 
 @Slf4j
@@ -29,6 +33,39 @@ public class AuthController {
     private final SysUserService sysUserService;
     private final PasswordEncoder passwordEncoder;
     private final TokenBlacklistService tokenBlacklistService;
+    private final RsaKeyHolder rsaKeyHolder;
+    private final CryptoKeyService cryptoKeyService;
+    private final AESUtil aesUtil;
+
+    /**
+     * 下发 RSA 公钥 (Base64 编码, X.509 SubjectPublicKeyInfo)。
+     * 前端启动或登录前拉取, 用于加密随机生成的 AES key/iv 上送。
+     * 此接口不需要鉴权。
+     */
+    @GetMapping("/public-key")
+    public R<Map<String, Object>> getPublicKey() {
+        Map<String, Object> data = new HashMap<>();
+        data.put("publicKey", rsaKeyHolder.getPublicKeyBase64());
+        data.put("fingerprint", rsaKeyHolder.getFingerprint());
+        data.put("encryptionEnabled", aesUtil.isEncryptionEnabled());
+        return R.ok(data);
+    }
+
+    /**
+     * 接收前端经 RSA 加密的 AES key/iv, 解密后存 Redis 绑定 userId。
+     * 调用此接口需携带登录后返回的 JWT。
+     */
+    @PostMapping("/key-exchange")
+    public R<Void> keyExchange(@RequestBody Map<String, String> body,
+                              @RequestAttribute Long userId) {
+        String encKey = body.get("encKey");
+        String encIv = body.get("encIv");
+        if (encKey == null || encIv == null) {
+            return R.fail("encKey/encIv 不能为空");
+        }
+        boolean ok = cryptoKeyService.storeKey(userId, encKey, encIv);
+        return ok ? R.ok(null) : R.fail("key-exchange 失败");
+    }
 
     @OperationLog(module = "AUTH", action = "LOGIN", targetType = "SysUser",
             content = "'登录: empNo=' + #request.empNo + (#result.success ? '' : ' reason=' + #result.msg)",
@@ -70,6 +107,8 @@ public class AuthController {
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             tokenBlacklistService.blacklistToken(authHeader.substring(7));
         }
+        // 清除该用户的 AES KV, 下次登录需重新 key-exchange (KV 轮换)
+        cryptoKeyService.removeKey(userId);
         log.info("[Auth] 用户登出: id={}", userId);
         return R.ok(null);
     }

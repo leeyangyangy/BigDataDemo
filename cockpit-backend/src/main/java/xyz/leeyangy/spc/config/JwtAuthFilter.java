@@ -41,6 +41,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         String uri = request.getRequestURI();
         return uri.equals("/api/auth/login")
                 || uri.equals("/api/auth/wechat-login")
+                || uri.equals("/api/auth/public-key")
                 || uri.startsWith("/actuator")
                 || uri.equals("/error");
     }
