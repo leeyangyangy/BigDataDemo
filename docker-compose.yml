@@ -1,0 +1,48 @@
+# SPC Analysis - frontend + backend only
+# MySQL / Redis / RabbitMQ run as external standalone services (addresses in .env).
+#
+# Usage:
+#   cp .env.example .env   (edit infra addresses + secrets)
+#   docker compose up -d --build
+#
+# Frontend nginx proxies /api and /actuator to the backend container.
+services:
+  backend:
+    build:
+      context: ./cockpit-backend
+    container_name: spc-backend
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      TZ: Asia/Shanghai
+      # ----- external MySQL -----
+      SPRING_DATASOURCE_URL: jdbc:mysql://${MYSQL_HOST:-192.168.1.106}:${MYSQL_PORT:-3306}/${MYSQL_DATABASE:-cockpit_all_stack}?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-root}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-root}
+      # ----- external Redis -----
+      SPRING_REDIS_HOST: ${REDIS_HOST:-192.168.1.106}
+      SPRING_REDIS_PORT: ${REDIS_PORT:-6379}
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      # ----- external RabbitMQ -----
+      SPRING_RABBITMQ_HOST: ${RABBITMQ_HOST:-192.168.1.106}
+      SPRING_RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-root}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-password}
+      SPRING_RABBITMQ_VIRTUAL_HOST: ${RABBITMQ_VHOST:-collect_data_vhost}
+      # ----- secrets (read by application-prod.yml) -----
+      SPC_AES_KEY: ${SPC_AES_KEY}
+      SPC_AES_IV: ${SPC_AES_IV}
+      SPC_JWT_SECRET: ${SPC_JWT_SECRET}
+      SPC_ALLOWED_ORIGINS: ${SPC_ALLOWED_ORIGINS}
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build:
+      context: ./cockpit-dashboard
+    container_name: spc-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
