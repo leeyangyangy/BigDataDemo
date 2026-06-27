@@ -67,6 +67,7 @@ const showRightFade = ref(false)
 const allNavItems = [
   { key: 'home', icon: '🏠', label: '首页' },
   { key: 'data', icon: '📊', label: '数据' },
+  { key: 'yield', icon: '📈', label: '良率' },
   // { key: 'chat', icon: '💬', label: 'AIChat' },
   // { key: 'map', icon: '🗺️', label: '地图' },
   { key: 'admin', icon: '☰', label: '后台' }

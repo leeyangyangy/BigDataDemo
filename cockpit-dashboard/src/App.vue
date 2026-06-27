@@ -31,8 +31,12 @@
     </div>
 
     <div class="page-content">
+      <YieldDashboard
+        v-if="activeNav === 'yield'"
+        :key="'yield'"
+      />
       <SpcDashboard
-        v-if="!activeNav.startsWith('admin')"
+        v-else-if="!activeNav.startsWith('admin')"
         :key="'dashboard'"
         :isLoggedIn="loggedIn"
         :userInfo="userInfo"
@@ -87,6 +91,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import SpcDashboard from './components/SpcDashboard.vue'
+import YieldDashboard from './components/yield/YieldDashboard.vue'
 import UserManagement from './components/admin/UserManagement.vue'
 import ProductManagement from './components/admin/ProductManagement.vue'
 import ProcessManagement from './components/admin/ProcessManagement.vue'
@@ -167,7 +172,7 @@ function navKeyToIndex(key) {
     const map = { 'home': 0, 'admin-product': 1, 'admin-process': 2, 'admin-standard': 3, 'admin-equipment': 4, 'admin-workshop': 5, 'admin-user': 6, 'admin-changelog': 7, 'admin-operationlog': 8 }
     return map[key] ?? 1
   }
-  const map = { home: 0, data: 1, admin: 2 }
+  const map = { home: 0, data: 1, yield: 2, admin: 3 }
   return map[key] ?? 0
 }
 

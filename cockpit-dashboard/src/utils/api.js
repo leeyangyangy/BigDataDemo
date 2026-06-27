@@ -207,6 +207,12 @@ export const authApi = {
   weComBind: (wecomUserId, empNo) => api.post('/auth/wecom/bind', { wecomUserId, empNo })
 }
 
+export const yieldApi = {
+  getData: (params) => api.get('/yield/data', params),
+  search: (params) => api.get('/yield/search', params),
+  getWorkshops: () => api.get('/yield/workshops')
+}
+
 export const spcApi = {
   getControlChart: (params) => api.get('/spc/chart/control', params),
   getDataByEquipment: (params) => api.get('/spc/chart/data', params),
