@@ -5,6 +5,7 @@ import lombok.Data;
 import xyz.leeyangy.spc.entity.SysUser;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 public class SysUserVO {
@@ -19,6 +20,15 @@ public class SysUserVO {
     private Long workshopId;
     private String wecomUserId;
     private Integer status;
+
+    /** 用户绑定的车间ID列表 (多车间管理) */
+    private List<Long> workshopIds;
+
+    /** 主车间ID (workshopIds 中标记为主车间) */
+    private Long primaryWorkshopId;
+
+    /** 用户绑定的测试站ID列表 */
+    private List<Long> testStationIds;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime lastLoginAt;

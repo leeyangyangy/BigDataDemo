@@ -48,7 +48,7 @@ public class SecurityConfig {
                         .antMatchers("/api/auth/logout").authenticated()
                         .antMatchers("/api/auth/change-password").authenticated()
                         .antMatchers("/api/auth/**").permitAll()
-                        .antMatchers("/api/yield/**").permitAll()
+                        .antMatchers("/api/yield/**").authenticated()
                         .antMatchers(HttpMethod.GET, "/actuator/health").permitAll()
                         .antMatchers("/actuator/**").hasRole(RoleConstants.ADMIN)
                         .antMatchers(HttpMethod.GET, "/api/spc/chart/**").authenticated()

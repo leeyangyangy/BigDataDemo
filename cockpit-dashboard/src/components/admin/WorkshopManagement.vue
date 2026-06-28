@@ -22,6 +22,7 @@
             <th>类型</th>
             <th>描述</th>
             <th>排序</th>
+            <th>数据中心</th>
             <th>状态</th>
             <th>操作</th>
           </tr>
@@ -33,6 +34,11 @@
             <td><span class="type-tag">{{ item.workshopType || '-' }}</span></td>
             <td class="text-muted text-truncate" style="max-width:150px">{{ item.description || '-' }}</td>
             <td>{{ item.sortOrder ?? 0 }}</td>
+            <td>
+              <span class="dc-tag" :class="item.dataCenterVisible === 1 ? 'on' : 'off'">
+                {{ item.dataCenterVisible === 1 ? '✓ 可见' : '-' }}
+              </span>
+            </td>
             <td>
               <span class="status-tag" :class="item.status === 1 ? 'on' : 'off'">{{ item.status === 1 ? '启用' : '停用' }}</span>
             </td>
@@ -91,6 +97,13 @@
             <label>排序值</label>
             <input v-model.number="form.sortOrder" type="number" class="form-input" placeholder="数字越小越靠前" />
           </div>
+          <div class="form-field full">
+            <label class="checkbox-label">
+              <input type="checkbox" v-model="form.dataCenterVisible" :true-value="1" :false-value="0" />
+              <span>标记为数据中心可见</span>
+              <small class="hint-text">勾选后此车间将出现在数据中心, 用户需绑定该车间才能在数据中心访问</small>
+            </label>
+          </div>
         </div>
         <div class="form-msg" v-if="formMsg" :class="{ error: formMsgType === 'error', success: formMsgType === 'success' }">{{ formMsg }}</div>
         <div class="modal-actions">
@@ -124,7 +137,7 @@ const formMsgType = ref('')
 
 const form = ref({
   workshopCode: '', workshopName: '', workshopType: '',
-  description: '', status: 1, sortOrder: 0
+  description: '', status: 1, sortOrder: 0, dataCenterVisible: 0
 })
 
 const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
@@ -151,7 +164,7 @@ async function loadData() {
 function openCreate() {
   isEdit.value = false
   editId.value = null
-  form.value = { workshopCode: '', workshopName: '', workshopType: '', description: '', status: 1, sortOrder: 0 }
+  form.value = { workshopCode: '', workshopName: '', workshopType: '', description: '', status: 1, sortOrder: 0, dataCenterVisible: 0 }
   formMsg.value = ''
   showForm.value = true
 }
@@ -165,7 +178,8 @@ function openEdit(item) {
     workshopType: item.workshopType || '',
     description: item.description || '',
     status: item.status,
-    sortOrder: item.sortOrder ?? 0
+    sortOrder: item.sortOrder ?? 0,
+    dataCenterVisible: item.dataCenterVisible ?? 0
   }
   formMsg.value = ''
   showForm.value = true
@@ -345,6 +359,29 @@ onMounted(() => {
 }
 .status-tag.on { background: #f6ffed; color: #389e0d; }
 .status-tag.off { background: #f5f5f5; color: #999; }
+
+.dc-tag {
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+}
+.dc-tag.on { background: rgba(59,130,246,0.12); color: #3b82f6; }
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 8px 0;
+}
+.checkbox-label input[type="checkbox"] { margin: 0; }
+.checkbox-label .hint-text {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: normal;
+}
 
 .actions { white-space: nowrap; }
 

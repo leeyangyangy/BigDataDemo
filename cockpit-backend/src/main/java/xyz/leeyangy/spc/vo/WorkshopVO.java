@@ -13,6 +13,8 @@ public class WorkshopVO {
     private String workshopCode;
     private String workshopName;
     private String workshopType;
+    /** 是否在数据中心可见 (0=否, 1=是) */
+    private Integer dataCenterVisible;
     private String description;
     private Integer status;
     private Integer sortOrder;
@@ -35,6 +37,7 @@ public class WorkshopVO {
         vo.setWorkshopCode(entity.getWorkshopCode());
         vo.setWorkshopName(entity.getWorkshopName());
         vo.setWorkshopType(entity.getWorkshopType());
+        vo.setDataCenterVisible(entity.getDataCenterVisible());
         vo.setDescription(entity.getDescription());
         vo.setStatus(entity.getStatus());
         vo.setSortOrder(entity.getSortOrder());

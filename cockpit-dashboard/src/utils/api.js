@@ -238,7 +238,10 @@ export async function ensureCryptoReady() {
 export const yieldApi = {
   getData: (params) => api.get('/yield/data', params),
   search: (params) => api.get('/yield/search', params),
-  getWorkshops: () => api.get('/yield/workshops')
+  getWorkshops: () => api.get('/yield/workshops'),
+  checkAccess: () => api.get('/yield/access'),
+  /** 数据中心: 查询指定车间需渲染的组件 key 列表 */
+  getComponents: (workshop) => api.get('/yield/components', { workshop })
 }
 
 export const spcApi = {
@@ -325,7 +328,7 @@ export const adminApi = {
   },
   workshop: {
     getPage: (params) => api.get('/admin/workshop/page', params),
-    listAll: () => api.get('/admin/workshop/list'),
+    listAll: (workshopType) => api.get('/admin/workshop/list', workshopType ? { workshopType } : {}),
     getById: (id) => api.get(`/admin/workshop/${id}`),
     create: (data) => api.post('/admin/workshop', data),
     update: (id, data) => api.put(`/admin/workshop/${id}`, data),
@@ -350,5 +353,23 @@ export const adminApi = {
     getDetail: (id) => api.get(`/admin/operation-log/${id}`),
     delete: (id) => api.delete(`/admin/operation-log/${id}`),
     cleanBefore: (date) => api.delete(`/admin/operation-log/clean?beforeDate=${date}`)
+  },
+  // 数据中心: 车间-组件关联管理 (后台管理用)
+  dataCenter: {
+    // 列出所有标记为 data_center_visible=1 的车间
+    listWorkshops: () => api.get('/admin/data-center/workshops'),
+    // 查询车间已关联的组件 (含禁用)
+    listComponents: (workshopId) => api.get(`/admin/data-center/workshop/${workshopId}/components`),
+    // 批量更新车间关联的组件 (全量替换)
+    updateComponents: (workshopId, components) => api.put(`/admin/data-center/workshop/${workshopId}/components`, components),
+    // 可用组件清单 (与前端 registry.js 对齐)
+    listAvailableComponents: () => api.get('/admin/data-center/available-components')
+  },
+  // 数据中心: 用户-车间绑定管理 (后台管理用)
+  userWorkshop: {
+    listUsers: () => api.get('/admin/user-workshop/users'),
+    getBindings: (userId) => api.get(`/admin/user-workshop/${userId}`),
+    rebind: (userId, data) => api.put(`/admin/user-workshop/${userId}`, data),
+    listWorkshops: () => api.get('/admin/user-workshop/workshops')
   }
 }

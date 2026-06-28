@@ -102,13 +102,6 @@
               <option value="VIEWER">观察者</option>
             </select>
           </div>
-          <div class="form-field">
-            <label>所属车间</label>
-            <select v-model="form.workshopId" class="form-input">
-              <option :value="null">不绑定车间</option>
-              <option v-for="w in workshopList" :key="w.id" :value="w.id">{{ w.workshopName }}（{{ w.workshopCode }}）</option>
-            </select>
-          </div>
           <div class="form-field" v-if="!isEdit">
             <label>状态</label>
             <select v-model="form.status" class="form-input">
@@ -116,6 +109,9 @@
               <option :value="0">停用</option>
             </select>
           </div>
+        </div>
+        <div class="form-tip" v-if="isEdit">
+          车间权限请到 <strong>后台 → DC权限</strong> 中绑定
         </div>
 
         <div class="form-msg" v-if="formMsg" :class="{ error: formMsgType === 'error', success: formMsgType === 'success' }">{{ formMsg }}</div>
@@ -126,6 +122,7 @@
         </div>
       </div>
     </div>
+
   </div>
 </template>
 
@@ -154,8 +151,7 @@ const formMsgType = ref('')
 
 const form = ref({
   empNo: '', username: '', password: '',
-  email: '', phone: '', role: 'OPERATOR', status: 1,
-  workshopId: null
+  email: '', phone: '', role: 'OPERATOR', status: 1
 })
 
 // TODO 动态查询获取
@@ -192,12 +188,12 @@ async function loadData() {
 function openCreate() {
   isEdit.value = false
   editId.value = null
-  form.value = { empNo: '', username: '', password: '', email: '', phone: '', role: 'OPERATOR', status: 1, workshopId: null }
+  form.value = { empNo: '', username: '', password: '', email: '', phone: '', role: 'OPERATOR', status: 1 }
   formMsg.value = ''
   showForm.value = true
 }
 
-function openEdit(item) {
+async function openEdit(item) {
   isEdit.value = true
   editId.value = item.id
   form.value = {
@@ -207,7 +203,7 @@ function openEdit(item) {
     email: item.email || '',
     phone: item.phone || '',
     role: item.role || 'OPERATOR',
-    workshopId: item.workshopId || null
+    status: item.status
   }
   formMsg.value = ''
   showForm.value = true
@@ -222,18 +218,18 @@ async function handleSubmit() {
   if (!form.value.username?.trim()) { formMsg.value = '姓名为必填项'; formMsgType.value = 'error'; return }
   if (!isEdit.value && !form.value.password) { formMsg.value = '密码为必填项'; formMsgType.value = 'error'; return }
 
+  const payload = { ...form.value }
+  if (isEdit.value && !payload.password) delete payload.password
+
   submitting.value = true
   formMsg.value = ''
 
   try {
     let res
     if (isEdit.value) {
-      const payload = { ...form.value }
-      if (!payload.password) delete payload.password
-      if (payload.workshopId === null) payload.clearWorkshop = true
       res = await adminApi.user.update(editId.value, payload)
     } else {
-      res = await adminApi.user.create(form.value)
+      res = await adminApi.user.create(payload)
     }
 
     if (res.code === 200) {
@@ -288,6 +284,7 @@ function getWorkshopName(workshopId) {
 
 onMounted(() => {
   loadData()
+  // 加载所有车间 (含生产车间和测试车间, 统一在所属车间列表中展示)
   adminApi.workshop.listAll().then(res => {
     if (res.code === 200 && res.data) workshopList.value = res.data
   }).catch(() => {})
@@ -300,6 +297,53 @@ onMounted(() => {
   border-radius: 16px;
   padding: 20px;
   border: 1px solid var(--border-color);
+}
+
+/* 多选车间/测试站 */
+.multi-workshop {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 140px;
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid var(--border-input);
+  border-radius: 8px;
+  background: var(--bg-input);
+}
+.workshop-check label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.workshop-check input[type="checkbox"] { margin: 0; }
+.workshop-check .primary-radio { margin-left: 8px; }
+.workshop-check .primary-label {
+  font-size: 11px;
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.1);
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+.workshop-type-tag {
+  font-size: 10px;
+  color: #6b7280;
+  background: rgba(107, 114, 128, 0.1);
+  padding: 0 4px;
+  border-radius: 4px;
+  margin-left: 4px;
+}
+
+.form-tip {
+  margin-top: 4px;
+  padding: 8px 12px;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 6px;
+  font-size: 12px;
+  color: #3b82f6;
 }
 
 .toolbar {

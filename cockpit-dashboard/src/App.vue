@@ -31,9 +31,9 @@
     </div>
 
     <div class="page-content">
-      <YieldDashboard
-        v-if="activeNav === 'yield'"
-        :key="'yield'"
+      <DataCenterDashboard
+        v-if="activeNav === 'data'"
+        :key="'data'"
       />
       <SpcDashboard
         v-else-if="!activeNav.startsWith('admin')"
@@ -49,6 +49,8 @@
         <WorkshopManagement v-else-if="activeNav === 'admin-workshop'" :key="'admin-workshop'" />
         <StandardManagement v-else-if="activeNav === 'admin-standard'" :key="'admin-standard'" />
         <EquipmentManagement v-else-if="activeNav === 'admin-equipment'" :key="'admin-equipment'" />
+        <DataCenterManagement v-else-if="activeNav === 'admin-datacenter-mgmt'" :key="'admin-datacenter-mgmt'" />
+        <DataCenterPermission v-else-if="activeNav === 'admin-datacenter-perm'" :key="'admin-datacenter-perm'" />
         <ChangeLogManagement v-else-if="activeNav === 'admin-changelog'" :key="'admin-changelog'" />
         <OperationLogManagement v-else-if="activeNav === 'admin-operationlog'" :key="'admin-operationlog'" />
 
@@ -77,6 +79,7 @@
       :activeIndex="navKeyToIndex(activeNav)"
       :userRole="userInfo?.role || ''"
       :activeKey="activeNav"
+      :showYield="yieldAccessible"
       @navigate="handleNavigate"
     />
 
@@ -91,15 +94,17 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import SpcDashboard from './components/SpcDashboard.vue'
-import YieldDashboard from './components/yield/YieldDashboard.vue'
+import DataCenterDashboard from './components/datacenter/DataCenterDashboard.vue'
 import UserManagement from './components/admin/UserManagement.vue'
 import ProductManagement from './components/admin/ProductManagement.vue'
 import ProcessManagement from './components/admin/ProcessManagement.vue'
 import WorkshopManagement from './components/admin/WorkshopManagement.vue'
+import DataCenterManagement from './components/admin/DataCenterManagement.vue'
+import DataCenterPermission from './components/admin/DataCenterPermission.vue'
 import BottomNav from './components/BottomNav.vue'
 import ThemeSwitcher from './components/ThemeSwitcher.vue'
 import LoginForm from './components/LoginForm.vue'
-import { getToken, getUser, removeToken, isLoggedIn } from './utils/api.js'
+import { getToken, getUser, removeToken, isLoggedIn, yieldApi } from './utils/api.js'
 import './styles/theme.css'
 import OperationLogManagement from "@/components/admin/OperationLogManagement.vue";
 import ChangeLogManagement from "@/components/admin/ChangeLogManagement.vue";
@@ -115,6 +120,9 @@ const activeNav = ref(localStorage.getItem(NAV_KEY) || 'home')
 
 const loggedIn = ref(false)
 const userInfo = ref(null)
+const yieldAccessible = ref(false)
+
+const YIELD_ACCESS_KEY = 'spc_yield_accessible'
 
 const roleLabel = computed(() => {
   const map = { ADMIN: '管理员', ENGINEER: '工程师', OPERATOR: '操作员', VIEWER: '观察者' }
@@ -127,12 +135,54 @@ function checkAuth() {
   loggedIn.value = isLoggedIn()
   if (loggedIn.value) {
     userInfo.value = getUser()
+    // 查询数据中心访问权限 (管理员自动放行, 其他用户需绑定车间 + data_center_visible=1)
+    if (isAdmin.value) {
+      yieldAccessible.value = true
+    } else {
+      const cached = localStorage.getItem(YIELD_ACCESS_KEY)
+      yieldAccessible.value = cached === '1'
+      // 异步刷新缓存
+      refreshYieldAccess()
+    }
   } else {
     userInfo.value = null
+    yieldAccessible.value = false
+    localStorage.removeItem(YIELD_ACCESS_KEY)
   }
   if (activeNav.value.startsWith('admin') && !isAdmin.value) {
     activeNav.value = 'home'
     localStorage.setItem(NAV_KEY, 'home')
+  }
+  // 若数据中心 tab 不可见但当前在数据中心页, 跳回首页
+  if (!yieldAccessible.value && activeNav.value === 'data') {
+    activeNav.value = 'home'
+    localStorage.setItem(NAV_KEY, 'home')
+  }
+  // 兼容旧值: yield -> data
+  if (activeNav.value === 'yield') {
+    activeNav.value = 'data'
+    localStorage.setItem(NAV_KEY, 'data')
+  }
+}
+
+async function refreshYieldAccess() {
+  try {
+    const res = await yieldApi.checkAccess()
+    if (res && res.code === 200 && res.data) {
+      const ok = res.data.accessible === true
+      yieldAccessible.value = ok
+      localStorage.setItem(YIELD_ACCESS_KEY, ok ? '1' : '0')
+      // 若权限被收回且当前在数据中心页, 跳回首页
+      if (!ok && activeNav.value === 'data') {
+        activeNav.value = 'home'
+        localStorage.setItem(NAV_KEY, 'home')
+      }
+    } else {
+      yieldAccessible.value = false
+      localStorage.setItem(YIELD_ACCESS_KEY, '0')
+    }
+  } catch (e) {
+    console.warn('[DataCenter] 查询数据中心权限失败:', e.message)
   }
 }
 
@@ -144,6 +194,8 @@ function onLoginSuccess(data) {
 function handleLogout() {
   removeToken()
   showUserMenu.value = false
+  yieldAccessible.value = false
+  localStorage.removeItem(YIELD_ACCESS_KEY)
   window.history.pushState(null, '', window.location.href)
   window.addEventListener('popstate', function onPop() {
     window.history.pushState(null, '', window.location.href)
@@ -169,10 +221,10 @@ function handleNavigate(key) {
 function navKeyToIndex(key) {
   const isAdmin = key.startsWith('admin')
   if (isAdmin) {
-    const map = { 'home': 0, 'admin-product': 1, 'admin-process': 2, 'admin-standard': 3, 'admin-equipment': 4, 'admin-workshop': 5, 'admin-user': 6, 'admin-changelog': 7, 'admin-operationlog': 8 }
+    const map = { 'home': 0, 'admin-product': 1, 'admin-process': 2, 'admin-standard': 3, 'admin-equipment': 4, 'admin-workshop': 5, 'admin-user': 6, 'admin-datacenter-mgmt': 7, 'admin-datacenter-perm': 8, 'admin-changelog': 9, 'admin-operationlog': 10 }
     return map[key] ?? 1
   }
-  const map = { home: 0, data: 1, yield: 2, admin: 3 }
+  const map = { home: 0, data: 1, admin: 2 }
   return map[key] ?? 0
 }
 

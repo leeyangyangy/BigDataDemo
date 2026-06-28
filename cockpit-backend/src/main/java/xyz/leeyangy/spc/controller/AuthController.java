@@ -14,9 +14,12 @@ import xyz.leeyangy.spc.dto.ChangePasswordDTO;
 import xyz.leeyangy.spc.dto.LoginDTO;
 import xyz.leeyangy.spc.dto.WechatLoginDTO;
 import xyz.leeyangy.spc.entity.SysUser;
+import xyz.leeyangy.spc.entity.Workshop;
 import xyz.leeyangy.spc.service.AuthService;
 import xyz.leeyangy.spc.service.SysUserService;
+import xyz.leeyangy.spc.service.SysUserWorkshopService;
 import xyz.leeyangy.spc.service.TokenBlacklistService;
+import xyz.leeyangy.spc.service.WorkshopService;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
@@ -36,6 +39,8 @@ public class AuthController {
     private final RsaKeyHolder rsaKeyHolder;
     private final CryptoKeyService cryptoKeyService;
     private final AESUtil aesUtil;
+    private final SysUserWorkshopService sysUserWorkshopService;
+    private final WorkshopService workshopService;
 
     /**
      * 下发 RSA 公钥 (Base64 编码, X.509 SubjectPublicKeyInfo)。
@@ -65,6 +70,69 @@ public class AuthController {
         }
         boolean ok = cryptoKeyService.storeKey(userId, encKey, encIv);
         return ok ? R.ok(null) : R.fail("key-exchange 失败");
+    }
+
+    /**
+     * 获取当前登录用户信息 (含绑定的车间/测试站列表)。
+     * 前端据此决定可查询哪些车间的数据。
+     */
+    @GetMapping("/info")
+    public R<Map<String, Object>> info(@RequestAttribute Long userId,
+                                       @RequestAttribute String role) {
+        SysUser user = sysUserService.getById(userId);
+        if (user == null) {
+            return R.fail("用户不存在");
+        }
+        Map<String, Object> data = new HashMap<>();
+        data.put("id", user.getId());
+        data.put("empNo", user.getEmpNo());
+        data.put("username", user.getUsername());
+        data.put("email", user.getEmail());
+        data.put("phone", user.getPhone());
+        data.put("avatar", user.getAvatar());
+        data.put("role", user.getRole());
+        data.put("workshopId", user.getWorkshopId());
+        data.put("wecomUserId", user.getWecomUserId());
+        data.put("status", user.getStatus());
+
+        // 绑定的车间ID列表 + 主车间
+        java.util.List<Long> workshopIds = sysUserWorkshopService.getWorkshopIds(userId);
+        data.put("workshopIds", workshopIds);
+        data.put("primaryWorkshopId", sysUserWorkshopService.getPrimaryWorkshopId(userId));
+        // 绑定的测试站ID列表
+        data.put("testStationIds", sysUserWorkshopService.getTestStationIds(userId));
+
+        // 关联车间详情 (前端展示车间名用)
+        java.util.List<Map<String, Object>> workshops = new java.util.ArrayList<>();
+        for (Long wid : workshopIds) {
+            Workshop w = workshopService.getById(wid);
+            if (w != null) {
+                Map<String, Object> wm = new HashMap<>();
+                wm.put("id", w.getId());
+                wm.put("workshopCode", w.getWorkshopCode());
+                wm.put("workshopName", w.getWorkshopName());
+                wm.put("workshopType", w.getWorkshopType());
+                workshops.add(wm);
+            }
+        }
+        data.put("workshops", workshops);
+
+        // 测试站详情
+        java.util.List<Long> stationIds = sysUserWorkshopService.getTestStationIds(userId);
+        java.util.List<Map<String, Object>> stations = new java.util.ArrayList<>();
+        for (Long sid : stationIds) {
+            Workshop s = workshopService.getById(sid);
+            if (s != null) {
+                Map<String, Object> sm = new HashMap<>();
+                sm.put("id", s.getId());
+                sm.put("workshopCode", s.getWorkshopCode());
+                sm.put("workshopName", s.getWorkshopName());
+                stations.add(sm);
+            }
+        }
+        data.put("testStations", stations);
+
+        return R.ok(data);
     }
 
     @OperationLog(module = "AUTH", action = "LOGIN", targetType = "SysUser",

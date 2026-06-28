@@ -17,9 +17,11 @@ import xyz.leeyangy.spc.dto.UserStatusDTO;
 import xyz.leeyangy.spc.dto.UserUpdateDTO;
 import xyz.leeyangy.spc.entity.SysUser;
 import xyz.leeyangy.spc.service.SysUserService;
+import xyz.leeyangy.spc.service.SysUserWorkshopService;
 import xyz.leeyangy.spc.vo.SysUserVO;
 
 import javax.validation.Valid;
+import java.util.List;
 
 @Slf4j
 @RestController
@@ -29,6 +31,7 @@ public class SysUserController {
 
     private final SysUserService sysUserService;
     private final PasswordEncoder passwordEncoder;
+    private final SysUserWorkshopService sysUserWorkshopService;
 
     @GetMapping("/page")
     public R<Page<SysUserVO>> page(
@@ -49,7 +52,8 @@ public class SysUserController {
                 .eq(status != null, SysUser::getStatus, status)
                 .orderByDesc(SysUser::getCreatedAt);
 
-        return R.ok(PageConvert.convert(sysUserService.page(page, wrapper), SysUserVO::from));
+        Page<SysUserVO> result = PageConvert.convert(sysUserService.page(page, wrapper), SysUserVO::from);
+        return R.ok(result);
     }
 
     @GetMapping("/{id}")
@@ -58,7 +62,17 @@ public class SysUserController {
         if (user == null) {
             return R.fail(StatusCode.DATA_NOT_FOUND, "用户不存在");
         }
-        return R.ok(SysUserVO.from(user));
+        SysUserVO vo = SysUserVO.from(user);
+        fillWorkshopBindings(vo);
+        return R.ok(vo);
+    }
+
+    /** 填充用户的多车间/测试站绑定信息 */
+    private void fillWorkshopBindings(SysUserVO vo) {
+        if (vo == null || vo.getId() == null) return;
+        vo.setWorkshopIds(sysUserWorkshopService.getWorkshopIds(vo.getId()));
+        vo.setPrimaryWorkshopId(sysUserWorkshopService.getPrimaryWorkshopId(vo.getId()));
+        vo.setTestStationIds(sysUserWorkshopService.getTestStationIds(vo.getId()));
     }
 
     @OperationLog(module = "USER", action = "CREATE", targetType = "SysUser",
@@ -90,12 +104,14 @@ public class SysUserController {
         user.setEmail(req.getEmail());
         user.setPhone(req.getPhone());
         user.setRole(req.getRole() != null ? req.getRole() : RoleConstants.OPERATOR);
-        user.setWorkshopId(req.getWorkshopId());
         user.setStatus(req.getStatus() != null ? req.getStatus() : 1);
 
         sysUserService.save(user);
+
         log.info("[Admin] 创建用户: empNo={} username={}", user.getEmpNo(), user.getUsername());
-        return R.ok("创建成功", SysUserVO.from(user));
+        SysUserVO vo = SysUserVO.from(user);
+        fillWorkshopBindings(vo);
+        return R.ok("创建成功", vo);
     }
 
     @OperationLog(module = "USER", action = "UPDATE", targetType = "SysUser",
@@ -123,11 +139,6 @@ public class SysUserController {
         if (req.getRole() != null) {
             wrapper.set(SysUser::getRole, req.getRole());
         }
-        if (req.getWorkshopId() != null) {
-            wrapper.set(SysUser::getWorkshopId, req.getWorkshopId());
-        } else if (req.isClearWorkshop()) {
-            wrapper.set(SysUser::getWorkshopId, null);;
-        }
         if (req.getStatus() != null) {
             wrapper.set(SysUser::getStatus, req.getStatus());
         }
@@ -135,11 +146,19 @@ public class SysUserController {
             wrapper.set(SysUser::getPassword, passwordEncoder.encode(req.getPassword()));
         }
 
-        sysUserService.update(wrapper);
+        // 仅在有字段需要更新时才执行 UPDATE (避免空 SET 子句触发 SQL 语法错误)
+        if (req.getUsername() != null || req.getEmail() != null || req.getPhone() != null
+                || req.getRole() != null || req.getStatus() != null
+                || (req.getPassword() != null && !req.getPassword().trim().isEmpty())) {
+            sysUserService.update(wrapper);
+        }
+
         log.info("[Admin] 更新用户: id={} empNo={}", id, existUser.getEmpNo());
 
         SysUser updated = sysUserService.getById(id);
-        return R.ok("更新成功", SysUserVO.from(updated));
+        SysUserVO vo = SysUserVO.from(updated);
+        fillWorkshopBindings(vo);
+        return R.ok("更新成功", vo);
     }
 
     @OperationLog(module = "USER", action = "STATUS_CHANGE", targetType = "SysUser",

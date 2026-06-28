@@ -4,6 +4,9 @@ import lombok.Data;
 
 /**
  * 更新用户请求 DTO（字段全部可选）
+ *
+ * 注: 车间绑定已迁移到数据中心权限页 (/api/admin/user-workshop),
+ *     此 DTO 不再处理 workshopId / workshopIds / primaryWorkshopId / testStationIds
  */
 @Data
 public class UserUpdateDTO {
@@ -23,12 +26,7 @@ public class UserUpdateDTO {
     /** 角色 */
     private String role;
 
-    /** 车间ID */
-    private Long workshopId;
-
-    /** 是否清空车间绑定 */
-    private boolean clearWorkshop;
-
     /** 状态 */
     private Integer status;
 }
+

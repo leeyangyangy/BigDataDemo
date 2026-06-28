@@ -5,6 +5,9 @@ import javax.validation.constraints.NotBlank;
 
 /**
  * 创建用户请求 DTO
+ *
+ * 注: 车间绑定已迁移到数据中心权限页 (/api/admin/user-workshop),
+ *     此 DTO 不再处理 workshopIds / primaryWorkshopId / testStationIds
  */
 @Data
 public class UserCreateDTO {
@@ -30,9 +33,7 @@ public class UserCreateDTO {
     /** 角色 */
     private String role;
 
-    /** 车间ID */
-    private Long workshopId;
-
     /** 状态 */
     private Integer status;
 }
+

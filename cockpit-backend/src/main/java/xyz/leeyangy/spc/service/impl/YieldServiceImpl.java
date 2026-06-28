@@ -1,14 +1,18 @@
 package xyz.leeyangy.spc.service.impl;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import xyz.leeyangy.spc.entity.YieldRate;
 import xyz.leeyangy.spc.service.YieldService;
 import xyz.leeyangy.spc.vo.YieldDataVO;
 
+import javax.annotation.PostConstruct;
 import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -49,6 +53,13 @@ public class YieldServiceImpl implements YieldService {
     /** 缓存 TTL（秒）：版本失效保证新鲜度，TTL 仅用于清理过期版本残留 */
     private static final long CACHE_TTL_SECONDS = 60L;
 
+    /** 数据窗口天数：超过此天数的 summaries 被丢弃 */
+    private static final int WINDOW_DAYS = 180;
+    /** Redis Hash key：持久化最新 summaries 全集（field=summaryKey, value=summaryJson） */
+    private static final String SUMMARIES_KEY = "spc:yield:summaries";
+    /** Redis List key 前缀：持久化历史时序点（LPUSH + LTRIM 保留最近 100 条） */
+    private static final String HISTORY_PREFIX = "spc:yield:history:";
+
     /** 当前良率列表 */
     private final List<YieldRate> currentYieldRates = Collections.synchronizedList(new ArrayList<>());
 
@@ -64,15 +75,183 @@ public class YieldServiceImpl implements YieldService {
 
     private final ReentrantLock dataLock = new ReentrantLock();
 
+    /**
+     * 启动加载：从 Redis 恢复 summaries 和历史时序，避免重启后大屏空白等待消息
+     * 加载失败不影响服务启动，会等待 RabbitMQ 推送
+     */
+    @PostConstruct
+    public void loadFromRedis() {
+        dataLock.lock();
+        try {
+            // 1. 恢复 summaries 并重建良率数据（含日期索引）
+            Boolean exists = redisTemplate.hasKey(SUMMARIES_KEY);
+            if (Boolean.TRUE.equals(exists)) {
+                // 先做一次过期清理（处理停机期间过期的数据）
+                LocalDateTime cutoff = LocalDateTime.now().minusDays(WINDOW_DAYS);
+                cleanupExpiredKeys(Collections.emptySet(), cutoff);
+
+                rebuildMemoryFromRedis();
+                log.info("[Yield] 启动加载完成: 当前良率 {} 条, 历史序列 {} 个",
+                        currentYieldRates.size(), historicalData.size());
+            } else {
+                log.info("[Yield] Redis 无 summaries 数据，等待 RabbitMQ 推送");
+            }
+
+            // 2. 加载历史时序（覆盖 rebuildMemoryFromRedis 中追加的最新点，避免重复）
+            loadHistoryFromRedis();
+        } catch (Exception e) {
+            log.warn("[Yield] 启动加载失败（不影响服务启动）: {}", e.getMessage(), e);
+        } finally {
+            dataLock.unlock();
+        }
+    }
+
+    /** 从 Redis List 加载历史时序，覆盖内存中追加的"启动点"，避免重复 */
+    private void loadHistoryFromRedis() {
+        ScanOptions options = ScanOptions.scanOptions()
+                .match(HISTORY_PREFIX + "*").count(100).build();
+        try (Cursor<String> cursor = redisTemplate.scan(options)) {
+            int loaded = 0;
+            while (cursor.hasNext()) {
+                String hKey = cursor.next();
+                String compositeKey = hKey.substring(HISTORY_PREFIX.length());
+                List<String> points = redisTemplate.opsForList().range(hKey, 0, -1);
+                if (points == null || points.isEmpty()) continue;
+                // List 用 LPUSH，最新在前面，需反转回时间顺序
+                Collections.reverse(points);
+                List<YieldDataVO.YieldHistoryPoint> list = Collections.synchronizedList(new ArrayList<>());
+                for (String p : points) {
+                    try {
+                        list.add(objectMapper.readValue(p, YieldDataVO.YieldHistoryPoint.class));
+                    } catch (Exception ex) {
+                        log.warn("[Yield] 反序列化历史点失败 key={}: {}", compositeKey, ex.getMessage());
+                    }
+                }
+                historicalData.put(compositeKey, list);
+                loaded++;
+            }
+            if (loaded > 0) {
+                log.info("[Yield] 加载历史时序: {} 个序列", loaded);
+            }
+        } catch (Exception e) {
+            log.warn("[Yield] 加载历史时序失败: {}", e.getMessage());
+        }
+    }
+
     @Override
     @SuppressWarnings("unchecked")
     public void updateYieldData(Map<String, Map<String, Object>> summaries) {
         if (summaries == null || summaries.isEmpty()) {
             return;
         }
-        log.info("[Yield] 开始计算良率，summaries 数量: {}", summaries.size());
+        log.info("[Yield] 收到 summaries 数量: {}", summaries.size());
         dataLock.lock();
         try {
+            // ① 时间过滤：丢弃 last_test_time 超出窗口的条目
+            LocalDateTime cutoff = LocalDateTime.now().minusDays(WINDOW_DAYS);
+            Map<String, Map<String, Object>> valid = new LinkedHashMap<>();
+            for (Map.Entry<String, Map<String, Object>> e : summaries.entrySet()) {
+                if (isWithinWindow(e.getValue(), cutoff)) {
+                    valid.put(e.getKey(), e.getValue());
+                }
+            }
+            log.info("[Yield] 时间过滤: incoming={} valid={} (window={}d)",
+                    summaries.size(), valid.size(), WINDOW_DAYS);
+            if (valid.isEmpty()) {
+                log.warn("[Yield] 时间过滤后无有效数据，跳过更新");
+                return;
+            }
+
+            // ② Diff 写入 Redis Hash（覆盖同 key）
+            persistSummariesToRedis(valid);
+
+            // ③ 清理 Redis 中本次未覆盖且已过期的 key
+            cleanupExpiredKeys(valid.keySet(), cutoff);
+
+            // ④ 从 Redis 全量重建内存（保证内存与 Redis 一致）
+            rebuildMemoryFromRedis();
+
+            // ⑤ 数据更新后递增版本号，使旧缓存自然失效
+            bumpCacheVersion();
+            log.info("[Yield] 大屏数据更新成功: 当前良率 {} 条, 历史序列 {} 个",
+                    currentYieldRates.size(), historicalData.size());
+        } finally {
+            dataLock.unlock();
+        }
+    }
+
+    /** 判断 summary 的 last_test_time 是否在窗口内 */
+    private boolean isWithinWindow(Map<String, Object> summary, LocalDateTime cutoff) {
+        if (summary == null) return false;
+        Object lastTest = summary.get("last_test_time");
+        if (lastTest == null) return false;
+        try {
+            LocalDateTime last = parseDateTime(String.valueOf(lastTest));
+            return last.isAfter(cutoff);
+        } catch (Exception e) {
+            // 解析失败按窗口外处理（避免脏数据无限堆积）
+            return false;
+        }
+    }
+
+    /** 把本次窗口内的 summaries 写入 Redis Hash（覆盖同 key） */
+    private void persistSummariesToRedis(Map<String, Map<String, Object>> valid) {
+        try {
+            Map<String, String> entries = new HashMap<>(valid.size());
+            for (Map.Entry<String, Map<String, Object>> e : valid.entrySet()) {
+                entries.put(e.getKey(), objectMapper.writeValueAsString(e.getValue()));
+            }
+            redisTemplate.opsForHash().putAll(SUMMARIES_KEY, entries);
+            log.info("[Yield] summaries 写入 Redis Hash: {} 条", entries.size());
+        } catch (Exception e) {
+            log.error("[Yield] summaries 持久化失败: {}", e.getMessage(), e);
+        }
+    }
+
+    /** 清理 Redis Hash 中本次未覆盖且已过期的 key（未过期则保留，容错生产方漏推） */
+    private void cleanupExpiredKeys(Set<String> incomingKeys, LocalDateTime cutoff) {
+        try {
+            Set<Object> redisKeys = redisTemplate.opsForHash().keys(SUMMARIES_KEY);
+            int removed = 0;
+            for (Object k : redisKeys) {
+                if (incomingKeys.contains(k)) continue;
+                String json = (String) redisTemplate.opsForHash().get(SUMMARIES_KEY, k);
+                if (json == null) continue;
+                try {
+                    Map<String, Object> s = objectMapper.readValue(json, Map.class);
+                    if (!isWithinWindow(s, cutoff)) {
+                        redisTemplate.opsForHash().delete(SUMMARIES_KEY, k);
+                        removed++;
+                    }
+                } catch (Exception ignored) {
+                    // 解析失败的脏数据直接清理
+                    redisTemplate.opsForHash().delete(SUMMARIES_KEY, k);
+                    removed++;
+                }
+            }
+            if (removed > 0) {
+                log.info("[Yield] 清理过期 summaries: {} 条", removed);
+            }
+        } catch (Exception e) {
+            log.warn("[Yield] 清理过期 summaries 失败: {}", e.getMessage());
+        }
+    }
+
+    /** 从 Redis 全量重建内存中的良率数据与历史时序 */
+    @SuppressWarnings("unchecked")
+    private void rebuildMemoryFromRedis() {
+        try {
+            Map<Object, Object> all = redisTemplate.opsForHash().entries(SUMMARIES_KEY);
+            Map<String, Map<String, Object>> summaries = new LinkedHashMap<>(all.size());
+            for (Map.Entry<Object, Object> e : all.entrySet()) {
+                try {
+                    summaries.put((String) e.getKey(),
+                            objectMapper.readValue((String) e.getValue(), Map.class));
+                } catch (Exception ex) {
+                    log.warn("[Yield] 反序列化 summary 失败 key={}: {}", e.getKey(), ex.getMessage());
+                }
+            }
+
             CalcResult result = calculateYieldRates(summaries);
 
             currentYieldRates.clear();
@@ -84,26 +263,33 @@ public class YieldServiceImpl implements YieldService {
             productKeyIndex.clear();
             productKeyIndex.putAll(result.productKeyIndex);
 
+            // 历史时序：追加本次计算结果，并持久化到 Redis List
             String timestamp = LocalDateTime.now()
                     .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
             for (YieldRate rate : result.yieldRates) {
-                String key = rate.getProductName() + "-" + rate.getProductCode() + "-" + rate.getBinRank();
-                List<YieldDataVO.YieldHistoryPoint> list = historicalData.computeIfAbsent(
-                        key, k -> Collections.synchronizedList(new ArrayList<>()));
-                list.add(YieldDataVO.YieldHistoryPoint.builder()
+                String compositeKey = rate.getProductName() + "-" + rate.getProductCode() + "-" + rate.getBinRank();
+                YieldDataVO.YieldHistoryPoint point = YieldDataVO.YieldHistoryPoint.builder()
                         .timestamp(timestamp)
                         .yieldRate(rate.getYieldRate())
-                        .build());
+                        .build();
+                // 内存追加 + 截断
+                List<YieldDataVO.YieldHistoryPoint> list = historicalData.computeIfAbsent(
+                        compositeKey, k -> Collections.synchronizedList(new ArrayList<>()));
+                list.add(point);
                 while (list.size() > HISTORY_MAX_SIZE) {
                     list.remove(0);
                 }
+                // Redis 持久化（LPUSH + LTRIM）
+                try {
+                    String hKey = HISTORY_PREFIX + compositeKey;
+                    redisTemplate.opsForList().leftPush(hKey, objectMapper.writeValueAsString(point));
+                    redisTemplate.opsForList().trim(hKey, 0, HISTORY_MAX_SIZE - 1);
+                } catch (Exception ex) {
+                    log.warn("[Yield] 历史时序持久化失败 key={}: {}", compositeKey, ex.getMessage());
+                }
             }
-            log.info("[Yield] 大屏数据更新成功: 当前良率 {} 条, 历史序列 {} 个",
-                    currentYieldRates.size(), historicalData.size());
-            // 数据更新后递增版本号，使旧缓存自然失效（下次查询重新计算并回填缓存）
-            bumpCacheVersion();
-        } finally {
-            dataLock.unlock();
+        } catch (Exception e) {
+            log.error("[Yield] 重建内存失败: {}", e.getMessage(), e);
         }
     }
 

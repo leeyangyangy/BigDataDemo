@@ -46,7 +46,8 @@ import { useTheme } from '../composables/useTheme'
 const props = defineProps({
   activeIndex: { type: Number, default: 1 },
   userRole: { type: String, default: '' },
-  activeKey: { type: String, default: 'home' }
+  activeKey: { type: String, default: 'home' },
+  showYield: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['navigate'])
@@ -66,8 +67,7 @@ const showRightFade = ref(false)
 
 const allNavItems = [
   { key: 'home', icon: '🏠', label: '首页' },
-  { key: 'data', icon: '📊', label: '数据' },
-  { key: 'yield', icon: '📈', label: '良率' },
+  { key: 'data', icon: '📊', label: '数据中心' },
   // { key: 'chat', icon: '💬', label: 'AIChat' },
   // { key: 'map', icon: '🗺️', label: '地图' },
   { key: 'admin', icon: '☰', label: '后台' }
@@ -80,6 +80,8 @@ const adminSubItems = [
   { key: 'admin-equipment', icon: '🔧', label: '设备' },
   { key: 'admin-workshop', icon: '🏭', label: '车间' },
   { key: 'admin-user', icon: '👥', label: '用户' },
+  { key: 'admin-datacenter-mgmt', icon: '🧩', label: '数据中心' },
+  { key: 'admin-datacenter-perm', icon: '🔐', label: 'DC权限' },
   { key: 'admin-changelog', icon: '📋', label: '日志' },
   { key: 'admin-operationlog', icon: '🔍', label: '运行日志' }
 ]
@@ -89,8 +91,13 @@ const navItems = computed(() => {
   if (isAdminMode) {
     return [{ key: 'home', icon: '🏠', label: '首页' }, ...adminSubItems]
   }
-  if (props.userRole === 'ADMIN') return allNavItems
-  return allNavItems.filter(item => item.key !== 'admin')
+  // 管理员始终显示数据中心 tab, 其他用户按 showYield 显示
+  const items = allNavItems.filter(item => {
+    if (item.key === 'admin') return props.userRole === 'ADMIN'
+    if (item.key === 'data') return props.userRole === 'ADMIN' || props.showYield
+    return true
+  })
+  return items
 })
 
 const activeKey = ref(props.activeKey || 'home')

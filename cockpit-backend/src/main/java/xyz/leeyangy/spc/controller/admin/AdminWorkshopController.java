@@ -36,9 +36,11 @@ public class AdminWorkshopController {
     }
 
     @GetMapping("/list")
-    public R<java.util.List<WorkshopVO>> listAll() {
+    public R<java.util.List<WorkshopVO>> listAll(
+            @RequestParam(required = false) String workshopType) {
         return R.ok(workshopService.list(new LambdaQueryWrapper<Workshop>()
                 .eq(Workshop::getStatus, 1)
+                .eq(workshopType != null && !workshopType.isEmpty(), Workshop::getWorkshopType, workshopType)
                 .orderByAsc(Workshop::getSortOrder))
                 .stream()
                 .map(WorkshopVO::from)
@@ -80,6 +82,7 @@ public class AdminWorkshopController {
         if (exist == null) return R.fail("车间不存在");
         if (workshop.getWorkshopName() != null) exist.setWorkshopName(workshop.getWorkshopName().trim());
         if (workshop.getWorkshopType() != null) exist.setWorkshopType(workshop.getWorkshopType());
+        if (workshop.getDataCenterVisible() != null) exist.setDataCenterVisible(workshop.getDataCenterVisible());
         if (workshop.getDescription() != null) exist.setDescription(workshop.getDescription());
         if (workshop.getStatus() != null) exist.setStatus(workshop.getStatus());
         if (workshop.getSortOrder() != null) exist.setSortOrder(workshop.getSortOrder());

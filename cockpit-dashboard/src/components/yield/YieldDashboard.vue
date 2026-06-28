@@ -156,9 +156,14 @@ async function loadWorkshops() {
       if (!workshops.value.includes(selectedWorkshop.value)) {
         selectedWorkshop.value = workshops.value[0]
       }
+    } else if (res && res.code === 403) {
+      error.value = '无良率数据查看权限, 请联系管理员'
     }
   } catch (e) {
     console.warn('[Yield] 加载车间列表失败，使用默认值:', e.message)
+    if (e.message && e.message.includes('403')) {
+      error.value = '无良率数据查看权限, 请联系管理员'
+    }
   }
 }
 
@@ -187,7 +192,11 @@ async function fetchData() {
       historicalData.value = {}
     }
   } catch (e) {
-    error.value = e.message || '获取良率数据失败'
+    if (e.message && e.message.includes('403')) {
+      error.value = '无良率数据查看权限, 请联系管理员'
+    } else {
+      error.value = e.message || '获取良率数据失败'
+    }
     console.error('[Yield] 获取数据失败:', e)
   } finally {
     loading.value = false

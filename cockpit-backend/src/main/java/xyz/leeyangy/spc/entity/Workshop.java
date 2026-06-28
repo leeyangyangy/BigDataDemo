@@ -13,6 +13,8 @@ public class Workshop extends BaseEntity {
     private String workshopCode;
     private String workshopName;
     private String workshopType;
+    /** 是否在数据中心可见 (0=否, 1=是) */
+    private Integer dataCenterVisible;
     private String description;
     private Integer status;
     private Integer sortOrder;
