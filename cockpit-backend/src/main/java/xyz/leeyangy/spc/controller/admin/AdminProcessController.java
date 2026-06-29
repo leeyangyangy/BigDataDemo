@@ -13,6 +13,7 @@ import xyz.leeyangy.spc.common.annotation.OperationLog;
 import xyz.leeyangy.spc.dto.ProcessCreateDTO;
 import xyz.leeyangy.spc.dto.ProcessUpdateDTO;
 import xyz.leeyangy.spc.entity.Process;
+import xyz.leeyangy.spc.mapper.ProcessMapper;
 import xyz.leeyangy.spc.service.ProcessService;
 import xyz.leeyangy.spc.vo.ProcessVO;
 
@@ -25,6 +26,7 @@ import javax.validation.Valid;
 public class AdminProcessController {
 
     private final ProcessService processService;
+    private final ProcessMapper processMapper;
 
     @GetMapping("/page")
     public R<Page<ProcessVO>> page(
@@ -150,26 +152,30 @@ public class AdminProcessController {
         return R.ok("复制成功", ProcessVO.from(copy));
     }
 
+    /**
+     * 生成唯一的 process_code：查询包含软删除记录的所有记录，避免命名冲突。
+     * 修复：原实现使用 LambdaQueryWrapper（受 @TableLogic 影响只查未删除），
+     * 导致软删除副本后再次复制会生成同名记录，触发唯一索引冲突或数据重复。
+     */
     private String generateUniqueCode(String baseCode, String type) {
         String candidate = baseCode + "_副本";
+        if (processMapper.countByCodeAll(candidate) == 0) return candidate;
         for (int i = 2; i <= 100; i++) {
-            long count = processService.count(new LambdaQueryWrapper<Process>()
-                    .eq(Process::getProcessCode, candidate)
-                    .eq(Process::getDeleted, 0));
-            if (count == 0) return candidate;
             candidate = baseCode + "_副本" + i;
+            if (processMapper.countByCodeAll(candidate) == 0) return candidate;
         }
         return baseCode + "_copy_" + System.currentTimeMillis();
     }
 
+    /**
+     * 生成唯一的 process_name：同上，查询包含软删除记录。
+     */
     private String generateUniqueName(String baseName, String type) {
         String candidate = baseName + " (副本)";
+        if (processMapper.countByNameAll(candidate) == 0) return candidate;
         for (int i = 2; i <= 100; i++) {
-            long count = processService.count(new LambdaQueryWrapper<Process>()
-                    .eq(Process::getProcessName, candidate)
-                    .eq(Process::getDeleted, 0));
-            if (count == 0) return candidate;
             candidate = baseName + " (副本" + i + ")";
+            if (processMapper.countByNameAll(candidate) == 0) return candidate;
         }
         return baseName + " (copy_" + System.currentTimeMillis() + ")";
     }

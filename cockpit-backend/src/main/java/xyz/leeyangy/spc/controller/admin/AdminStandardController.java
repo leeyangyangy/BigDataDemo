@@ -13,6 +13,7 @@ import xyz.leeyangy.spc.common.annotation.OperationLog;
 import xyz.leeyangy.spc.dto.ParamCreateDTO;
 import xyz.leeyangy.spc.dto.ParamUpdateDTO;
 import xyz.leeyangy.spc.entity.Param;
+import xyz.leeyangy.spc.mapper.ParamMapper;
 import xyz.leeyangy.spc.service.ParamService;
 import xyz.leeyangy.spc.vo.ParamVO;
 
@@ -25,6 +26,7 @@ import javax.validation.Valid;
 public class AdminStandardController {
 
     private final ParamService paramService;
+    private final ParamMapper paramMapper;
 
     @GetMapping("/page")
     public R<Page<ParamVO>> page(
@@ -135,26 +137,30 @@ public class AdminStandardController {
         return R.ok("复制成功", ParamVO.from(copy));
     }
 
+    /**
+     * 生成唯一的 param_code：查询包含软删除记录的所有记录，避免命名冲突。
+     * 修复：原实现使用 LambdaQueryWrapper（受 @TableLogic 影响只查未删除），
+     * 导致软删除副本后再次复制会生成同名记录，触发唯一索引冲突或数据重复。
+     */
     private String generateUniqueParamCode(String baseCode) {
         String candidate = baseCode + "_副本";
+        if (paramMapper.countByCodeAll(candidate) == 0) return candidate;
         for (int i = 2; i <= 100; i++) {
-            long count = paramService.count(new LambdaQueryWrapper<Param>()
-                    .eq(Param::getParamCode, candidate)
-                    .eq(Param::getDeleted, 0));
-            if (count == 0) return candidate;
             candidate = baseCode + "_副本" + i;
+            if (paramMapper.countByCodeAll(candidate) == 0) return candidate;
         }
         return baseCode + "_copy_" + System.currentTimeMillis();
     }
 
+    /**
+     * 生成唯一的 param_name：同上，查询包含软删除记录。
+     */
     private String generateUniqueParamName(String baseName) {
         String candidate = baseName + " (副本)";
+        if (paramMapper.countByNameAll(candidate) == 0) return candidate;
         for (int i = 2; i <= 100; i++) {
-            long count = paramService.count(new LambdaQueryWrapper<Param>()
-                    .eq(Param::getParamName, candidate)
-                    .eq(Param::getDeleted, 0));
-            if (count == 0) return candidate;
             candidate = baseName + " (副本" + i + ")";
+            if (paramMapper.countByNameAll(candidate) == 0) return candidate;
         }
         return baseName + " (copy_" + System.currentTimeMillis() + ")";
     }
