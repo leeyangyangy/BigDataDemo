@@ -18,6 +18,7 @@ import xyz.leeyangy.spc.dto.UserUpdateDTO;
 import xyz.leeyangy.spc.entity.SysUser;
 import xyz.leeyangy.spc.service.SysUserService;
 import xyz.leeyangy.spc.service.SysUserWorkshopService;
+import xyz.leeyangy.spc.service.TokenBlacklistService;
 import xyz.leeyangy.spc.vo.SysUserVO;
 
 import javax.validation.Valid;
@@ -32,6 +33,7 @@ public class SysUserController {
     private final SysUserService sysUserService;
     private final PasswordEncoder passwordEncoder;
     private final SysUserWorkshopService sysUserWorkshopService;
+    private final TokenBlacklistService tokenBlacklistService;
 
     @GetMapping("/page")
     public R<Page<SysUserVO>> page(
@@ -177,6 +179,10 @@ public class SysUserController {
         String statusDesc = newStatus == 1 ? "启用" : "停用";
         user.setStatus(newStatus);
         sysUserService.updateById(user);
+        // 停用用户时立即踢出其所有Token, 强制下线
+        if (newStatus == 0) {
+            tokenBlacklistService.kickUser(id);
+        }
         log.info("[Admin] 用户状态变更: id={} status={}", id, newStatus);
         return R.ok(null);
     }

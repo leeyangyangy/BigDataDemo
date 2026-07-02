@@ -29,7 +29,7 @@
             <th>邮箱</th>
             <th>手机号</th>
             <th>角色</th>
-            <th>车间</th>
+            <th>主车间</th>
             <th>状态</th>
             <th>最后登录</th>
             <th>操作</th>
@@ -42,7 +42,7 @@
             <td class="text-muted">{{ item.email || '-' }}</td>
             <td>{{ item.phone || '-' }}</td>
             <td><span class="role-tag" :class="'role-' + item.role">{{ roleMap[item.role] || item.role }}</span></td>
-            <td>{{ getWorkshopName(item.workshopId) }}</td>
+            <td>{{ getPrimaryWorkshopName(item) }}</td>
             <td>
               <span class="status-dot" :class="item.status === 1 ? 'on' : 'off'" @click="toggleStatus(item)"></span>
               {{ item.status === 1 ? '启用' : '停用' }}
@@ -50,6 +50,7 @@
             <td class="text-muted text-sm">{{ formatTime(item.lastLoginAt) || '-' }}</td>
             <td class="actions">
               <button class="btn-action btn-edit" @click="openEdit(item)">编辑</button>
+              <button class="btn-action btn-perm" @click="openWorkshopBinding(item)">车间权限</button>
               <button class="btn-action btn-del" @click="handleDelete(item)">删除</button>
             </td>
           </tr>
@@ -102,7 +103,7 @@
               <option value="VIEWER">观察者</option>
             </select>
           </div>
-          <div class="form-field" v-if="!isEdit">
+          <div class="form-field">
             <label>状态</label>
             <select v-model="form.status" class="form-input">
               <option :value="1">启用</option>
@@ -110,15 +111,61 @@
             </select>
           </div>
         </div>
-        <div class="form-tip" v-if="isEdit">
-          车间权限请到 <strong>后台 → DC权限</strong> 中绑定
-        </div>
-
         <div class="form-msg" v-if="formMsg" :class="{ error: formMsgType === 'error', success: formMsgType === 'success' }">{{ formMsg }}</div>
 
         <div class="modal-actions">
           <button class="btn-cancel" @click="closeForm">取消</button>
           <button class="btn-submit" @click="handleSubmit" :disabled="submitting">{{ submitting ? '提交中...' : (isEdit ? '保存' : '创建') }}</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 车间权限绑定弹窗 -->
+    <div class="modal-overlay" v-if="showWorkshopForm">
+      <div class="modal-card">
+        <h3 class="modal-title">车间权限 - {{ editingUser.username }} ({{ editingUser.empNo }})</h3>
+
+        <div class="form-field">
+          <label>生产车间 (可多选, 单选主车间)</label>
+          <div class="multi-workshop">
+            <div v-for="w in productionWorkshops" :key="w.id" class="workshop-check">
+              <label>
+                <input type="checkbox" :value="w.id" v-model="workshopForm.workshopIds" />
+                <span>{{ w.workshopName }}（{{ w.workshopCode }}）</span>
+                <input
+                  v-if="workshopForm.workshopIds.includes(w.id)"
+                  type="radio"
+                  name="primaryWorkshop"
+                  :value="w.id"
+                  v-model="workshopForm.primaryWorkshopId"
+                  class="primary-radio"
+                  title="设为主车间"
+                />
+                <span v-if="workshopForm.workshopIds.includes(w.id)" class="primary-label">主</span>
+              </label>
+            </div>
+            <div v-if="productionWorkshops.length === 0" class="text-muted text-sm">暂无可绑定的生产车间</div>
+          </div>
+        </div>
+
+        <div class="form-field">
+          <label>测试站 (可多选)</label>
+          <div class="multi-workshop">
+            <div v-for="w in testStationWorkshops" :key="w.id" class="workshop-check">
+              <label>
+                <input type="checkbox" :value="w.id" v-model="workshopForm.testStationIds" />
+                <span>{{ w.workshopName }}（{{ w.workshopCode }}）</span>
+              </label>
+            </div>
+            <div v-if="testStationWorkshops.length === 0" class="text-muted text-sm">暂无可绑定的测试站</div>
+          </div>
+        </div>
+
+        <div class="form-msg" v-if="workshopFormMsg" :class="{ error: workshopFormMsgType === 'error', success: workshopFormMsgType === 'success' }">{{ workshopFormMsg }}</div>
+
+        <div class="modal-actions">
+          <button class="btn-cancel" @click="closeWorkshopForm">取消</button>
+          <button class="btn-submit" @click="saveWorkshopBinding" :disabled="workshopSubmitting">{{ workshopSubmitting ? '保存中...' : '保存' }}</button>
         </div>
       </div>
     </div>
@@ -141,6 +188,7 @@ const filterRole = ref('')
 const filterStatus = ref('')
 
 const workshopList = ref([])
+const userBindingsMap = ref({})
 
 const showForm = ref(false)
 const isEdit = ref(false)
@@ -153,6 +201,25 @@ const form = ref({
   empNo: '', username: '', password: '',
   email: '', phone: '', role: 'OPERATOR', status: 1
 })
+
+// 车间权限绑定状态
+const showWorkshopForm = ref(false)
+const editingUser = ref({})
+const workshopSubmitting = ref(false)
+const workshopFormMsg = ref('')
+const workshopFormMsgType = ref('')
+const workshopForm = ref({
+  workshopIds: [],
+  primaryWorkshopId: null,
+  testStationIds: []
+})
+
+const productionWorkshops = computed(() =>
+  workshopList.value.filter(w => w.workshopType !== '测试车间' && w.workshopType !== 'TEST')
+)
+const testStationWorkshops = computed(() =>
+  workshopList.value.filter(w => w.workshopType === '测试车间' || w.workshopType === 'TEST')
+)
 
 // TODO 动态查询获取
 const roleMap = {
@@ -167,16 +234,26 @@ const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
 async function loadData() {
   loading.value = true
   try {
-    const res = await adminApi.user.getPage({
-      current: current.value,
-      size: pageSize.value,
-      keyword: keyword.value,
-      role: filterRole.value,
-      status: filterStatus.value !== '' ? Number(filterStatus.value) : undefined
-    })
+    const [res, bindingsRes] = await Promise.all([
+      adminApi.user.getPage({
+        current: current.value,
+        size: pageSize.value,
+        keyword: keyword.value,
+        role: filterRole.value,
+        status: filterStatus.value !== '' ? Number(filterStatus.value) : undefined
+      }),
+      adminApi.userWorkshop.listUsers()
+    ])
     if (res.code === 200 && res.data) {
       list.value = res.data.records || []
       total.value = res.data.total || 0
+    }
+    if (bindingsRes.code === 200 && bindingsRes.data) {
+      const map = {}
+      for (const u of bindingsRes.data) {
+        map[u.id] = u
+      }
+      userBindingsMap.value = map
     }
   } catch (e) {
     console.error('加载用户列表失败:', e)
@@ -280,6 +357,66 @@ function getWorkshopName(workshopId) {
   if (!workshopId) return '-'
   const w = workshopList.value.find(item => item.id === workshopId)
   return w ? w.workshopName : '-'
+}
+
+function getPrimaryWorkshopName(item) {
+  const binding = userBindingsMap.value[item.id]
+  if (binding && binding.primaryWorkshopId) {
+    return getWorkshopName(binding.primaryWorkshopId)
+  }
+  return getWorkshopName(item.workshopId)
+}
+
+// 车间权限绑定
+async function openWorkshopBinding(user) {
+  editingUser.value = user
+  workshopFormMsg.value = ''
+  workshopForm.value = { workshopIds: [], primaryWorkshopId: null, testStationIds: [] }
+  showWorkshopForm.value = true
+  try {
+    const res = await adminApi.userWorkshop.getBindings(user.id)
+    if (res.code === 200 && res.data) {
+      workshopForm.value.workshopIds = res.data.workshopIds || []
+      workshopForm.value.primaryWorkshopId = res.data.primaryWorkshopId || null
+      workshopForm.value.testStationIds = res.data.testStationIds || []
+    }
+  } catch (e) {
+    console.error('加载用户车间绑定失败:', e)
+  }
+}
+
+function closeWorkshopForm() {
+  showWorkshopForm.value = false
+  editingUser.value = {}
+  workshopForm.value = { workshopIds: [], primaryWorkshopId: null, testStationIds: [] }
+}
+
+async function saveWorkshopBinding() {
+  workshopSubmitting.value = true
+  workshopFormMsg.value = ''
+  try {
+    if (workshopForm.value.primaryWorkshopId && !workshopForm.value.workshopIds.includes(workshopForm.value.primaryWorkshopId)) {
+      workshopFormMsg.value = '主车间必须在所选车间列表中，请重新指定'
+      workshopFormMsgType.value = 'error'
+      workshopSubmitting.value = false
+      return
+    }
+    const res = await adminApi.userWorkshop.rebind(editingUser.value.id, workshopForm.value)
+    if (res.code === 200) {
+      workshopFormMsg.value = '保存成功'
+      workshopFormMsgType.value = 'success'
+      await loadData()
+      setTimeout(() => closeWorkshopForm(), 500)
+    } else {
+      workshopFormMsg.value = res.msg || '保存失败'
+      workshopFormMsgType.value = 'error'
+    }
+  } catch (e) {
+    workshopFormMsg.value = e.message || '网络错误'
+    workshopFormMsgType.value = 'error'
+  } finally {
+    workshopSubmitting.value = false
+  }
 }
 
 onMounted(() => {
@@ -497,6 +634,8 @@ onMounted(() => {
 }
 .btn-edit { background: #e6f7ff; color: #1890ff; }
 .btn-edit:hover { background: #bae7ff; }
+.btn-perm { background: #f9f0ff; color: #722ed1; }
+.btn-perm:hover { background: #efdbff; }
 .btn-del { background: #fff1f0; color: #cf1322; }
 .btn-del:hover { background: #ffa39e; }
 

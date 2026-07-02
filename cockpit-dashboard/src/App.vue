@@ -50,7 +50,6 @@
         <StandardManagement v-else-if="activeNav === 'admin-standard'" :key="'admin-standard'" />
         <EquipmentManagement v-else-if="activeNav === 'admin-equipment'" :key="'admin-equipment'" />
         <DataCenterManagement v-else-if="activeNav === 'admin-datacenter-mgmt'" :key="'admin-datacenter-mgmt'" />
-        <DataCenterPermission v-else-if="activeNav === 'admin-datacenter-perm'" :key="'admin-datacenter-perm'" />
         <ChangeLogManagement v-else-if="activeNav === 'admin-changelog'" :key="'admin-changelog'" />
         <OperationLogManagement v-else-if="activeNav === 'admin-operationlog'" :key="'admin-operationlog'" />
 
@@ -100,7 +99,6 @@ import ProductManagement from './components/admin/ProductManagement.vue'
 import ProcessManagement from './components/admin/ProcessManagement.vue'
 import WorkshopManagement from './components/admin/WorkshopManagement.vue'
 import DataCenterManagement from './components/admin/DataCenterManagement.vue'
-import DataCenterPermission from './components/admin/DataCenterPermission.vue'
 import BottomNav from './components/BottomNav.vue'
 import ThemeSwitcher from './components/ThemeSwitcher.vue'
 import LoginForm from './components/LoginForm.vue'
@@ -221,7 +219,7 @@ function handleNavigate(key) {
 function navKeyToIndex(key) {
   const isAdmin = key.startsWith('admin')
   if (isAdmin) {
-    const map = { 'home': 0, 'admin-product': 1, 'admin-process': 2, 'admin-standard': 3, 'admin-equipment': 4, 'admin-workshop': 5, 'admin-user': 6, 'admin-datacenter-mgmt': 7, 'admin-datacenter-perm': 8, 'admin-changelog': 9, 'admin-operationlog': 10 }
+    const map = { 'home': 0, 'admin-product': 1, 'admin-process': 2, 'admin-standard': 3, 'admin-equipment': 4, 'admin-workshop': 5, 'admin-user': 6, 'admin-datacenter-mgmt': 7, 'admin-changelog': 8, 'admin-operationlog': 9 }
     return map[key] ?? 1
   }
   const map = { home: 0, data: 1, admin: 2 }
