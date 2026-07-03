@@ -287,7 +287,7 @@ public class SpcChartController {
         for (int i = 0; i < alerts.size(); i++) {
             SpcAlert alert = alerts.get(i);
             Map<String, Object> item = new LinkedHashMap<>();
-            item.put("ruleId", i + 1);
+            item.put("ruleId", extractRuleId(alert.getRuleNumber(), i + 1));
             item.put("ruleCode", alert.getRuleNumber());
             item.put("ruleName", alert.getRuleName());
             item.put("value", alert.getMeasuredValue() != null ? alert.getMeasuredValue().toString() : "");
@@ -301,12 +301,27 @@ public class SpcChartController {
         return R.ok(result);
     }
 
+    /** 从规则代码（如 "N1"）提取数字 ID，失败时回退到 fallback 值 */
+    private int extractRuleId(String ruleCode, int fallback) {
+        if (ruleCode != null && ruleCode.startsWith("N")) {
+            try {
+                return Integer.parseInt(ruleCode.substring(1));
+            } catch (NumberFormatException e) {
+                return fallback;
+            }
+        }
+        return fallback;
+    }
+
     private String getSeverityLevel(String ruleCode) {
         if (SpcRuleEngine.RULE_1_BEYOND_3SIGMA.equals(ruleCode)) return "critical";
         if (SpcRuleEngine.RULE_2_NINE_ONE_SIDE.equals(ruleCode)) return "major";
         if (SpcRuleEngine.RULE_3_SIX_TREND.equals(ruleCode)) return "major";
+        if (SpcRuleEngine.RULE_4_FOURTEEN_ALTERNATE.equals(ruleCode)) return "warning";
         if (SpcRuleEngine.RULE_5_TWO_OF_THREE_2SIGMA.equals(ruleCode)) return "warning";
         if (SpcRuleEngine.RULE_6_FOUR_OF_FIVE_1SIGMA.equals(ruleCode)) return "warning";
+        if (SpcRuleEngine.RULE_7_FIFTEEN_IN_1SIGMA.equals(ruleCode)) return "info";
+        if (SpcRuleEngine.RULE_8_EIGHT_OUTSIDE_1SIGMA.equals(ruleCode)) return "info";
         return "warning";
     }
 }

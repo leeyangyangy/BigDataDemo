@@ -343,6 +343,12 @@ export const adminApi = {
     update: (id, data) => api.put(`/admin/param-version/${id}`, data),
     delete: (id) => api.delete(`/admin/param-version/${id}`)
   },
+  spcData: {
+    getPage: (params) => api.get('/admin/spc-data/page', params),
+    getById: (id) => api.get(`/admin/spc-data/${id}`),
+    delete: (id) => api.delete(`/admin/spc-data/${id}`),
+    batchDelete: (ids) => api.post('/admin/spc-data/batch-delete', ids)
+  },
   changeLog: {
     getPage: (params) => api.get('/admin/change-log/page', params),
     getDetail: (id) => api.get(`/admin/change-log/${id}`),

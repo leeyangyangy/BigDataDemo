@@ -23,8 +23,16 @@ public class SpcCalculator {
     /**
      * 计算完整统计指标并填充到 SpcStatResult。
      *
+     * <p>算法规范：
+     * <ul>
+     *   <li>整体标准差 σ_overall：样本方差（除以 n-1），用于 Pp/Ppk</li>
+     *   <li>组内标准差 σ_within：I-MR 用 MR̄/d₂，Xbar-R 用 R̄/d₂，用于 Cp/Cpk 和控制限</li>
+     *   <li>控制限：I-MR 用 mean ± k×σ_within，Xbar-R 用 grandMean ± A₂×R̄</li>
+     *   <li>stdDev 字段存 σ_within（控制图标准差）</li>
+     * </ul>
+     *
      * @param dataList        样本数据（非空）
-     * @param version         参数标准版本（含 USL/LSL/sigmaWidth 等）
+     * @param version         参数标准版本（含 USL/LSL/sigmaWidth/chartType/subgroupSize 等）
      * @param paramVersionId  参数版本ID
      * @param batchId         批次ID（可空）
      * @param triggerSource   触发来源
@@ -57,35 +65,53 @@ public class SpcCalculator {
 
         int n = dataList.size();
         BigDecimal mean = sum.divide(BigDecimal.valueOf(n), 10, RoundingMode.HALF_UP);
-        BigDecimal variance = sumSq.divide(BigDecimal.valueOf(n), 10, RoundingMode.HALF_UP)
-                .subtract(mean.multiply(mean));
-        BigDecimal stdDev = variance.compareTo(BigDecimal.ZERO) > 0
-                ? sqrt(variance, 10) : BigDecimal.ZERO;
         BigDecimal range = maxVal != null ? maxVal.subtract(minVal) : BigDecimal.ZERO;
 
+        // 整体标准差 σ_overall（样本方差，除以 n-1）—— 用于 Pp/Ppk
+        BigDecimal varianceOverall = n > 1
+                ? sumSq.subtract(mean.multiply(sum)).divide(BigDecimal.valueOf(n - 1), 10, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+        BigDecimal stdDevOverall = varianceOverall.compareTo(BigDecimal.ZERO) > 0
+                ? sqrt(varianceOverall, 10) : BigDecimal.ZERO;
+
+        // 组内标准差 σ_within 和控制限 —— 用于 Cp/Cpk 和控制图
+        int subgroupSize = version.getSubgroupSize() != null && version.getSubgroupSize() > 0
+                ? version.getSubgroupSize() : 5;
+        BigDecimal sigmaWidth = version.getSigmaWidth() != null ? version.getSigmaWidth() : BigDecimal.valueOf(3);
+        BigDecimal stdDevWithin = computeWithinSigma(dataList, mean, version.getChartType(), subgroupSize);
+        BigDecimal[] controlLimits = computeControlLimits(dataList, mean, stdDevWithin,
+                version.getChartType(), subgroupSize, sigmaWidth);
+
         result.setMeanValue(mean);
-        result.setStdDev(stdDev);
+        result.setStdDev(stdDevWithin);
         result.setRangeValue(range);
+        result.setCalcCl(controlLimits[0]);
+        result.setCalcUcl(controlLimits[1]);
+        result.setCalcLcl(controlLimits[2]);
 
         BigDecimal usl = version.getUsl();
         BigDecimal lsl = version.getLsl();
 
-        if (usl != null && lsl != null && stdDev.compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal specRange = usl.subtract(lsl);
-            BigDecimal sixSigma = stdDev.multiply(BigDecimal.valueOf(6));
+        if (usl != null && lsl != null) {
+            // Cp/Cpk 用 σ_within（组内标准差）
+            if (stdDevWithin.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal specRange = usl.subtract(lsl);
+                BigDecimal sixSigmaWithin = stdDevWithin.multiply(BigDecimal.valueOf(6));
+                result.setCp(specRange.divide(sixSigmaWithin, 4, RoundingMode.HALF_UP));
+                BigDecimal cpu = usl.subtract(mean).divide(stdDevWithin.multiply(BigDecimal.valueOf(3)), 4, RoundingMode.HALF_UP);
+                BigDecimal cpl = mean.subtract(lsl).divide(stdDevWithin.multiply(BigDecimal.valueOf(3)), 4, RoundingMode.HALF_UP);
+                result.setCpk(cpu.min(cpl));
+            }
 
-            result.setCp(specRange.divide(sixSigma, 4, RoundingMode.HALF_UP));
-
-            BigDecimal cpu = usl.subtract(mean).divide(stdDev.multiply(BigDecimal.valueOf(3)), 4, RoundingMode.HALF_UP);
-            BigDecimal cpl = mean.subtract(lsl).divide(stdDev.multiply(BigDecimal.valueOf(3)), 4, RoundingMode.HALF_UP);
-            result.setCpk(cpu.min(cpl));
-
-            BigDecimal ppVal = specRange.divide(sixSigma, 4, RoundingMode.HALF_UP);
-            result.setPp(ppVal);
-
-            BigDecimal ppu = usl.subtract(mean).divide(stdDev.multiply(BigDecimal.valueOf(3)), 4, RoundingMode.HALF_UP);
-            BigDecimal ppl = mean.subtract(lsl).divide(stdDev.multiply(BigDecimal.valueOf(3)), 4, RoundingMode.HALF_UP);
-            result.setPpk(ppu.min(ppl));
+            // Pp/Ppk 用 σ_overall（整体标准差）
+            if (stdDevOverall.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal specRange = usl.subtract(lsl);
+                BigDecimal sixSigmaOverall = stdDevOverall.multiply(BigDecimal.valueOf(6));
+                result.setPp(specRange.divide(sixSigmaOverall, 4, RoundingMode.HALF_UP));
+                BigDecimal ppu = usl.subtract(mean).divide(stdDevOverall.multiply(BigDecimal.valueOf(3)), 4, RoundingMode.HALF_UP);
+                BigDecimal ppl = mean.subtract(lsl).divide(stdDevOverall.multiply(BigDecimal.valueOf(3)), 4, RoundingMode.HALF_UP);
+                result.setPpk(ppu.min(ppl));
+            }
 
             int passCnt = 0;
             for (SpcData d : dataList) {
@@ -109,12 +135,122 @@ public class SpcCalculator {
             result.setIsNormal(wResult[1] >= 0.05);
         }
 
-        BigDecimal sigmaWidth = version.getSigmaWidth() != null ? version.getSigmaWidth() : BigDecimal.valueOf(3);
-        result.setCalcCl(mean);
-        result.setCalcUcl(mean.add(sigmaWidth.multiply(stdDev)));
-        result.setCalcLcl(mean.subtract(sigmaWidth.multiply(stdDev)));
-
         return result;
+    }
+
+    /**
+     * 计算组内标准差 σ_within
+     *
+     * <p>I-MR 图：σ = MR̄ / d₂（d₂=1.128，等效子组大小=2）
+     * <br>Xbar-R 图：σ = R̄ / d₂（d₂ 根据 subgroupSize 查表）
+     * <br>子组不足或系数不可用时回退到 I-MR 算法
+     */
+    private BigDecimal computeWithinSigma(List<SpcData> dataList, BigDecimal mean,
+                                           String chartType, int subgroupSize) {
+        if (isXbarChart(chartType) && ControlChartConstants.isValidN(subgroupSize)) {
+            int n = dataList.size();
+            int numSubgroups = n / subgroupSize;
+            if (numSubgroups >= 2) {
+                BigDecimal avgRange = computeAverageRange(dataList, subgroupSize, numSubgroups);
+                if (avgRange.compareTo(BigDecimal.ZERO) > 0) {
+                    return avgRange.divide(ControlChartConstants.d2(subgroupSize), 10, RoundingMode.HALF_UP);
+                }
+            }
+        }
+        // I-MR 算法或回退
+        return computeImrSigma(dataList);
+    }
+
+    /**
+     * 计算控制限 [CL, UCL, LCL]
+     *
+     * <p>I-MR 图：CL=mean, UCL/LCL = mean ± sigmaWidth × σ_within
+     * <br>Xbar-R 图：CL=grandMean, UCL/LCL = grandMean ± A₂ × R̄
+     */
+    private BigDecimal[] computeControlLimits(List<SpcData> dataList, BigDecimal mean,
+                                               BigDecimal stdDevWithin, String chartType,
+                                               int subgroupSize, BigDecimal sigmaWidth) {
+        if (isXbarChart(chartType) && ControlChartConstants.isValidN(subgroupSize)) {
+            int n = dataList.size();
+            int numSubgroups = n / subgroupSize;
+            if (numSubgroups >= 2) {
+                BigDecimal avgRange = computeAverageRange(dataList, subgroupSize, numSubgroups);
+                BigDecimal grandMean = computeGrandMean(dataList, subgroupSize, numSubgroups, mean);
+                BigDecimal A2 = ControlChartConstants.A2(subgroupSize);
+                BigDecimal xbarUcl = grandMean.add(A2.multiply(avgRange));
+                BigDecimal xbarLcl = grandMean.subtract(A2.multiply(avgRange));
+                return new BigDecimal[]{grandMean, xbarUcl, xbarLcl};
+            }
+        }
+        // I-MR 算法或回退
+        return new BigDecimal[]{
+                mean,
+                mean.add(sigmaWidth.multiply(stdDevWithin)),
+                mean.subtract(sigmaWidth.multiply(stdDevWithin))
+        };
+    }
+
+    /** I-MR 组内标准差：MR̄ / d₂ */
+    private BigDecimal computeImrSigma(List<SpcData> dataList) {
+        int n = dataList.size();
+        if (n < 2) return BigDecimal.ZERO;
+        BigDecimal mrSum = BigDecimal.ZERO;
+        for (int i = 1; i < n; i++) {
+            BigDecimal mr = dataList.get(i).getMeasuredValue()
+                    .subtract(dataList.get(i - 1).getMeasuredValue()).abs();
+            mrSum = mrSum.add(mr);
+        }
+        BigDecimal mrBar = mrSum.divide(BigDecimal.valueOf(n - 1), 10, RoundingMode.HALF_UP);
+        return mrBar.divide(ControlChartConstants.IMR_D2, 10, RoundingMode.HALF_UP);
+    }
+
+    /** Xbar-R 平均极差 R̄ */
+    private BigDecimal computeAverageRange(List<SpcData> dataList, int subgroupSize, int numSubgroups) {
+        BigDecimal rangeSum = BigDecimal.ZERO;
+        for (int i = 0; i < numSubgroups; i++) {
+            int start = i * subgroupSize;
+            BigDecimal sgMin = null, sgMax = null;
+            for (int j = start; j < start + subgroupSize && j < dataList.size(); j++) {
+                BigDecimal v = dataList.get(j).getMeasuredValue();
+                if (sgMin == null || v.compareTo(sgMin) < 0) sgMin = v;
+                if (sgMax == null || v.compareTo(sgMax) > 0) sgMax = v;
+            }
+            if (sgMin != null && sgMax != null) {
+                rangeSum = rangeSum.add(sgMax.subtract(sgMin));
+            }
+        }
+        return rangeSum.divide(BigDecimal.valueOf(numSubgroups), 10, RoundingMode.HALF_UP);
+    }
+
+    /** Xbar-R 总均值 X̄̄ */
+    private BigDecimal computeGrandMean(List<SpcData> dataList, int subgroupSize,
+                                         int numSubgroups, BigDecimal fallbackMean) {
+        BigDecimal grandMeanSum = BigDecimal.ZERO;
+        int validGroups = 0;
+        for (int i = 0; i < numSubgroups; i++) {
+            int start = i * subgroupSize;
+            BigDecimal sgSum = BigDecimal.ZERO;
+            int count = 0;
+            for (int j = start; j < start + subgroupSize && j < dataList.size(); j++) {
+                sgSum = sgSum.add(dataList.get(j).getMeasuredValue());
+                count++;
+            }
+            if (count > 0) {
+                grandMeanSum = grandMeanSum.add(sgSum.divide(BigDecimal.valueOf(count), 10, RoundingMode.HALF_UP));
+                validGroups++;
+            }
+        }
+        return validGroups > 0
+                ? grandMeanSum.divide(BigDecimal.valueOf(validGroups), 10, RoundingMode.HALF_UP)
+                : fallbackMean;
+    }
+
+    /** 判断是否为 Xbar 系列控制图（Xbar-R 或 Xbar-S） */
+    private boolean isXbarChart(String chartType) {
+        if (chartType == null) return false;
+        String upper = chartType.replace("-", "_").replace(" ", "").toUpperCase();
+        return "XBAR_R".equals(upper) || "XBARR".equals(upper)
+                || "XBAR_S".equals(upper) || "XBARS".equals(upper);
     }
 
     private BigDecimal sqrt(BigDecimal value, int scale) {

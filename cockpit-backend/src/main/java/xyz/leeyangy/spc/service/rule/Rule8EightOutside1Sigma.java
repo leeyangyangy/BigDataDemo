@@ -32,17 +32,22 @@ public class Rule8EightOutside1Sigma implements SpcRule {
 
         for (int end = 8; end <= n; end++) {
             boolean allOutside = true;
+            boolean hasAbove = false;
+            boolean hasBelow = false;
             for (int i = end - 8; i < end; i++) {
                 if (values[i] >= lower1sigma && values[i] <= upper1sigma) {
                     allOutside = false;
                     break;
                 }
+                if (values[i] > upper1sigma) hasAbove = true;
+                if (values[i] < lower1sigma) hasBelow = true;
             }
-            if (allOutside) {
+            // Nelson Rule 8 标准要求：8点都在1σ外，且两侧都有点
+            if (allOutside && hasAbove && hasBelow) {
                 int triggerIdx = end - 1;
                 if (!flagged.contains(triggerIdx)) {
                     alerts.add(ctx.createAlert(ctx.getDataList().get(triggerIdx), ruleCode(),
-                            "连续8点都在1σ范围之外(可能存在混合来源)"));
+                            "连续8点都在1σ范围之外且两侧分布(可能存在混合来源)"));
                     flagged.add(triggerIdx);
                 }
                 break;

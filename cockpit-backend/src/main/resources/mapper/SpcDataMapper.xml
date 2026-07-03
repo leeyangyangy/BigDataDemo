@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="xyz.leeyangy.spc.mapper.SpcDataMapper">
+
+    <select id="selectDetailPage" resultType="xyz.leeyangy.spc.vo.SpcDataDetailVO">
+        SELECT
+            d.id,
+            d.param_version_id        AS paramVersionId,
+            d.batch_id                AS batchId,
+            d.product_id              AS productId,
+            d.process_id              AS processId,
+            d.param_id                AS paramId,
+            d.equipment_id            AS equipmentId,
+            d.workstation_no          AS workstationNo,
+            d.measured_value          AS measuredValue,
+            d.subgroup_idx            AS subgroupIdx,
+            d.subgroup_size           AS subgroupSize,
+            d.subgroup_seq            AS subgroupSeq,
+            d.deviation               AS deviation,
+            d.is_ooc                  AS isOoc,
+            d.is_oos                  AS isOos,
+            d.sigma_level             AS sigmaLevel,
+            d.zone                    AS zone,
+            d.spc_flags               AS spcFlags,
+            d.data_source             AS dataSource,
+            d.collect_time            AS collectTime,
+            d.fill_time               AS fillTime,
+            d.data_quality            AS dataQuality,
+            d.trace_id                AS traceId,
+            d.msg_id                  AS msgId,
+            d.source_system           AS sourceSystem,
+            d.created_at              AS createdAt,
+            d.updated_at              AS updatedAt,
+            d.created_by              AS createdBy,
+            d.updated_by              AS updatedBy,
+
+            p.product_code            AS productCode,
+            p.product_name            AS productName,
+
+            pr.process_code           AS processCode,
+            pr.process_name           AS processName,
+
+            pa.param_code             AS paramCode,
+            pa.param_name             AS paramName,
+            pa.unit                   AS paramUnit,
+
+            e.equip_code              AS equipCode,
+            e.equip_name              AS equipName,
+
+            pv.version_no             AS versionNo,
+            pv.chart_type             AS chartType,
+            pv.target                 AS target,
+            pv.usl                    AS usl,
+            pv.lsl                    AS lsl,
+            pv.ucl                    AS ucl,
+            pv.lcl                    AS lcl
+        FROM spc_data d
+        LEFT JOIN spc_product       p  ON d.product_id = p.id  AND p.deleted = 0
+        LEFT JOIN spc_process       pr ON d.process_id = pr.id AND pr.deleted = 0
+        LEFT JOIN spc_param         pa ON d.param_id = pa.id  AND pa.deleted = 0
+        LEFT JOIN spc_equipment     e  ON d.equipment_id = e.id AND e.deleted = 0
+        LEFT JOIN spc_param_version pv ON d.param_version_id = pv.id AND pv.deleted = 0
+        WHERE d.deleted = 0
+        <if test="paramVersionId != null">
+            AND d.param_version_id = #{paramVersionId}
+        </if>
+        <if test="batchId != null and batchId != ''">
+            AND d.batch_id = #{batchId}
+        </if>
+        <if test="productId != null">
+            AND d.product_id = #{productId}
+        </if>
+        <if test="paramId != null">
+            AND d.param_id = #{paramId}
+        </if>
+        <if test="processId != null">
+            AND d.process_id = #{processId}
+        </if>
+        <if test="equipmentId != null">
+            AND d.equipment_id = #{equipmentId}
+        </if>
+        <if test="isOoc != null">
+            AND d.is_ooc = #{isOoc}
+        </if>
+        <if test="isOos != null">
+            AND d.is_oos = #{isOos}
+        </if>
+        <if test="dataSource != null and dataSource != ''">
+            AND d.data_source = #{dataSource}
+        </if>
+        <if test="startTime != null">
+            AND d.collect_time &gt;= #{startTime}
+        </if>
+        <if test="endTime != null">
+            AND d.collect_time &lt;= #{endTime}
+        </if>
+        ORDER BY d.collect_time DESC
+    </select>
+
+</mapper>

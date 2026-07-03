@@ -76,12 +76,35 @@ let subChartInstance = null
 
 function normalizeChartType(raw) {
   if (!raw) return 'imr'
-  const map = { 'I_MR': 'imr', 'IMR': 'imr', 'XbarR': 'xbar_r', 'XBAR_R': 'xbar_r', 'XbarS': 'xbar_r' }
-  const lower = raw.replace(/[-_]/g, '').toUpperCase()
+  const map = {
+    'I_MR': 'imr', 'IMR': 'imr',
+    'XBAR_R': 'xbar_r', 'XBARR': 'xbar_r',
+    'XBAR_S': 'xbar_r', 'XBARS': 'xbar_r',
+    'P': 'imr', 'P_CHART': 'imr'
+  }
+  const normalized = raw.replace(/[-_]/g, '').toUpperCase()
   for (const [k, v] of Object.entries(map)) {
-    if (lower === k.replace(/[-_]/g, '')) return v
+    if (normalized === k.replace(/[-_]/g, '')) return v
   }
   return 'imr'
+}
+
+// Xbar-R 控制图系数表（按子组大小 n=2..10）
+const CONTROL_CHART_COEFFICIENTS = {
+  2:  { A2: 1.880, D3: 0,     D4: 3.267, d2: 1.128 },
+  3:  { A2: 1.023, D3: 0,     D4: 2.574, d2: 1.693 },
+  4:  { A2: 0.729, D3: 0,     D4: 2.282, d2: 2.059 },
+  5:  { A2: 0.577, D3: 0,     D4: 2.114, d2: 2.326 },
+  6:  { A2: 0.483, D3: 0,     D4: 2.004, d2: 2.534 },
+  7:  { A2: 0.419, D3: 0,     D4: 1.924, d2: 2.704 },
+  8:  { A2: 0.373, D3: 0.076, D4: 1.864, d2: 2.847 },
+  9:  { A2: 0.337, D3: 0.184, D4: 1.816, d2: 2.970 },
+  10: { A2: 0.308, D3: 0.223, D4: 1.777, d2: 3.078 }
+}
+
+function getCoefficients(subgroupSize) {
+  const sg = Math.max(2, Math.min(10, subgroupSize || 5))
+  return CONTROL_CHART_COEFFICIENTS[sg] || CONTROL_CHART_COEFFICIENTS[5]
 }
 
 const currentChartType = ref(normalizeChartType(props.chartType))
@@ -385,9 +408,10 @@ function renderXbarR(data) {
   const { timeSeries, values, zones, oocFlags, limits } = data
   if (!values || !values.length) return
 
-  const subgroupSize = 5
+  // 从后端返回数据读取子组大小，默认 5
+  const subgroupSize = (data.subgroupSize && data.subgroupSize >= 2) ? data.subgroupSize : 5
   const numSubgroups = Math.floor(values.length / subgroupSize)
-  
+
   if (numSubgroups < 2) {
     renderIMR(data)
     return
@@ -423,9 +447,8 @@ function renderXbarR(data) {
   const grandMean = xbarData.reduce((a, b) => a + b, 0) / xbarData.length
   const avgRange = rData.reduce((a, b) => a + b, 0) / rData.length
 
-  const A2 = 0.577
-  const D3 = 0
-  const D4 = 2.114
+  // 根据子组大小动态获取控制图系数
+  const { A2, D3, D4 } = getCoefficients(subgroupSize)
 
   const xbarUcl = grandMean + A2 * avgRange
   const xbarLcl = grandMean - A2 * avgRange

@@ -3,8 +3,13 @@ package xyz.leeyangy.spc.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,11 +23,13 @@ import xyz.leeyangy.spc.mapper.SpcDataMapper;
 import xyz.leeyangy.spc.service.ParamVersionService;
 import xyz.leeyangy.spc.service.SpcDataService;
 import xyz.leeyangy.spc.service.SpcRuleEngine;
+import xyz.leeyangy.spc.vo.SpcDataDetailVO;
 
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 
 @Slf4j
@@ -33,9 +40,25 @@ public class SpcDataServiceImpl extends ServiceImpl<SpcDataMapper, SpcData> impl
     private final ParamVersionService paramVersionService;
     private final StringRedisTemplate redisTemplate;
     private final SpcRuleEngine spcRuleEngine;
+    private final ObjectMapper objectMapper;
 
     private static final String IDEMPOTENT_PREFIX = "spc:idempotent:";
     private static final String LATEST_DATA_PREFIX = "spc:latest:";
+
+    /** 后台 SPC 数据列表缓存 key 前缀 */
+    private static final String LIST_CACHE_PREFIX = "spc:admin:data:page:";
+    /** 列表缓存 TTL */
+    private static final Duration LIST_CACHE_TTL = Duration.ofMinutes(5);
+
+    /** 列表缓存值结构（仅缓存必要字段，避免序列化 MyBatis-Plus Page 内部字段） */
+    @Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private static class PageCache {
+        private List<SpcDataDetailVO> records;
+        private long total;
+        private long current;
+        private long size;
+    }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -227,5 +250,110 @@ public class SpcDataServiceImpl extends ServiceImpl<SpcDataMapper, SpcData> impl
             wrapper.last("LIMIT " + limit);
         }
         return list(wrapper);
+    }
+
+    @Override
+    public Page<SpcDataDetailVO> pageDetail(Page<SpcDataDetailVO> page,
+                                             Long paramVersionId, String batchId,
+                                             Long productId, Long paramId,
+                                             Long processId, Long equipmentId,
+                                             Integer isOoc, Integer isOos,
+                                             String dataSource,
+                                             LocalDateTime startTime, LocalDateTime endTime) {
+        // 1. 构建缓存 key（全部查询条件拼接，可读且无碰撞）
+        String cacheKey = buildListCacheKey(page.getCurrent(), page.getSize(),
+                paramVersionId, batchId, productId, paramId,
+                processId, equipmentId, isOoc, isOos, dataSource, startTime, endTime);
+
+        // 2. 先查缓存：命中直接返回
+        try {
+            String cached = redisTemplate.opsForValue().get(cacheKey);
+            if (cached != null) {
+                PageCache cache = objectMapper.readValue(cached, PageCache.class);
+                Page<SpcDataDetailVO> cachedPage = new Page<>(cache.getCurrent(), cache.getSize());
+                cachedPage.setRecords(cache.getRecords());
+                cachedPage.setTotal(cache.getTotal());
+                log.debug("[Cache] SPC数据列表缓存命中: {}", cacheKey);
+                return cachedPage;
+            }
+        } catch (Exception e) {
+            log.warn("[Cache] SPC数据列表缓存读取失败，回源DB: {}", e.getMessage());
+        }
+
+        // 3. 未命中：回源 DB（MyBatis-Plus 拦截器原地填充 page）
+        baseMapper.selectDetailPage(page,
+                paramVersionId, batchId, productId, paramId,
+                processId, equipmentId, isOoc, isOos,
+                dataSource, startTime, endTime);
+
+        // 4. 回写缓存
+        try {
+            PageCache cache = new PageCache();
+            cache.setRecords(page.getRecords());
+            cache.setTotal(page.getTotal());
+            cache.setCurrent(page.getCurrent());
+            cache.setSize(page.getSize());
+            redisTemplate.opsForValue().set(cacheKey, objectMapper.writeValueAsString(cache), LIST_CACHE_TTL);
+        } catch (Exception e) {
+            log.warn("[Cache] SPC数据列表缓存写入失败: {}", e.getMessage());
+        }
+        return page;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean deleteData(Long id) {
+        // 先清缓存，再删除（缓存非事务，删除失败回滚后下次查询会重建）
+        clearListCache();
+        return removeById(id);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean batchDeleteData(List<Long> ids) {
+        clearListCache();
+        return removeByIds(ids);
+    }
+
+    /** 拼接缓存 key：可读 + 无碰撞 */
+    private String buildListCacheKey(long current, long size,
+                                     Long paramVersionId, String batchId,
+                                     Long productId, Long paramId,
+                                     Long processId, Long equipmentId,
+                                     Integer isOoc, Integer isOos,
+                                     String dataSource,
+                                     LocalDateTime startTime, LocalDateTime endTime) {
+        return LIST_CACHE_PREFIX + current + ":" + size
+                + ":" + paramVersionId
+                + ":" + batchId
+                + ":" + productId
+                + ":" + paramId
+                + ":" + processId
+                + ":" + equipmentId
+                + ":" + isOoc
+                + ":" + isOos
+                + ":" + dataSource
+                + ":" + startTime
+                + ":" + endTime;
+    }
+
+    /** 清除所有后台 SPC 数据列表缓存（SCAN + 批量删除，生产安全） */
+    private void clearListCache() {
+        try {
+            ScanOptions options = ScanOptions.scanOptions()
+                    .match(LIST_CACHE_PREFIX + "*").count(200).build();
+            List<String> keys = new ArrayList<>();
+            try (Cursor<String> cursor = redisTemplate.scan(options)) {
+                while (cursor.hasNext()) {
+                    keys.add(cursor.next());
+                }
+            }
+            if (!keys.isEmpty()) {
+                redisTemplate.delete(keys);
+                log.info("[Cache] 清除SPC数据列表缓存: {} 个key", keys.size());
+            }
+        } catch (Exception e) {
+            log.warn("[Cache] 清除SPC数据列表缓存失败: {}", e.getMessage());
+        }
     }
 }

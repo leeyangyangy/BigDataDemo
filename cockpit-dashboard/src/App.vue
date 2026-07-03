@@ -52,6 +52,7 @@
         <DataCenterManagement v-else-if="activeNav === 'admin-datacenter-mgmt'" :key="'admin-datacenter-mgmt'" />
         <ChangeLogManagement v-else-if="activeNav === 'admin-changelog'" :key="'admin-changelog'" />
         <OperationLogManagement v-else-if="activeNav === 'admin-operationlog'" :key="'admin-operationlog'" />
+        <SpcDataManagement v-else-if="activeNav === 'admin-spc-data'" :key="'admin-spc-data'" />
 
 <!--        <AdminPanel v-else-if="activeNav === 'admi' +-->
 <!--         'n-standard' || activeNav === 'admin-equipment' || activeNav === 'admin-changelog' || activeNav === 'admin-operationlog'" :key="activeNav" :defaultTab="activeNav === 'admin-changelog' ? 'changelog' : (activeNav === 'admin-operationlog' ? 'operationlog' : (activeNav === 'admin-standard' ? 'standard' : 'equipment'))" />-->
@@ -108,6 +109,7 @@ import OperationLogManagement from "@/components/admin/OperationLogManagement.vu
 import ChangeLogManagement from "@/components/admin/ChangeLogManagement.vue";
 import EquipmentManagement from "@/components/admin/EquipmentManagement.vue";
 import StandardManagement from "@/components/admin/StandardManagement.vue";
+import SpcDataManagement from "@/components/admin/SpcDataManagement.vue";
 
 const NAV_KEY = 'spc_active_nav'
 const ADMIN_NAV_KEY = 'spc_admin_last_nav'
@@ -219,7 +221,7 @@ function handleNavigate(key) {
 function navKeyToIndex(key) {
   const isAdmin = key.startsWith('admin')
   if (isAdmin) {
-    const map = { 'home': 0, 'admin-product': 1, 'admin-process': 2, 'admin-standard': 3, 'admin-equipment': 4, 'admin-workshop': 5, 'admin-user': 6, 'admin-datacenter-mgmt': 7, 'admin-changelog': 8, 'admin-operationlog': 9 }
+    const map = { 'home': 0, 'admin-product': 1, 'admin-process': 2, 'admin-standard': 3, 'admin-equipment': 4, 'admin-workshop': 5, 'admin-user': 6, 'admin-spc-data': 7, 'admin-datacenter-mgmt': 8, 'admin-changelog': 9, 'admin-operationlog': 10 }
     return map[key] ?? 1
   }
   const map = { home: 0, data: 1, admin: 2 }

@@ -80,6 +80,7 @@ const adminSubItems = [
   { key: 'admin-equipment', icon: '🔧', label: '设备' },
   { key: 'admin-workshop', icon: '🏭', label: '车间' },
   { key: 'admin-user', icon: '👥', label: '用户' },
+  { key: 'admin-spc-data', icon: '📊', label: 'SPC数据' },
   { key: 'admin-datacenter-mgmt', icon: '🧩', label: '数据中心' },
   { key: 'admin-changelog', icon: '📋', label: '日志' },
   { key: 'admin-operationlog', icon: '🔍', label: '运行日志' }

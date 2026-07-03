@@ -113,7 +113,7 @@ public class AdminParamVersionController {
         if (req.getCl() != null) updated.setCl(req.getCl());
         if (req.getChartType() != null) updated.setChartType(req.getChartType());
         if (req.getStatus() != null) updated.setStatus(req.getStatus());
-        if (req.getSubgroupSize() !=null) updated.setStatus(req.getSubgroupSize());
+        if (req.getSubgroupSize() != null) updated.setSubgroupSize(req.getSubgroupSize());
 
         boolean ok = paramVersionService.updateVersion(id, updated);
 

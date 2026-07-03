@@ -214,9 +214,9 @@
             <div class="form-field">
               <label>图表类型</label>
               <select v-model="newVersion.chartType" class="form-input">
-                <option value="XbarR">Xbar-R</option>
-                <option value="XbarS">Xbar-S</option>
-                <option value="I-MR">I-MR</option>
+                <option value="XBAR_R">Xbar-R</option>
+                <option value="XBAR_S">Xbar-S</option>
+                <option value="I_MR">I-MR</option>
                 <option value="P">P图</option>
               </select>
             </div>
@@ -278,9 +278,9 @@
                 <div class="form-field"><label>CL</label><input v-model.number="editVersionForm.cl" type="number" step="0.000001" class="form-input form-input-sm" /></div>
                 <div class="form-field"><label>图表类型</label>
                   <select v-model="editVersionForm.chartType" class="form-input form-input-sm">
-                    <option value="XbarR">Xbar-R</option>
-                    <option value="XbarS">Xbar-S</option>
-                    <option value="I-MR">I-MR</option>
+                    <option value="XBAR_R">Xbar-R</option>
+                    <option value="XBAR_S">Xbar-S</option>
+                    <option value="I_MR">I-MR</option>
                     <option value="P">P图</option>
                   </select>
                 </div>
@@ -354,7 +354,7 @@ const editForm = ref({
 const newVersion = ref({
   usl: null, lsl: null, target: null,
   ucl: null, lcl: null,
-  chartType: 'XbarR',
+  chartType: 'XBAR_R',
   subgroupSize: 5,
   changeReason: ''
 })
@@ -363,7 +363,7 @@ const editingVersionId = ref(null)
 const editVersionForm = ref({
   usl: null, lsl: null, target: null,
   ucl: null, lcl: null, cl: null,
-  chartType: 'XbarR', subgroupSize: 5
+  chartType: 'XBAR_R', subgroupSize: 5
 })
 
 const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
@@ -573,7 +573,7 @@ async function openVersionManage(item) {
   newVersion.value = {
     usl: null, lsl: null, target: null,
     ucl: null, lcl: null,
-    chartType: 'XbarR',
+    chartType: 'XBAR_R',
     subgroupSize: 5,
     changeReason: ''
   }
@@ -683,7 +683,7 @@ function handleEditVersion(v) {
   editVersionForm.value = {
     usl: v.usl, lsl: v.lsl, target: v.target,
     ucl: v.ucl, lcl: v.lcl, cl: v.cl,
-    chartType: v.chartType || 'XbarR', subgroupSize: v.subgroupSize
+    chartType: v.chartType || 'XBAR_R', subgroupSize: v.subgroupSize
   }
 }
 
