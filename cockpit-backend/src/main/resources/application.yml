@@ -122,6 +122,11 @@ spc:
   cors:
     allowed-origins: http://localhost:5174,http://localhost:5173,http://127.0.0.1:5174,http://192.168.1.111:5174
 
+  # SPC 报告相关配置(年份自动取当前年份,无需手动修改)
+  report:
+    company-name: 飓芯科技
+    company-website: https://hurricanechip.com/
+
 management:
   endpoints:
     web:

@@ -24,6 +24,7 @@ import com.itextpdf.layout.properties.TextAlignment;
 import com.itextpdf.layout.properties.UnitValue;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import xyz.leeyangy.spc.common.exception.BusinessException;
 import xyz.leeyangy.spc.common.exception.ResourceNotFoundException;
@@ -44,6 +45,7 @@ import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
@@ -64,6 +66,13 @@ public class SpcReportServiceImpl implements SpcReportService {
     private final ParamVersionService paramVersionService;
     private final SpcCalculator spcCalculator;
     private final SpcRuleEngine spcRuleEngine;
+
+    /** 报告公司名称(从 application.yml 读取,年份自动取当前年份) */
+    @Value("${spc.report.company-name:飓芯科技}")
+    private String companyName;
+
+    @Value("${spc.report.company-website:}")
+    private String companyWebsite;
 
     private static final DateTimeFormatter DT_FMT = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
     private static final DateTimeFormatter FILE_FMT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
@@ -188,7 +197,7 @@ public class SpcReportServiceImpl implements SpcReportService {
         doc.setFont(cnFont);
 
         // ============ 标题 ============
-        Paragraph title = new Paragraph("SPC统计过程控制分析报告")
+        Paragraph title = new Paragraph(companyName + " · SPC统计过程控制分析报告")
                 .setFont(cnBold).setFontSize(20).setBold()
                 .setTextAlignment(TextAlignment.CENTER)
                 .setMarginBottom(4);
@@ -322,9 +331,13 @@ public class SpcReportServiceImpl implements SpcReportService {
         addChart(doc, charts.getNormalProbabilityPlot(), "正态概率图 - 正态性检验");
         addChart(doc, charts.getTrendChart(), "趋势图 - 数据趋势分析");
 
-        // ============ 页脚 ============
+        // ============ 页脚(年份自动取当前年份,公司名从配置读取) ============
         doc.add(new LineSeparator(new SolidLine(0.5f)).setMarginTop(12));
-        Paragraph footer = new Paragraph("© 2025 飓芯科技 · SPC 过程控制分析系统")
+        int year = LocalDate.now().getYear();
+        String footerText = companyWebsite != null && !companyWebsite.isEmpty()
+                ? "© " + year + " " + companyName + " · " + companyWebsite
+                : "© " + year + " " + companyName + " · SPC 过程控制分析系统";
+        Paragraph footer = new Paragraph(footerText)
                 .setFontSize(8).setFontColor(ColorConstants.GRAY)
                 .setTextAlignment(TextAlignment.CENTER)
                 .setMarginTop(6);
