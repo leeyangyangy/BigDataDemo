@@ -108,7 +108,7 @@ public class SysUserWorkshopController {
 
         // 校验主车间必须在 workshopIds 中
         if (primaryId != null && !workshopIds.contains(primaryId)) {
-            return R.fail("主车间必须在所选车间列表中");
+            return R.fail("主车间必须在所选车间列表中，请重新指定");
         }
 
         sysUserWorkshopService.rebindWorkshops(userId, workshopIds, primaryId);

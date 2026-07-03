@@ -276,7 +276,7 @@ export const spcApi = {
   getParamPage: (params) => api.get('/spc/param/page', params),
   getAlerts: (params) => api.get('/spc/chart/alerts', params),
   importData: (formData) => api.post('/spc/data/import', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  downloadTemplate: () => '/api/spc/data/template/download',
+  downloadTemplate: () => '/api/spc/data/template',
   exportReport: (params) => {
     const queryString = new URLSearchParams(params).toString()
     return `/api/spc/data/export/report?${queryString}`

@@ -62,6 +62,8 @@ public class SpcChartController {
         }
 
         List<SpcData> dataList = spcDataService.listRecentData(version.getId(), limit, startTime, endTime);
+        // listRecentData 按 collect_time DESC 返回（最新在前），反转成正序（旧→新）以便控制图按时间方向渲染
+        Collections.reverse(dataList);
 
         List<String> timeSeries = new ArrayList<>();
         List<BigDecimal> values = new ArrayList<>();

@@ -8,9 +8,11 @@ import java.util.Map;
 
 public interface SpcDataImportExportService {
 
-    Map<String, Object> importFromExcel(MultipartFile file, Long paramVersionId, Long userId);
+    Map<String, Object> importFromExcel(MultipartFile file, Long paramId, Long productId,
+                                        Long processId, Long equipmentId, Long userId, String role);
 
-    void exportToExcel(Long paramVersionId, LocalDateTime startTime, LocalDateTime endTime,
+    void exportToExcel(Long paramId, Long productId, Long equipmentId, Integer limit,
+                       LocalDateTime startTime, LocalDateTime endTime,
                        HttpServletResponse response) throws IOException;
 
     void downloadTemplate(HttpServletResponse response) throws IOException;

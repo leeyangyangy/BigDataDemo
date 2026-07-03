@@ -438,7 +438,7 @@ onMounted(async () => {
 .result-badge.ok { background: #f6ffed; color: #389e0d; }
 .result-badge.fail { background: #fff1f0; color: #cf1322; }
 
-.ip-cell { font-family: monospace; font-size: 11px; color: var(--text-tertiary); max-width: 130px; overflow: hidden; text-overflow: ellipsis; display: inline-block; }
+.ip-cell { max-width: 180px; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
 
 .content-cell { max-width: 180px; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
 .error-text { color: #cf1322; }

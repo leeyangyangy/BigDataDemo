@@ -7,6 +7,7 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import xyz.leeyangy.spc.common.exception.BusinessException;
 import xyz.leeyangy.spc.common.exception.ResourceNotFoundException;
 import xyz.leeyangy.spc.entity.SpcData;
 import xyz.leeyangy.spc.entity.ParamVersion;
@@ -32,7 +33,25 @@ public class SpcDataImportExportServiceImpl implements SpcDataImportExportServic
     private final ParamVersionService paramVersionService;
 
     @Override
-    public Map<String, Object> importFromExcel(MultipartFile file, Long paramVersionId, Long userId) {
+    public Map<String, Object> importFromExcel(MultipartFile file, Long paramId, Long productId,
+                                               Long processId, Long equipmentId, Long userId, String role) {
+        // 业务级参数校验（与前端校验对齐，防止绕过前端直接调接口）
+        if (file == null || file.isEmpty()) {
+            throw new BusinessException("导入文件不能为空");
+        }
+        if (paramId == null || paramId <= 0) {
+            throw new BusinessException("请先选择工艺参数后再导入数据");
+        }
+        if (productId == null || productId <= 0) {
+            throw new BusinessException("请先选择产品后再导入数据");
+        }
+        if (userId == null || userId <= 0) {
+            throw new BusinessException("用户未登录，无法导入数据");
+        }
+        if (role == null || role.trim().isEmpty()) {
+            throw new BusinessException("用户角色缺失，无法导入数据");
+        }
+
         Map<String, Object> result = new HashMap<>();
         List<SpcData> successList = new ArrayList<>();
         List<Map<String, String>> failList = new ArrayList<>();
@@ -62,7 +81,10 @@ public class SpcDataImportExportServiceImpl implements SpcDataImportExportServic
 
                 try {
                     SpcData data = new SpcData();
-                    data.setParamVersionId(paramVersionId);
+                    data.setParamId(paramId);
+                    data.setProductId(productId);
+                    data.setProcessId(processId);
+                    data.setEquipmentId(equipmentId);
                     data.setCreatedBy(userId);
 
                     if (batchCol >= 0 && row.getCell(batchCol) != null) {
@@ -71,22 +93,22 @@ public class SpcDataImportExportServiceImpl implements SpcDataImportExportServic
                             data.setBatchId(batchVal);
                         }
                     }
-                    
+
                     if (valueCol >= 0 && row.getCell(valueCol) != null) {
                         String valStr = getCellValue(row.getCell(valueCol)).trim();
                         if (valStr.isEmpty()) {
                             throw new IllegalArgumentException("测量值为空");
                         }
-                        
+
                         try {
                             BigDecimal measuredValue = new BigDecimal(valStr);
-                            
+
                             // 验证数值合理性
                             if (measuredValue.compareTo(new BigDecimal("-999999999")) < 0 ||
                                 measuredValue.compareTo(new BigDecimal("999999999")) > 0) {
                                 throw new IllegalArgumentException("测量值超出合理范围: " + valStr);
                             }
-                            
+
                             data.setMeasuredValue(measuredValue);
                         } catch (NumberFormatException e) {
                             throw new IllegalArgumentException("测量值格式错误: '" + valStr + "'，请输入有效数字");
@@ -94,7 +116,7 @@ public class SpcDataImportExportServiceImpl implements SpcDataImportExportServic
                     } else {
                         throw new IllegalArgumentException("缺少测量值列或测量值为空");
                     }
-                    
+
                     if (timeCol >= 0 && row.getCell(timeCol) != null) {
                         String timeStr = getCellValue(row.getCell(timeCol)).trim();
                         if (!timeStr.isEmpty()) {
@@ -109,13 +131,22 @@ public class SpcDataImportExportServiceImpl implements SpcDataImportExportServic
                     } else {
                         data.setCollectTime(LocalDateTime.now());
                     }
-                    
+
                     data.setFillTime(LocalDateTime.now());
 
-                    spcDataService.save(data);
-                    successList.add(data);
-                    log.debug("[Import] 第{}行导入成功: batch={} value={}", rowIndex + 1, 
-                             data.getBatchId(), data.getMeasuredValue());
+                    // 走 uploadData 统一通道：自动解析当前版本、评估 OOC/OOS、缓存最新数据、触发判异
+                    SpcData saved = spcDataService.uploadData(data, role);
+                    if (saved != null) {
+                        successList.add(saved);
+                        log.debug("[Import] 第{}行导入成功: batch={} value={}", rowIndex + 1,
+                                 saved.getBatchId(), saved.getMeasuredValue());
+                    } else {
+                        // uploadData 返回 null 表示重复消息被去重，按失败行处理
+                        Map<String, String> failItem = new HashMap<>();
+                        failItem.put("row", String.valueOf(rowIndex + 1));
+                        failItem.put("reason", "重复数据被去重");
+                        failList.add(failItem);
+                    }
                 } catch (IllegalArgumentException e) {
                     Map<String, String> failItem = new HashMap<>();
                     failItem.put("row", String.valueOf(rowIndex + 1));
@@ -143,24 +174,30 @@ public class SpcDataImportExportServiceImpl implements SpcDataImportExportServic
         result.put("successList", successList);
         result.put("failList", failList);
 
-        log.info("[Import] 导入完成: total={} success={} fail={}",
-                successList.size() + failList.size(), successList.size(), failList.size());
+        log.info("[Import] 导入完成: paramId={} productId={} total={} success={} fail={}",
+                paramId, productId, successList.size() + failList.size(), successList.size(), failList.size());
         return result;
     }
 
     @Override
-    public void exportToExcel(Long paramVersionId, LocalDateTime startTime, LocalDateTime endTime,
+    public void exportToExcel(Long paramId, Long productId, Long equipmentId, Integer limit,
+                              LocalDateTime startTime, LocalDateTime endTime,
                               HttpServletResponse response) throws IOException {
-        ParamVersion version = paramVersionService.getById(paramVersionId);
+        ParamVersion version = paramVersionService.getCurrentVersion(paramId, productId);
         if (version == null) {
-            throw new ResourceNotFoundException("参数版本", paramVersionId);
+            throw new ResourceNotFoundException("参数当前版本", "paramId=" + paramId + ", productId=" + productId);
         }
 
         LambdaQueryWrapper<SpcData> wrapper = new LambdaQueryWrapper<SpcData>()
-                .eq(SpcData::getParamVersionId, paramVersionId)
-                .orderByAsc(SpcData::getCollectTime);
-        if (startTime != null) wrapper.ge(SpcData::getCollectTime, startTime);
-        if (endTime != null) wrapper.le(SpcData::getCollectTime, endTime);
+                .eq(SpcData::getParamVersionId, version.getId())
+                .eq(equipmentId != null, SpcData::getEquipmentId, equipmentId)
+                .ge(startTime != null, SpcData::getCollectTime, startTime)
+                .le(endTime != null, SpcData::getCollectTime, endTime)
+                .eq(SpcData::getDeleted, 0)
+                .orderByDesc(SpcData::getCollectTime);
+        if (limit != null && limit > 0) {
+            wrapper.last("LIMIT " + limit);
+        }
 
         List<SpcData> dataList = spcDataService.list(wrapper);
 
@@ -214,7 +251,8 @@ public class SpcDataImportExportServiceImpl implements SpcDataImportExportServic
             workbook.write(response.getOutputStream());
         }
 
-        log.info("[Export] 导出完成: paramVersionId={} count={}", paramVersionId, dataList.size());
+        log.info("[Export] 导出完成: paramId={} productId={} paramVersionId={} count={}",
+                paramId, productId, version.getId(), dataList.size());
     }
 
     @Override

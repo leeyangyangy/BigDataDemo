@@ -289,6 +289,11 @@ function formatTimeLabel(val) {
   return val
 }
 
+// 生成子组序号数组 [1, 2, ..., n]，用于 X 轴刻度
+function indexLabels(n) {
+  return Array.from({ length: n }, (_, i) => i + 1)
+}
+
 function renderIMR(data) {
   if (!chartInstance || !subChartInstance || !data) return
 
@@ -314,7 +319,8 @@ function renderIMR(data) {
       if (!Array.isArray(params)) params = [params]
       const idx = params[0]?.dataIndex ?? 0
       const val = values[idx]
-      let html = `<strong>${formatTimeLabel(params[0]?.axisValue || '')}</strong>`
+      let html = `<strong>数据点 ${idx + 1}</strong>`
+      if (timeSeries && timeSeries[idx]) html += `<br/><small style="color:#8c8c8c">${formatTimeLabel(timeSeries[idx])}</small>`
       html += `<br/>${params[0].marker}${params[0].seriesName}: <strong>${val}</strong>`
 
       const isOOS = oosFlags && oosFlags[idx] === 1
@@ -351,7 +357,7 @@ function renderIMR(data) {
       top: 32, itemGap: 16, textStyle: { fontSize: 11 }
     },
     grid: { left: 80, right: 45, top: 60, bottom: 55, containLabel: false },
-    xAxis: { type: 'category', data: timeSeries, axisLabel: { rotate: 35, fontSize: 10, formatter: formatTimeLabel, interval: Math.floor(timeSeries.length / 15) || 0, margin: 10 }, axisTick: { alignWithLabel: true } },
+    xAxis: { type: 'category', data: indexLabels(values.length), name: '数据点序号', nameTextStyle: { fontSize: 11 }, nameGap: 28, axisLabel: { fontSize: 10, interval: Math.floor(values.length / 15) || 0, margin: 8 }, axisTick: { alignWithLabel: true } },
     yAxis: { type: 'value', scale: true, name: '测量值', nameTextStyle: { fontSize: 11 }, nameGap: 16, splitLine: { lineStyle: { type: 'dashed', opacity: 0.4 } } },
     series: [{
       name: '测量值', type: 'line', data: values,
@@ -383,12 +389,15 @@ function renderIMR(data) {
     title: { text: 'MR 图 - 移动极差', left: 'center', textStyle: { fontSize: 13, fontWeight: 600 }, top: 6 },
     tooltip: { trigger: 'axis', confine: true, formatter(params) {
       if (!Array.isArray(params)) params = [params]
-      let html = `<strong>${formatTimeLabel(params[0]?.axisValue || '')}</strong>`
+      const idx = params[0]?.dataIndex ?? 0
+      const originalIdx = idx + 1
+      let html = `<strong>数据点 ${originalIdx + 1}</strong>`
+      if (timeSeries && timeSeries[originalIdx]) html += `<br/><small style="color:#8c8c8c">${formatTimeLabel(timeSeries[originalIdx])}</small>`
       params.forEach(p => { html += `<br/>${p.marker}${p.seriesName}: ${p.data}` })
       return html
     } },
     grid: { left: 80, right: 45, top: 38, bottom: 40 },
-    xAxis: { type: 'category', data: timeSeries.slice(1), axisLabel: { rotate: 35, fontSize: 9, formatter: formatTimeLabel, interval: Math.floor(timeSeries.length / 18) || 0, margin: 8 }, axisTick: { alignWithLabel: true } },
+    xAxis: { type: 'category', data: indexLabels(values.length).slice(1), name: '数据点序号', nameTextStyle: { fontSize: 10 }, nameGap: 24, axisLabel: { fontSize: 9, interval: Math.floor(values.length / 18) || 0, margin: 6 }, axisTick: { alignWithLabel: true } },
     yAxis: { type: 'value', min: 0, scale: true, name: '极差 MR', nameTextStyle: { fontSize: 10 }, nameGap: 14, splitLine: { lineStyle: { type: 'dashed', opacity: 0.4 } } },
     series: [{
       name: '移动极差', type: 'line', data: mrValues.slice(1), symbol: 'circle', symbolSize: 4,
@@ -473,7 +482,8 @@ function renderXbarR(data) {
     tooltip: { trigger: 'axis', axisPointer: { type: 'cross' }, confine: true, extraCssText: 'z-index:999', formatter(params) {
       if (!Array.isArray(params)) params = [params]
       const idx = params[0]?.dataIndex ?? 0
-      let html = `<strong>${formatTimeLabel(params[0]?.axisValue || '')}</strong>`
+      let html = `<strong>子组 ${idx + 1}</strong>`
+      if (xbarTimeLabels[idx]) html += `<br/><small style="color:#8c8c8c">${formatTimeLabel(xbarTimeLabels[idx])}</small>`
       html += `<br/>${params[0].marker}${params[0].seriesName}: <strong>${xbarData[idx]}</strong>`
 
       const isOOS = xbarOosFlags && xbarOosFlags[idx] === 1
@@ -501,7 +511,7 @@ function renderXbarR(data) {
       top: 32, itemGap: 16, textStyle: { fontSize: 11 }
     },
     grid: { left: 80, right: 45, top: 60, bottom: 55, containLabel: false },
-    xAxis: { type: 'category', data: xbarTimeLabels, axisLabel: { rotate: 35, fontSize: 10, formatter: formatTimeLabel, interval: Math.floor(xbarTimeLabels.length / 12) || 0, margin: 10 }, axisTick: { alignWithLabel: true } },
+    xAxis: { type: 'category', data: indexLabels(xbarData.length), name: '子组序号', nameTextStyle: { fontSize: 11 }, nameGap: 28, axisLabel: { fontSize: 10, interval: Math.floor(xbarData.length / 12) || 0, margin: 8 }, axisTick: { alignWithLabel: true } },
     yAxis: { type: 'value', scale: true, name: '均值 X̄', nameTextStyle: { fontSize: 11 }, nameGap: 16, splitLine: { lineStyle: { type: 'dashed', opacity: 0.4 } } },
     series: [{
       name: '子组均值', type: 'line', data: xbarData,
@@ -526,12 +536,14 @@ function renderXbarR(data) {
     title: { text: 'R 图 - 极差控制图', left: 'center', textStyle: { fontSize: 13, fontWeight: 600 }, top: 6 },
     tooltip: { trigger: 'axis', confine: true, formatter(params) {
       if (!Array.isArray(params)) params = [params]
-      let html = `<strong>${formatTimeLabel(params[0]?.axisValue || '')}</strong>`
+      const idx = params[0]?.dataIndex ?? 0
+      let html = `<strong>子组 ${idx + 1}</strong>`
+      if (xbarTimeLabels[idx]) html += `<br/><small style="color:#8c8c8c">${formatTimeLabel(xbarTimeLabels[idx])}</small>`
       params.forEach(p => { html += `<br/>${p.marker}${p.seriesName}: ${p.data}` })
       return html
     } },
     grid: { left: 80, right: 45, top: 38, bottom: 40 },
-    xAxis: { type: 'category', data: xbarTimeLabels, axisLabel: { rotate: 35, fontSize: 9, formatter: formatTimeLabel, interval: Math.floor(xbarTimeLabels.length / 15) || 0, margin: 8 }, axisTick: { alignWithLabel: true } },
+    xAxis: { type: 'category', data: indexLabels(rData.length), name: '子组序号', nameTextStyle: { fontSize: 10 }, nameGap: 24, axisLabel: { fontSize: 9, interval: Math.floor(rData.length / 15) || 0, margin: 6 }, axisTick: { alignWithLabel: true } },
     yAxis: { type: 'value', min: 0, scale: true, name: '极差 R', nameTextStyle: { fontSize: 10 }, nameGap: 14, splitLine: { lineStyle: { type: 'dashed', opacity: 0.4 } } },
     series: [{
       name: '极差', type: 'line', data: rData, symbol: 'circle', symbolSize: 6,
@@ -760,10 +772,16 @@ function renderScatter(data) {
 
   const option = {
     title: { text: '散点图 - 趋势分析', left: 'center', textStyle: { fontSize: 14, fontWeight: 600 }, top: 8 },
-    tooltip: { trigger: 'item', confine: true, formatter: function(p) { return `${formatTimeLabel(timeSeries[p.data[0]] || '')}<br/>值: ${p.data[1]}` } },
+    tooltip: { trigger: 'item', confine: true, formatter: function(p) {
+      const idx = p.data[0]
+      let html = `<strong>数据点 ${idx + 1}</strong>`
+      if (timeSeries && timeSeries[idx]) html += `<br/><small style="color:#8c8c8c">${formatTimeLabel(timeSeries[idx])}</small>`
+      html += `<br/>值: ${p.data[1]}`
+      return html
+    } },
     legend: { data: ['测量值', ...trendLine ? ['趋势线'] : []], top: 30, itemGap: 16, textStyle: { fontSize: 12 } },
     grid: { left: 75, right: 45, top: 60, bottom: 55 },
-    xAxis: { type: 'value', name: '序号', minInterval: 1 },
+    xAxis: { type: 'value', name: '数据点序号', minInterval: 1 },
     yAxis: { type: 'value', scale: true, name: '测量值', nameTextStyle: { fontSize: 11 } },
     series: [
       {

@@ -64,6 +64,7 @@ public class SecurityConfig {
                         .antMatchers(HttpMethod.POST, "/api/spc/data/batch-upload").hasAnyRole(RoleConstants.ADMIN, RoleConstants.ENGINEER, RoleConstants.OPERATOR)
                         .antMatchers(HttpMethod.POST, "/api/spc/data/import").hasAnyRole(RoleConstants.ADMIN, RoleConstants.ENGINEER)
                         .antMatchers(HttpMethod.GET, "/api/spc/data/export/report").hasAnyRole(RoleConstants.ADMIN, RoleConstants.ENGINEER)
+                        .antMatchers(HttpMethod.POST, "/api/spc/data/export/pdf-report").hasAnyRole(RoleConstants.ADMIN, RoleConstants.ENGINEER)
                         .antMatchers(HttpMethod.POST, "/api/spc/stat/calculate").hasAnyRole(RoleConstants.ADMIN, RoleConstants.ENGINEER, RoleConstants.VIEWER)
                         .antMatchers(HttpMethod.POST, "/api/spc/param-version/create").hasAnyRole(RoleConstants.ADMIN, RoleConstants.ENGINEER)
                         .antMatchers(HttpMethod.POST, "/api/spc/batch").hasAnyRole(RoleConstants.ADMIN, RoleConstants.ENGINEER)

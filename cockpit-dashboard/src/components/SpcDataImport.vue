@@ -2,7 +2,7 @@
   <div class="spc-data-import">
     <div class="import-actions-bar">
       <button class="btn-upload" @click="requireAuth(() => showUploadForm = true)" v-if="canWriteData">填写数据</button>
-      <button class="btn-import" @click="requireAuth(showImportDialog)" v-if="canWriteData && selectedProduct">导入数据</button>
+      <button class="btn-import" @click="requireAuth(showImportDialog)" v-if="canWriteData && selectedParam && selectedProduct">导入数据</button>
       <button class="btn-export" @click="exportDataReport" v-if="canExportReport && selectedParam && selectedProduct">导出报告</button>
       <button class="btn-template" @click="downloadTemplate" v-if="canWriteData">下载模板</button>
     </div>
@@ -252,6 +252,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import * as echarts from 'echarts'
 import { spcApi, getToken, getUser } from '@/utils/api'
 import { decryptResponse, isEncryptionEnabled } from '@/utils/crypto.js'
 
@@ -495,15 +496,25 @@ function parseCSVFile(file) {
 async function submitImport() {
   if (!importFile.value) return
 
+  if (!props.selectedParam || props.selectedParam <= 0) {
+    importResult.value = { success: false, message: '请先选择工艺参数后再导入数据' }
+    return
+  }
+  if (!importForm.value.productId || importForm.value.productId <= 0) {
+    importResult.value = { success: false, message: '请先选择产品后再导入数据' }
+    return
+  }
+
   importing.value = true
   importResult.value = null
 
   try {
     const formData = new FormData()
     formData.append('file', importFile.value)
-    formData.append('productId', importForm.value.productId)
-    if (importForm.value.processId) formData.append('processId', importForm.value.processId)
-    if (importForm.value.equipmentId) formData.append('equipmentId', importForm.value.equipmentId)
+    formData.append('paramId', String(props.selectedParam))
+    formData.append('productId', String(importForm.value.productId))
+    if (importForm.value.processId) formData.append('processId', String(importForm.value.processId))
+    if (importForm.value.equipmentId) formData.append('equipmentId', String(importForm.value.equipmentId))
 
     const res = await fetch('/api/spc/data/import', {
       method: 'POST',
@@ -536,36 +547,9 @@ async function submitImport() {
   }
 }
 
-function downloadTemplate() {
-  const link = document.createElement('a')
-  link.href = spcApi.downloadTemplate()
-  link.download = 'SPC数据导入模板.csv'
-  link.click()
-}
-
-async function exportDataReport() {
-  if (!props.selectedParam || !props.selectedProduct) return
-
+async function downloadTemplate() {
   try {
-    const params = new URLSearchParams({
-      paramId: props.selectedParam,
-      productId: props.selectedProduct,
-      limit: props.dataLimit || 500
-    })
-
-    if (props.selectedEquipment) {
-      params.append('equipmentId', props.selectedEquipment)
-    }
-
-    if (props.timeRange) {
-      const endTime = new Date()
-      const startTime = new Date()
-      startTime.setDate(startTime.getDate() - parseInt(props.timeRange))
-      params.append('startTime', formatDateTime(startTime))
-      params.append('endTime', formatDateTime(endTime))
-    }
-
-    const res = await fetch(`/api/spc/data/export/report?${params.toString()}`, {
+    const res = await fetch(spcApi.downloadTemplate(), {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${getToken()}`,
@@ -573,11 +557,11 @@ async function exportDataReport() {
       }
     })
 
-    if (!res.ok) throw new Error('导出失败')
+    if (!res.ok) throw new Error('下载模板失败')
 
     const blob = await res.blob()
     const contentDisposition = res.headers.get('Content-Disposition')
-    let filename = `SPC数据报告_${formatDate(new Date())}.csv`
+    let filename = 'SPC数据导入模板.xlsx'
     if (contentDisposition) {
       const match = contentDisposition.match(/filename\*?=(?:UTF-8''|"?)([^";]+)/i)
       if (match) filename = decodeURIComponent(match[1])
@@ -590,9 +574,404 @@ async function exportDataReport() {
     link.click()
     window.URL.revokeObjectURL(url)
   } catch (e) {
-    console.error('导出失败:', e)
-    alert('导出失败，请重试')
+    console.error('下载模板失败:', e)
+    alert('下载模板失败，请重试')
   }
+}
+
+async function exportDataReport() {
+  if (!props.selectedParam || !props.selectedProduct) {
+    alert('请先选择产品和工艺参数')
+    return
+  }
+
+  const exportBtn = document.querySelector('.btn-export')
+  const originalText = exportBtn ? exportBtn.textContent : ''
+  if (exportBtn) {
+    exportBtn.disabled = true
+    exportBtn.textContent = '生成报告中...'
+  }
+
+  try {
+    // 1. 拉取控制图数据(含统计量、限值、原始 values)
+    const limit = props.dataLimit || 500
+    const chartParams = {
+      paramId: props.selectedParam,
+      productId: props.selectedProduct,
+      limit
+    }
+    if (props.selectedEquipment) chartParams.equipmentId = props.selectedEquipment
+    if (props.timeRange) {
+      const endTime = new Date()
+      const startTime = new Date()
+      startTime.setDate(startTime.getDate() - parseInt(props.timeRange))
+      chartParams.startTime = formatDateTime(startTime)
+      chartParams.endTime = formatDateTime(endTime)
+    }
+
+    const chartRes = await spcApi.getControlChart(chartParams)
+    const chartData = chartRes?.data || {}
+    const values = (chartData.values || []).map(v => Number(v))
+    const timeSeries = chartData.timeSeries || []
+    const limits = chartData.limits || {}
+    const chartType = (chartData.chartType || 'I_MR').toUpperCase()
+    const subgroupSize = chartData.subgroupSize || 1
+
+    if (!values.length) {
+      alert('所选范围内无 SPC 数据')
+      return
+    }
+
+    // 2. 用 ECharts 在隐藏 div 渲染各图并截图
+    const charts = {}
+    charts.controlChartImr = renderControlChart(values, timeSeries, limits, chartType)
+    if (chartType === 'XBAR_R' || chartType === 'XBAR_S') {
+      const xbarR = renderXbarRChart(values, subgroupSize, limits)
+      charts.controlChartXbar = xbarR.xbar
+      charts.controlChartR = xbarR.r
+    }
+    charts.capabilityHistogram = renderHistogram(values, limits)
+    charts.normalProbabilityPlot = renderNormalProbability(values)
+    charts.trendChart = renderTrendChart(values, timeSeries)
+
+    // 调试: 打印各图表 base64 长度,便于排查
+    console.log('[Export Report] charts 状态:', {
+      controlChartImr: charts.controlChartImr ? `OK(${charts.controlChartImr.length} chars)` : 'NULL',
+      controlChartXbar: charts.controlChartXbar ? `OK(${charts.controlChartXbar.length} chars)` : 'NULL',
+      controlChartR: charts.controlChartR ? `OK(${charts.controlChartR.length} chars)` : 'NULL',
+      capabilityHistogram: charts.capabilityHistogram ? `OK(${charts.capabilityHistogram.length} chars)` : 'NULL',
+      normalProbabilityPlot: charts.normalProbabilityPlot ? `OK(${charts.normalProbabilityPlot.length} chars)` : 'NULL',
+      trendChart: charts.trendChart ? `OK(${charts.trendChart.length} chars)` : 'NULL',
+      valuesCount: values.length
+    })
+
+    // 3. 上送截图 + 参数,生成 PDF
+    const formData = new FormData()
+    formData.append('paramId', String(props.selectedParam))
+    formData.append('productId', String(props.selectedProduct))
+    formData.append('limit', String(limit))
+    if (props.selectedEquipment) formData.append('equipmentId', String(props.selectedEquipment))
+    if (chartParams.startTime) formData.append('startTime', chartParams.startTime)
+    if (chartParams.endTime) formData.append('endTime', chartParams.endTime)
+    if (charts.controlChartImr) formData.append('controlChartImr', charts.controlChartImr)
+    if (charts.controlChartXbar) formData.append('controlChartXbar', charts.controlChartXbar)
+    if (charts.controlChartR) formData.append('controlChartR', charts.controlChartR)
+    if (charts.capabilityHistogram) formData.append('capabilityHistogram', charts.capabilityHistogram)
+    if (charts.normalProbabilityPlot) formData.append('normalProbabilityPlot', charts.normalProbabilityPlot)
+    if (charts.trendChart) formData.append('trendChart', charts.trendChart)
+
+    const res = await fetch('/api/spc/data/export/pdf-report', {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'Authorization': `Bearer ${getToken()}`,
+        'X-Encrypted': 'true'
+      }
+    })
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '')
+      throw new Error(`导出失败: ${res.status} ${errText}`)
+    }
+
+    const blob = await res.blob()
+    const contentDisposition = res.headers.get('Content-Disposition')
+    let filename = `SPC统计过程控制分析报告_${formatDate(new Date())}.pdf`
+    if (contentDisposition) {
+      const match = contentDisposition.match(/filename\*?=(?:UTF-8''|"?)([^";]+)/i)
+      if (match) filename = decodeURIComponent(match[1])
+    }
+
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    link.click()
+    window.URL.revokeObjectURL(url)
+  } catch (e) {
+    console.error('SPC 报告导出失败:', e)
+    alert('SPC 报告导出失败: ' + (e.message || '请重试'))
+  } finally {
+    if (exportBtn) {
+      exportBtn.disabled = false
+      exportBtn.textContent = originalText
+    }
+  }
+}
+
+/** 在内存中创建隐藏 div + ECharts 实例,渲染后返回 base64 截图,最后销毁 */
+function renderHiddenChart(option, width = 800, height = 400) {
+  const div = document.createElement('div')
+  div.style.width = width + 'px'
+  div.style.height = height + 'px'
+  div.style.position = 'fixed'
+  div.style.left = '0'
+  div.style.top = '0'
+  div.style.zIndex = '-1'
+  div.style.visibility = 'hidden'
+  div.style.pointerEvents = 'none'
+  document.body.appendChild(div)
+  try {
+    // 关闭动画，确保 setOption 后 canvas 立即完成渲染
+    option.animation = false
+    const inst = echarts.init(div, null, { width, height, renderer: 'canvas' })
+    inst.setOption(option, true)
+    // 强制刷新一次，确保 canvas 绘制完成
+    inst.resize()
+    const dataUrl = inst.getDataURL({
+      type: 'png',
+      pixelRatio: 1.5,
+      backgroundColor: '#fff'
+    })
+    inst.dispose()
+    return dataUrl
+  } finally {
+    document.body.removeChild(div)
+  }
+}
+
+/** 单值-移动极差(I-MR)控制图 */
+function renderControlChart(values, timeSeries, limits, chartType) {
+  if (!values.length) return null
+  const mrValues = values.slice(1).map((v, i) => Math.abs(v - values[i]))
+  // X 轴用数据点序号 (1, 2, ..., n)，与网页版 SpcControlChart 保持一致
+  const categories = values.map((_, i) => i + 1)
+
+  const markLines = []
+  if (limits.ucl != null) markLines.push({ yAxis: Number(limits.ucl), name: 'UCL' })
+  if (limits.cl != null) markLines.push({ yAxis: Number(limits.cl), name: 'CL' })
+  if (limits.lcl != null) markLines.push({ yAxis: Number(limits.lcl), name: 'LCL' })
+  if (limits.usl != null) markLines.push({ yAxis: Number(limits.usl), name: 'USL', lineStyle: { color: '#fa541c' } })
+  if (limits.lsl != null) markLines.push({ yAxis: Number(limits.lsl), name: 'LSL', lineStyle: { color: '#fa541c' } })
+
+  const option = {
+    title: { text: '单值-移动极差控制图 (I-MR)', left: 'center', textStyle: { fontSize: 14 } },
+    grid: [
+      { left: '10%', right: '5%', top: '15%', height: '35%' },
+      { left: '10%', right: '5%', top: '60%', height: '30%' }
+    ],
+    xAxis: [
+      { type: 'category', data: categories, gridIndex: 0, name: '数据点序号', nameTextStyle: { fontSize: 10 }, axisLabel: { show: false } },
+      { type: 'category', data: categories, gridIndex: 1, name: '数据点序号', nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 9 } }
+    ],
+    yAxis: [
+      { type: 'value', gridIndex: 0, name: '单值', nameTextStyle: { fontSize: 11 }, scale: true },
+      { type: 'value', gridIndex: 1, name: 'MR', nameTextStyle: { fontSize: 11 }, scale: true }
+    ],
+    series: [
+      {
+        name: '单值', type: 'line', xAxisIndex: 0, yAxisIndex: 0,
+        data: values, symbol: 'circle', symbolSize: 6,
+        itemStyle: { color: '#1890ff' },
+        markLine: {
+          symbol: 'none', silent: true,
+          data: markLines.map(m => ({ yAxis: m.yAxis, name: m.name, lineStyle: m.lineStyle || { color: '#888', type: 'dashed' }, label: { formatter: m.name, fontSize: 9 } }))
+        }
+      },
+      {
+        name: '移动极差', type: 'line', xAxisIndex: 1, yAxisIndex: 1,
+        data: mrValues, symbol: 'circle', symbolSize: 5,
+        itemStyle: { color: '#52c41a' }
+      }
+    ],
+    tooltip: { show: false }
+  }
+  return renderHiddenChart(option)
+}
+
+/** X-bar 和 R 控制图(仅 XBAR_R/XBAR_S 时渲染) */
+function renderXbarRChart(values, subgroupSize, limits) {
+  if (!values.length || subgroupSize < 2) return { xbar: null, r: null }
+  const numGroups = Math.floor(values.length / subgroupSize)
+  if (numGroups < 2) return { xbar: null, r: null }
+
+  const xbarData = [], rData = [], categories = []
+  for (let i = 0; i < numGroups; i++) {
+    const grp = values.slice(i * subgroupSize, (i + 1) * subgroupSize)
+    const sum = grp.reduce((a, b) => a + b, 0)
+    const mean = sum / grp.length
+    const range = Math.max(...grp) - Math.min(...grp)
+    xbarData.push(Number(mean.toFixed(4)))
+    rData.push(Number(range.toFixed(4)))
+    categories.push(i + 1)
+  }
+
+  const xbarOption = {
+    title: { text: 'X-bar 控制图 - 过程均值监控', left: 'center', textStyle: { fontSize: 14 } },
+    grid: { left: '10%', right: '5%', top: '15%', bottom: '15%' },
+    xAxis: { type: 'category', data: categories, name: '子组序号', nameTextStyle: { fontSize: 11 }, axisLabel: { fontSize: 10 } },
+    yAxis: { type: 'value', name: 'X̄', nameTextStyle: { fontSize: 11 }, scale: true },
+    series: [{
+      name: 'X̄', type: 'line', data: xbarData, symbol: 'circle', symbolSize: 6,
+      itemStyle: { color: '#1890ff' }
+    }],
+    tooltip: { show: false }
+  }
+  const rOption = {
+    title: { text: 'R 控制图 - 过程变异监控', left: 'center', textStyle: { fontSize: 14 } },
+    grid: { left: '10%', right: '5%', top: '15%', bottom: '15%' },
+    xAxis: { type: 'category', data: categories, name: '子组序号', nameTextStyle: { fontSize: 11 }, axisLabel: { fontSize: 10 } },
+    yAxis: { type: 'value', name: 'R', nameTextStyle: { fontSize: 11 }, scale: true },
+    series: [{
+      name: 'R', type: 'line', data: rData, symbol: 'circle', symbolSize: 6,
+      itemStyle: { color: '#52c41a' }
+    }],
+    tooltip: { show: false }
+  }
+  return {
+    xbar: renderHiddenChart(xbarOption),
+    r: renderHiddenChart(rOption)
+  }
+}
+
+/** 直方图 + 正态分布曲线 + 规格限 */
+function renderHistogram(values, limits) {
+  if (!values.length) return null
+  const sorted = [...values].sort((a, b) => a - b)
+  const min = sorted[0], max = sorted[sorted.length - 1]
+  const binCount = Math.min(20, Math.max(5, Math.ceil(Math.sqrt(values.length))))
+  const binWidth = (max - min) / binCount || 1
+  const bins = new Array(binCount).fill(0)
+  for (const v of values) {
+    let idx = Math.floor((v - min) / binWidth)
+    if (idx >= binCount) idx = binCount - 1
+    if (idx < 0) idx = 0
+    bins[idx]++
+  }
+  const binLabels = []
+  for (let i = 0; i < binCount; i++) {
+    binLabels.push((min + i * binWidth).toFixed(2))
+  }
+
+  // 计算正态曲线(基于均值+样本标准差)
+  const n = values.length
+  const mean = values.reduce((a, b) => a + b, 0) / n
+  const variance = values.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1 || 1)
+  const sigma = Math.sqrt(variance)
+  const curveData = []
+  const steps = 100
+  const xMin = min, xMax = max
+  for (let i = 0; i <= steps; i++) {
+    const x = xMin + (xMax - xMin) * i / steps
+    const y = (1 / (sigma * Math.sqrt(2 * Math.PI))) * Math.exp(-((x - mean) ** 2) / (2 * sigma ** 2)) * n * binWidth
+    curveData.push([Number(x.toFixed(4)), Number(y.toFixed(4))])
+  }
+
+  const markLines = []
+  if (limits.usl != null) markLines.push({ xAxis: Number(limits.usl), name: 'USL', lineStyle: { color: '#fa541c' } })
+  if (limits.lsl != null) markLines.push({ xAxis: Number(limits.lsl), name: 'LSL', lineStyle: { color: '#fa541c' } })
+  if (limits.target != null) markLines.push({ xAxis: Number(limits.target), name: 'T', lineStyle: { color: '#888' } })
+
+  const option = {
+    title: { text: '直方图 - 数据分布分析', left: 'center', textStyle: { fontSize: 14 } },
+    grid: { left: '8%', right: '5%', top: '15%', bottom: '12%' },
+    xAxis: { type: 'category', data: binLabels, name: '测量值' },
+    yAxis: { type: 'value', name: '频次' },
+    series: [
+      {
+        name: '频次', type: 'bar', data: bins,
+        itemStyle: { color: '#5470c6' },
+        markLine: {
+          symbol: 'none', silent: true,
+          data: markLines.map(m => ({ xAxis: m.xAxis, name: m.name, lineStyle: m.lineStyle || { type: 'dashed' }, label: { formatter: m.name, fontSize: 9 } }))
+        }
+      },
+      {
+        name: '正态曲线', type: 'line', data: curveData,
+        smooth: true, symbol: 'none',
+        itemStyle: { color: '#ee6666' },
+        lineStyle: { width: 2 }
+      }
+    ],
+    tooltip: { show: false }
+  }
+  return renderHiddenChart(option)
+}
+
+/** 正态概率图(Q-Q 图) */
+function renderNormalProbability(values) {
+  if (!values.length) return null
+  const sorted = [...values].sort((a, b) => a - b)
+  const n = sorted.length
+  // 经验分位数 vs 理论分位数
+  const points = []
+  const mean = sorted.reduce((a, b) => a + b, 0) / n
+  const variance = sorted.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1 || 1)
+  const sigma = Math.sqrt(variance)
+  for (let i = 0; i < n; i++) {
+    const p = (i + 0.5) / n
+    const z = invNorm(p)
+    points.push([Number(z.toFixed(4)), Number(sorted[i].toFixed(4))])
+  }
+  // 参考线
+  const refLine = [
+    [-3, mean - 3 * sigma],
+    [3, mean + 3 * sigma]
+  ]
+  const option = {
+    title: { text: '正态概率图 - 正态性检验', left: 'center', textStyle: { fontSize: 14 } },
+    grid: { left: '8%', right: '5%', top: '15%', bottom: '12%' },
+    xAxis: { type: 'value', name: '理论分位数 Z' },
+    yAxis: { type: 'value', name: '实测值' },
+    series: [
+      {
+        name: '数据点', type: 'scatter', data: points,
+        symbolSize: 5, itemStyle: { color: '#1890ff' }
+      },
+      {
+        name: '参考线', type: 'line', data: refLine,
+        symbol: 'none', lineStyle: { color: '#fa541c', type: 'dashed', width: 2 }
+      }
+    ],
+    tooltip: { show: false }
+  }
+  return renderHiddenChart(option)
+}
+
+/** 趋势图 */
+function renderTrendChart(values, timeSeries) {
+  if (!values.length) return null
+  // X 轴用数据点序号，与网页版 SpcControlChart 保持一致
+  const categories = values.map((_, i) => i + 1)
+  const option = {
+    title: { text: '趋势图 - 数据趋势分析', left: 'center', textStyle: { fontSize: 14 } },
+    grid: { left: '10%', right: '5%', top: '15%', bottom: '15%' },
+    xAxis: { type: 'category', data: categories, name: '数据点序号', nameTextStyle: { fontSize: 11 }, axisLabel: { fontSize: 10 } },
+    yAxis: { type: 'value', name: '测量值', nameTextStyle: { fontSize: 11 }, scale: true },
+    series: [{
+      name: '测量值', type: 'line', data: values,
+      symbol: 'circle', symbolSize: 5,
+      itemStyle: { color: '#1890ff' },
+      lineStyle: { width: 2 }
+    }],
+    tooltip: { show: false }
+  }
+  return renderHiddenChart(option)
+}
+
+/** 标准正态分布反函数(用于 Q-Q 图理论分位数) */
+function invNorm(p) {
+  if (p <= 0) return -3
+  if (p >= 1) return 3
+  const a = [-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02,
+    1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00]
+  const b = [-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02,
+    6.680131188771972e+01, -1.328068155288572e+01]
+  const c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00,
+    -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00]
+  const d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00, 3.754408661907416e+00]
+  const pLow = 0.02425, pHigh = 1 - pLow
+  let q, r
+  if (p < pLow) {
+    q = Math.sqrt(-2 * Math.log(p))
+    return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)
+  } else if (p <= pHigh) {
+    q = p - 0.5
+    r = q * q
+    return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5]) * q / (((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1)
+  }
+  q = Math.sqrt(-2 * Math.log(1 - p))
+  return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)
 }
 
 function formatDate(d) {
@@ -739,12 +1118,20 @@ function setNowTime() {
 async function submitData() {
   submitAttempted.value = true
 
+  if (!uploadData.value.productId || uploadData.value.productId <= 0) {
+    uploadResult.value = { success: false, message: '请先选择产品后再提交数据' }
+    return
+  }
+  if (!uploadData.value.processId || uploadData.value.processId <= 0) {
+    uploadResult.value = { success: false, message: '请先选择工序后再提交数据' }
+    return
+  }
   if (uploadSelectedParamIds.value.length === 0) {
     uploadResult.value = { success: false, message: '请至少选择一个工艺参数' }
     return
   }
 
-  if (!uploadData.value.equipmentId) {
+  if (!uploadData.value.equipmentId || uploadData.value.equipmentId <= 0) {
     uploadResult.value = { success: false, message: '请选择设备' }
     return
   }

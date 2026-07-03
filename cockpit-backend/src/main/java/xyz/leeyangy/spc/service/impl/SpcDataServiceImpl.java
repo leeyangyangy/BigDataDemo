@@ -63,14 +63,20 @@ public class SpcDataServiceImpl extends ServiceImpl<SpcDataMapper, SpcData> impl
     @Override
     @Transactional(rollbackFor = Exception.class)
     public SpcData uploadData(SpcData data, String role) {
-        if (data.getEquipmentId() == null) {
+        if (data.getParamId() == null || data.getParamId() <= 0) {
+            throw new ParamValidationException("工艺参数不能为空，请先选择工艺参数");
+        }
+        if (data.getProductId() == null || data.getProductId() <= 0) {
+            throw new ParamValidationException("产品不能为空，请先选择产品");
+        }
+        if (data.getProcessId() == null || data.getProcessId() <= 0) {
+            throw new ParamValidationException("工序不能为空，请先选择工序");
+        }
+        if (data.getEquipmentId() == null || data.getEquipmentId() <= 0) {
             throw new ParamValidationException("设备ID不能为空，请选择设备");
         }
         if (data.getMeasuredValue() == null) {
             throw new ParamValidationException("测量值不能为空");
-        }
-        if (data.getParamId() == null) {
-            throw new ParamValidationException("工艺参数ID不能为空");
         }
 
         if (data.getMsgId() != null) {
@@ -155,6 +161,9 @@ public class SpcDataServiceImpl extends ServiceImpl<SpcDataMapper, SpcData> impl
     @Override
     @Transactional(rollbackFor = Exception.class)
     public List<SpcData> batchUpload(List<SpcData> dataList, String role) {
+        if (dataList == null || dataList.isEmpty()) {
+            throw new ParamValidationException("提交数据不能为空");
+        }
         for (SpcData data : dataList) {
             uploadData(data, role);
         }
