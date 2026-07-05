@@ -149,7 +149,7 @@ async function handleLogin() {
       }
       emit('success', res.data)
       blockBackNavigation()
-      window.location.replace(window.location.href)
+      window.location.reload()
     } else {
       errorMsg.value = res.msg || '登录失败'
     }
@@ -220,7 +220,7 @@ function doRenderWwQrCode(config) {
       appid: config.corpId,
       agentid: config.agentId,
       redirect_uri: encodeURIComponent(window.location.origin + '/wecom/callback'),
-      state: 'spc_wecom_login_' + Date.now(),
+      state: 'cockpit_wecom_login_' + Date.now(),
       href: '',
       lang: 'zh',
       on_success: async (res) => {
@@ -319,7 +319,7 @@ async function handleBind() {
       }
       emit('success', res.data)
       blockBackNavigation()
-      window.location.replace(window.location.href)
+      window.location.reload()
     } else {
       bindErrorMsg.value = res.msg || '绑定失败'
     }

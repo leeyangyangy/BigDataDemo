@@ -77,18 +77,15 @@ export function secureSetToken(token) {
 
 /**
  * 安全地移除 Token 及相关元数据。
+ *
+ * <p>removeItem 本身会触发 storage 事件(newValue=null), 其他标签页的监听器
+ * 可据此同步登出, 无需额外 setItem 空字符串(那样反而会留下空值 key)。
  */
 export function secureRemoveToken() {
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(USER_KEY)
   localStorage.removeItem(TOKEN_EXPIRY_KEY)
   localStorage.removeItem(LAST_ACTIVITY_KEY)
-  // 触发其他标签页同步登出
-  try {
-    localStorage.setItem(TOKEN_KEY, '') // 触发 storage 事件
-  } catch (e) {
-    // 忽略
-  }
 }
 
 /**

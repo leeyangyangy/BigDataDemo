@@ -198,11 +198,8 @@ function handleLogout() {
   showUserMenu.value = false
   yieldAccessible.value = false
   localStorage.removeItem(YIELD_ACCESS_KEY)
-  window.history.pushState(null, '', window.location.href)
-  window.addEventListener('popstate', function onPop() {
-    window.history.pushState(null, '', window.location.href)
-  })
-  window.location.replace(window.location.href)
+  // 刷新页面以重置所有状态 (reload 确保 SPA 完全重新初始化)
+  window.location.reload()
 }
 
 function handleNavigate(key) {

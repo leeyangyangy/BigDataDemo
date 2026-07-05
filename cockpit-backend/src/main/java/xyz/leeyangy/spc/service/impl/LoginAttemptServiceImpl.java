@@ -46,8 +46,8 @@ public class LoginAttemptServiceImpl implements LoginAttemptService {
         }
         try {
             Long ttl = redisTemplate.getExpire(LOCK_KEY_PREFIX + empNo, TimeUnit.SECONDS);
-            // Redis 返回 -2 表示 key 不存在, -1 表示无 TTL
-            if (ttl == null || ttl < 0) {
+            // Redis 返回 -2 表示 key 不存在, -1 表示无 TTL, 0 表示已过期未清理
+            if (ttl == null || ttl <= 0) {
                 return null;
             }
             return ttl;

@@ -1,7 +1,7 @@
 const BASE_URL = '/api'
 
-const TOKEN_KEY = 'spc_token'
-const USER_KEY = 'spc_user'
+const TOKEN_KEY = 'cockpit_token'
+const USER_KEY = 'cockpit_user'
 
 import {
   isEncryptionEnabled,
@@ -36,6 +36,7 @@ export function setToken(token) {
 
 export function removeToken() {
   secureRemoveToken()
+  clearKey()
 }
 
 export function getUser() {
