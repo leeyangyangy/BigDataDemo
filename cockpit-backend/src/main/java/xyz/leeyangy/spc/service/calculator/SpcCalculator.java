@@ -8,6 +8,7 @@ import xyz.leeyangy.spc.entity.SpcStatResult;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -160,7 +161,41 @@ public class SpcCalculator {
             result.setIsNormal(wResult[1] >= 0.05);
         }
 
+        // 额外统计指标(非持久化, 仅用于 API 响应)
+        result.setMinValue(minVal);
+        result.setMaxValue(maxVal);
+        result.setStdDevOverall(stdDevOverall);
+        result.setMedian(computeMedian(dataList));
+        result.setCpm(computeCpm(version, mean, stdDevWithin));
+
         return result;
+    }
+
+    /** Cpm = (USL-LSL)/(6×√(σ²+(μ-T)²)) Taguchi 能力指数, 需双边规格限+目标值 */
+    private BigDecimal computeCpm(ParamVersion version, BigDecimal mean, BigDecimal sigmaWithin) {
+        if (version.getUsl() == null || version.getLsl() == null || version.getTarget() == null
+                || mean == null || sigmaWithin == null || sigmaWithin.compareTo(BigDecimal.ZERO) <= 0) {
+            return null;
+        }
+        BigDecimal variance = sigmaWithin.multiply(sigmaWithin);
+        BigDecimal meanDevSq = mean.subtract(version.getTarget()).pow(2);
+        BigDecimal denom = sqrt(variance.add(meanDevSq), 10).multiply(BigDecimal.valueOf(6));
+        if (denom.compareTo(BigDecimal.ZERO) <= 0) return null;
+        return version.getUsl().subtract(version.getLsl())
+                .divide(denom, 4, RoundingMode.HALF_UP);
+    }
+
+    /** 中位数 */
+    private BigDecimal computeMedian(List<SpcData> dataList) {
+        if (dataList.isEmpty()) return null;
+        List<BigDecimal> sorted = new ArrayList<>();
+        for (SpcData d : dataList) sorted.add(d.getMeasuredValue());
+        sorted.sort(BigDecimal::compareTo);
+        int n = sorted.size();
+        return n % 2 == 1
+                ? sorted.get(n / 2)
+                : sorted.get(n / 2 - 1).add(sorted.get(n / 2))
+                        .divide(BigDecimal.valueOf(2), 4, RoundingMode.HALF_UP);
     }
 
     /**

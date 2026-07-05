@@ -53,6 +53,8 @@ public class SpcDataServiceImpl extends ServiceImpl<SpcDataMapper, SpcData> impl
     private static final String LIST_CACHE_PREFIX = "spc:admin:data:page:";
     /** 列表缓存 TTL */
     private static final Duration LIST_CACHE_TTL = Duration.ofMinutes(5);
+    /** 图表查询缓存 key 前缀（与 SpcChartController 中保持一致） */
+    private static final String CHART_CACHE_PREFIX = "spc:chart:";
 
     /** 列表缓存值结构（仅缓存必要字段，避免序列化 MyBatis-Plus Page 内部字段） */
     @Data
@@ -397,23 +399,30 @@ public class SpcDataServiceImpl extends ServiceImpl<SpcDataMapper, SpcData> impl
                 + ":" + endTime;
     }
 
-    /** 清除所有后台 SPC 数据列表缓存（SCAN + 批量删除，生产安全） */
+    /**
+     * 清除所有数据相关缓存（SCAN + 批量删除，生产安全）
+     * 1. 后台 SPC 数据列表缓存 spc:admin:data:page:*
+     * 2. 图表查询缓存 spc:chart:* （/control 与 /data 端点）
+     * 数据写入/删除后调用, 确保下次查询走 DB 重新计算并刷新缓存
+     */
     private void clearListCache() {
+        List<String> keys = new ArrayList<>();
         try {
-            ScanOptions options = ScanOptions.scanOptions()
-                    .match(LIST_CACHE_PREFIX + "*").count(200).build();
-            List<String> keys = new ArrayList<>();
-            try (Cursor<String> cursor = redisTemplate.scan(options)) {
-                while (cursor.hasNext()) {
-                    keys.add(cursor.next());
+            for (String prefix : new String[]{LIST_CACHE_PREFIX, CHART_CACHE_PREFIX}) {
+                ScanOptions options = ScanOptions.scanOptions()
+                        .match(prefix + "*").count(200).build();
+                try (Cursor<String> cursor = redisTemplate.scan(options)) {
+                    while (cursor.hasNext()) {
+                        keys.add(cursor.next());
+                    }
                 }
             }
             if (!keys.isEmpty()) {
                 redisTemplate.delete(keys);
-                log.info("[Cache] 清除SPC数据列表缓存: {} 个key", keys.size());
+                log.info("[Cache] 清除SPC数据相关缓存: {} 个key", keys.size());
             }
         } catch (Exception e) {
-            log.warn("[Cache] 清除SPC数据列表缓存失败: {}", e.getMessage());
+            log.warn("[Cache] 清除SPC数据相关缓存失败: {}", e.getMessage());
         }
     }
 }

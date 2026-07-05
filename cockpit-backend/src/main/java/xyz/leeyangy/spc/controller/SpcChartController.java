@@ -1,8 +1,11 @@
 package xyz.leeyangy.spc.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 import xyz.leeyangy.spc.common.R;
@@ -15,10 +18,12 @@ import xyz.leeyangy.spc.service.ParamVersionService;
 import xyz.leeyangy.spc.service.SpcDataService;
 import xyz.leeyangy.spc.service.SpcStatService;
 import xyz.leeyangy.spc.service.SpcRuleEngine;
+import xyz.leeyangy.spc.service.calculator.SpcCalculator;
 import xyz.leeyangy.spc.entity.SpcAlert;
 
 import javax.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -33,6 +38,14 @@ public class SpcChartController {
     private final SpcStatService spcStatService;
     private final ParamVersionService paramVersionService;
     private final SpcRuleEngine spcRuleEngine;
+    private final SpcCalculator spcCalculator;
+    private final StringRedisTemplate redisTemplate;
+    private final ObjectMapper objectMapper;
+
+    /** 图表缓存 key 前缀 */
+    private static final String CHART_CACHE_PREFIX = "spc:chart:";
+    /** 图表缓存 TTL */
+    private static final Duration CHART_CACHE_TTL = Duration.ofMinutes(5);
 
     @OperationLog(module = "SPC_CHART", action = "QUERY_CONTROL", targetType = "ParamVersion",
             content = "'查询控制图: paramId=' + #paramId + ' productId=' + #productId + ' dataPoints=' + #result.data['totalPoints']")
@@ -45,8 +58,16 @@ public class SpcChartController {
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime,
             @RequestParam(defaultValue = "100") Integer limit) {
 
+        // cache-aside: 查询优先读缓存, 命中直接返回; 数据写入/删除时由 SpcDataServiceImpl.clearListCache() 清除
+        String cacheKey = buildChartCacheKey("control", paramId, productId, batchId, limit, startTime, endTime);
+        Map<String, Object> cached = readChartCache(cacheKey);
+        if (cached != null) {
+            return R.ok(cached);
+        }
+
         ParamVersion version = paramVersionService.getCurrentVersion(paramId, productId);
         if (version == null) {
+            // 未配置版本时不缓存, 避免后续配置完成后仍返回空结果
             Map<String, Object> emptyResult = new LinkedHashMap<>();
             emptyResult.put("paramId", paramId);
             emptyResult.put("productId", productId);
@@ -79,10 +100,11 @@ public class SpcChartController {
             sampleSizes.add(d.getSampleSize());
         }
 
-        SpcStatResult stat = spcStatService.getLatestStat(version.getId(), batchId);
-        if (stat == null && !dataList.isEmpty()) {
-            stat = spcStatService.calculateAndSave(version.getId(), batchId, "AUTO");
-        }
+        // 基于当前查询数据集(受 limit/startTime/endTime 影响)实时计算统计量, 不读历史快照, 不落库
+        // 这样前端展示的 mean/stdDev/Cp/Cpk 等指标随用户选择的数据范围动态变化
+        SpcStatResult stat = !dataList.isEmpty()
+                ? spcCalculator.computeStatistics(dataList, version, version.getId(), batchId, "QUERY")
+                : null;
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("paramVersionId", version.getId());
@@ -115,8 +137,14 @@ public class SpcChartController {
             capability.put("cpk", stat.getCpk());
             capability.put("pp", stat.getPp());
             capability.put("ppk", stat.getPpk());
+            capability.put("cpm", stat.getCpm());
             capability.put("mean", stat.getMeanValue());
             capability.put("stdDev", stat.getStdDev());
+            capability.put("stdDevOverall", stat.getStdDevOverall());
+            capability.put("min", stat.getMinValue());
+            capability.put("max", stat.getMaxValue());
+            capability.put("median", stat.getMedian());
+            capability.put("range", stat.getRangeValue());
             capability.put("sampleCount", stat.getSampleCount());
             result.put("capability", capability);
             result.put("passRate", stat.getPassRate());
@@ -128,6 +156,7 @@ public class SpcChartController {
         }
 
         result.put("totalPoints", dataList.size());
+        writeChartCache(cacheKey, result);
         return R.ok(result);
     }
 
@@ -140,6 +169,13 @@ public class SpcChartController {
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime,
             @RequestParam(defaultValue = "100") Integer limit,
             HttpServletRequest request) {
+
+        // cache-aside: 查询优先读缓存, 命中直接返回; 数据写入/删除时由 SpcDataServiceImpl.clearListCache() 清除
+        String cacheKey = buildChartCacheKey("data", paramId, equipmentId, productId, limit, startTime, endTime);
+        Map<String, Object> cached = readChartCache(cacheKey);
+        if (cached != null) {
+            return R.ok(cached);
+        }
 
         Page<SpcData> pageResult = spcDataService.pageByCondition(
                 new Page<>(1, limit), null, null, productId, paramId, startTime, endTime);
@@ -182,10 +218,10 @@ public class SpcChartController {
         ParamVersion version = (productId != null) ? paramVersionService.getCurrentVersion(paramId, productId) : null;
         SpcStatResult stat = null;
         if (version != null) {
-            stat = spcStatService.getLatestStat(version.getId(), null);
-            if (stat == null && !allData.isEmpty()) {
-                stat = spcStatService.calculateAndSave(version.getId(), null, "AUTO");
-            }
+            // 基于当前查询数据集(受 limit/startTime/endTime/equipmentId 影响)实时计算统计量, 不读历史快照
+            stat = !allData.isEmpty()
+                    ? spcCalculator.computeStatistics(allData, version, version.getId(), null, "QUERY")
+                    : null;
             Map<String, Object> limits = new LinkedHashMap<>();
             // 与 /control 端点一致: version 限为空时回退 stat 计算限(计数型图控制限由算法计算)
             limits.put("usl", version.getUsl());
@@ -208,8 +244,14 @@ public class SpcChartController {
                 capability.put("cpk", stat.getCpk());
                 capability.put("pp", stat.getPp());
                 capability.put("ppk", stat.getPpk());
+                capability.put("cpm", stat.getCpm());
                 capability.put("mean", stat.getMeanValue());
                 capability.put("stdDev", stat.getStdDev());
+                capability.put("stdDevOverall", stat.getStdDevOverall());
+                capability.put("min", stat.getMinValue());
+                capability.put("max", stat.getMaxValue());
+                capability.put("median", stat.getMedian());
+                capability.put("range", stat.getRangeValue());
                 capability.put("sampleCount", stat.getSampleCount());
                 result.put("capability", capability);
                 result.put("passRate", stat.getPassRate());
@@ -232,6 +274,7 @@ public class SpcChartController {
             result.put("versionNo", 0);
         }
 
+        writeChartCache(cacheKey, result);
         return R.ok(result);
     }
 
@@ -338,5 +381,49 @@ public class SpcChartController {
         if (SpcRuleEngine.RULE_7_FIFTEEN_IN_1SIGMA.equals(ruleCode)) return "info";
         if (SpcRuleEngine.RULE_8_EIGHT_OUTSIDE_1SIGMA.equals(ruleCode)) return "info";
         return "warning";
+    }
+
+    /**
+     * 构建图表缓存 key
+     * 格式: spc:chart:{endpoint}:{part1}:{part2}:...
+     * null 值统一编码为 "null" 以避免 key 冲突
+     */
+    private String buildChartCacheKey(String endpoint, Object... parts) {
+        StringBuilder sb = new StringBuilder(CHART_CACHE_PREFIX).append(endpoint).append(":");
+        for (int i = 0; i < parts.length; i++) {
+            sb.append(parts[i] != null ? parts[i].toString() : "null");
+            if (i < parts.length - 1) sb.append(":");
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 读取图表缓存
+     * 命中返回反序列化后的 Map, 未命中或异常返回 null (降级到 DB 查询)
+     */
+    private Map<String, Object> readChartCache(String key) {
+        try {
+            String json = redisTemplate.opsForValue().get(key);
+            if (json == null || json.isEmpty()) {
+                return null;
+            }
+            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            log.warn("[Cache] 读取图表缓存失败 key={}, msg={}", key, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 写入图表缓存
+     * 异常仅记录日志, 不影响主流程返回结果 (5 分钟 TTL, 由 SpcDataServiceImpl.clearListCache 主动失效)
+     */
+    private void writeChartCache(String key, Map<String, Object> result) {
+        try {
+            String json = objectMapper.writeValueAsString(result);
+            redisTemplate.opsForValue().set(key, json, CHART_CACHE_TTL);
+        } catch (Exception e) {
+            log.warn("[Cache] 写入图表缓存失败 key={}, msg={}", key, e.getMessage());
+        }
     }
 }

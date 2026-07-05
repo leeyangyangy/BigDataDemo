@@ -1,5 +1,6 @@
 package xyz.leeyangy.spc.entity;
 
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
@@ -38,6 +39,23 @@ public class SpcStatResult extends BaseEntity {
     private BigDecimal normalityPValue;
     private Boolean isNormal;
     private String triggerSource;
+
+    // ===== 非持久化字段: 仅用于 API 响应, 不写入 spc_stat_result 表 =====
+    /** 最小值 */
+    @TableField(exist = false)
+    private BigDecimal minValue;
+    /** 最大值 */
+    @TableField(exist = false)
+    private BigDecimal maxValue;
+    /** 中位数 */
+    @TableField(exist = false)
+    private BigDecimal median;
+    /** 总体标准差 σ_overall(除以 n-1), 与 stdDev(σ_within) 区分 */
+    @TableField(exist = false)
+    private BigDecimal stdDevOverall;
+    /** Cpm = (USL-LSL)/(6×√(σ²+(μ-T)²)) Taguchi 能力指数 */
+    @TableField(exist = false)
+    private BigDecimal cpm;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime statTime;
