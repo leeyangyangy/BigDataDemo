@@ -182,15 +182,16 @@ public class YieldServiceImpl implements YieldService {
 
     /** 判断 summary 的 last_test_time 是否在窗口内 */
     private boolean isWithinWindow(Map<String, Object> summary, LocalDateTime cutoff) {
-        if (summary == null) return false;
+        // 宽松策略：仅丢弃明确超出窗口的旧数据；缺失或无法解析时间戳的条目予以保留，
+        // 与原 Python 服务（update_dashboard_data 不做任何时间过滤，全量接收）行为一致。
+        if (summary == null) return true;
         Object lastTest = summary.get("last_test_time");
-        if (lastTest == null) return false;
+        if (lastTest == null) return true;
         try {
             LocalDateTime last = parseDateTime(String.valueOf(lastTest));
             return last.isAfter(cutoff);
         } catch (Exception e) {
-            // 解析失败按窗口外处理（避免脏数据无限堆积）
-            return false;
+            return true;
         }
     }
 
@@ -562,11 +563,21 @@ public class YieldServiceImpl implements YieldService {
     }
 
     private LocalDateTime parseDateTime(String value) {
-        if (value.contains("T")) {
-            return ZonedDateTime.parse(value.replace("Z", "+00:00"))
-                    .toLocalDateTime();
+        if (value == null || value.trim().isEmpty()) {
+            throw new DateTimeParseException("empty timestamp", value, 0);
         }
-        return LocalDateTime.parse(value, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        String v = value.trim();
+        if (v.contains("T")) {
+            // 带时区/偏移（如 ...Z 或 ...+08:00）按 ZonedDateTime 解析
+            String s = v.replace("Z", "+00:00");
+            try {
+                return ZonedDateTime.parse(s).toLocalDateTime();
+            } catch (DateTimeParseException e) {
+                // 无偏移的本地时间（如 2026-06-27T10:30:00），与 Python fromisoformat 一致
+                return LocalDateTime.parse(s);
+            }
+        }
+        return LocalDateTime.parse(v, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
     }
 
     private LocalDateTime parseLocalDate(String date) {
