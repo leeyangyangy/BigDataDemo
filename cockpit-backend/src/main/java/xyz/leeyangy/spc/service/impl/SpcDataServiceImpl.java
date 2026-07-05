@@ -401,8 +401,8 @@ public class SpcDataServiceImpl extends ServiceImpl<SpcDataMapper, SpcData> impl
 
     /**
      * 清除所有数据相关缓存（SCAN + 批量删除，生产安全）
-     * 1. 后台 SPC 数据列表缓存 spc:admin:data:page:*
-     * 2. 图表查询缓存 spc:chart:* （/control 与 /data 端点）
+     * 1. 后台 SPC 数据列表缓存 cockpit:admin:data:page:*
+     * 2. 图表查询缓存 cockpit:chart:* （/control 与 /data 端点）
      * 数据写入/删除后调用, 确保下次查询走 DB 重新计算并刷新缓存
      */
     private void clearListCache() {

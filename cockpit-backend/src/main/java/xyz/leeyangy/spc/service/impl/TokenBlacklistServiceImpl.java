@@ -16,11 +16,11 @@ public class TokenBlacklistServiceImpl implements TokenBlacklistService {
 
     private final StringRedisTemplate redisTemplate;
 
-    @Value("${spc.jwt.expiration:86400000}")
+    @Value("${cockpit.jwt.expiration:86400000}")
     private long jwtExpirationMs;
 
-    private static final String BLACKLIST_PREFIX = "spc:token:blacklist:";
-    private static final String USER_KICK_PREFIX = "spc:user:kicked:";
+    private static final String BLACKLIST_PREFIX = "cockpit:token:blacklist:";
+    private static final String USER_KICK_PREFIX = "cockpit:user:kicked:";
 
     @Override
     public void blacklistToken(String token) {

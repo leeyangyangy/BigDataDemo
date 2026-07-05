@@ -47,18 +47,18 @@ public class YieldServiceImpl implements YieldService {
     private static final int HISTORY_MAX_SIZE = 100;
 
     /** Redis 缓存版本号 key（数据更新时递增，使旧缓存自然失效） */
-    private static final String CACHE_VERSION_KEY = "spc:yield:version";
-    /** 缓存 key 前缀：spc:yield:{data|search}:{version}:{workshop}:{keyword}:{startDate}:{endDate} */
-    private static final String CACHE_PREFIX = "spc:yield:";
+    private static final String CACHE_VERSION_KEY = "cockpit:yield:version";
+    /** 缓存 key 前缀：cockpit:yield:{data|search}:{version}:{workshop}:{keyword}:{startDate}:{endDate} */
+    private static final String CACHE_PREFIX = "cockpit:yield:";
     /** 缓存 TTL（秒）：版本失效保证新鲜度，TTL 仅用于清理过期版本残留 */
     private static final long CACHE_TTL_SECONDS = 60L;
 
     /** 数据窗口天数：超过此天数的 summaries 被丢弃 */
     private static final int WINDOW_DAYS = 180;
     /** Redis Hash key：持久化最新 summaries 全集（field=summaryKey, value=summaryJson） */
-    private static final String SUMMARIES_KEY = "spc:yield:summaries";
+    private static final String SUMMARIES_KEY = "cockpit:yield:summaries";
     /** Redis List key 前缀：持久化历史时序点（LPUSH + LTRIM 保留最近 100 条） */
-    private static final String HISTORY_PREFIX = "spc:yield:history:";
+    private static final String HISTORY_PREFIX = "cockpit:yield:history:";
 
     /** 当前良率列表 */
     private final List<YieldRate> currentYieldRates = Collections.synchronizedList(new ArrayList<>());
@@ -631,7 +631,7 @@ public class YieldServiceImpl implements YieldService {
         }
     }
 
-    /** 构建缓存 key：spc:yield:{type}:{version}:{workshop}:{keyword}:{startDate}:{endDate} */
+    /** 构建缓存 key：cockpit:yield:{type}:{version}:{workshop}:{keyword}:{startDate}:{endDate} */
     private String buildCacheKey(String type, String version, String workshop, String keyword,
                                  String startDate, String endDate) {
         return CACHE_PREFIX + type + ":" + version + ":"

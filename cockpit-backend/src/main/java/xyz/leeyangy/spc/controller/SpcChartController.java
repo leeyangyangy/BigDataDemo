@@ -43,7 +43,7 @@ public class SpcChartController {
     private final ObjectMapper objectMapper;
 
     /** 图表缓存 key 前缀 */
-    private static final String CHART_CACHE_PREFIX = "spc:chart:";
+    private static final String CHART_CACHE_PREFIX = "cockpit:chart:";
     /** 图表缓存 TTL */
     private static final Duration CHART_CACHE_TTL = Duration.ofMinutes(5);
 
@@ -385,7 +385,7 @@ public class SpcChartController {
 
     /**
      * 构建图表缓存 key
-     * 格式: spc:chart:{endpoint}:{part1}:{part2}:...
+     * 格式: cockpit:chart:{endpoint}:{part1}:{part2}:...
      * null 值统一编码为 "null" 以避免 key 冲突
      */
     private String buildChartCacheKey(String endpoint, Object... parts) {

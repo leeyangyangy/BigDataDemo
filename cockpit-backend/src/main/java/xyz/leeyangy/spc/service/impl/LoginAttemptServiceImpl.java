@@ -14,9 +14,9 @@ import java.util.concurrent.TimeUnit;
  *
  * <p>Redis Key 设计:</p>
  * <ul>
- *   <li>失败计数: {@code spc:login:fail:{empNo}} (TTL = window-seconds)</li>
- *   <li>锁定标记: {@code spc:login:lock:{empNo}} (TTL = lockout-seconds)</li>
- *   <li>IP 关联: {@code spc:login:fail:ip:{empNo}} 记录最近失败 IP</li>
+ *   <li>失败计数: {@code cockpit:login:fail:{empNo}} (TTL = window-seconds)</li>
+ *   <li>锁定标记: {@code cockpit:login:lock:{empNo}} (TTL = lockout-seconds)</li>
+ *   <li>IP 关联: {@code cockpit:login:fail:ip:{empNo}} 记录最近失败 IP</li>
  * </ul>
  */
 @Slf4j
