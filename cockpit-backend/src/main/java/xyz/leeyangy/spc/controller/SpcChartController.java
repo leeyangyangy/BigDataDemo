@@ -69,12 +69,14 @@ public class SpcChartController {
         List<BigDecimal> values = new ArrayList<>();
         List<Integer> zones = new ArrayList<>();
         List<Integer> oocFlags = new ArrayList<>();
+        List<Integer> sampleSizes = new ArrayList<>();
 
         for (SpcData d : dataList) {
             timeSeries.add(d.getCollectTime().toString());
             values.add(d.getMeasuredValue());
             zones.add(d.getZone() != null ? d.getZone() : 0);
             oocFlags.add(d.getIsOoc() != null ? d.getIsOoc() : 0);
+            sampleSizes.add(d.getSampleSize());
         }
 
         SpcStatResult stat = spcStatService.getLatestStat(version.getId(), batchId);
@@ -93,6 +95,7 @@ public class SpcChartController {
         result.put("values", values);
         result.put("zones", zones);
         result.put("oocFlags", oocFlags);
+        result.put("sampleSizes", sampleSizes);
 
         Map<String, Object> limits = new LinkedHashMap<>();
         limits.put("ucl", version.getUcl() != null ? version.getUcl() :
@@ -147,17 +150,22 @@ public class SpcChartController {
                     .filter(d -> equipmentId.equals(d.getEquipmentId()))
                     .collect(Collectors.toList());
         }
+        // pageByCondition 按 collect_time DESC 返回(最新在前)，反转成正序(旧→新)以便控制图按时间方向渲染
+        // 与 /control 端点保持一致
+        Collections.reverse(allData);
 
         List<String> timeSeries = new ArrayList<>();
         List<BigDecimal> values = new ArrayList<>();
         List<Integer> zones = new ArrayList<>();
         List<Integer> oocFlags = new ArrayList<>();
+        List<Integer> sampleSizes = new ArrayList<>();
         for (SpcData d : allData) {
             if (d.getCollectTime() != null && d.getMeasuredValue() != null) {
                 timeSeries.add(d.getCollectTime().toString());
                 values.add(d.getMeasuredValue());
                 zones.add(d.getZone() != null ? d.getZone() : 0);
                 oocFlags.add(d.getIsOoc() != null ? d.getIsOoc() : 0);
+                sampleSizes.add(d.getSampleSize());
             }
         }
 
@@ -168,27 +176,32 @@ public class SpcChartController {
         result.put("values", values);
         result.put("zones", zones);
         result.put("oocFlags", oocFlags);
+        result.put("sampleSizes", sampleSizes);
         result.put("totalPoints", allData.size());
 
         ParamVersion version = (productId != null) ? paramVersionService.getCurrentVersion(paramId, productId) : null;
+        SpcStatResult stat = null;
         if (version != null) {
+            stat = spcStatService.getLatestStat(version.getId(), null);
+            if (stat == null && !allData.isEmpty()) {
+                stat = spcStatService.calculateAndSave(version.getId(), null, "AUTO");
+            }
             Map<String, Object> limits = new LinkedHashMap<>();
+            // 与 /control 端点一致: version 限为空时回退 stat 计算限(计数型图控制限由算法计算)
             limits.put("usl", version.getUsl());
             limits.put("lsl", version.getLsl());
             limits.put("target", version.getTarget());
-            limits.put("ucl", version.getUcl());
-            limits.put("lcl", version.getLcl());
-            limits.put("cl", version.getCl() != null ? version.getCl() : version.getTarget());
+            limits.put("ucl", version.getUcl() != null ? version.getUcl()
+                    : (stat != null ? stat.getCalcUcl() : null));
+            limits.put("lcl", version.getLcl() != null ? version.getLcl()
+                    : (stat != null ? stat.getCalcLcl() : null));
+            limits.put("cl", version.getCl() != null ? version.getCl()
+                    : (stat != null ? stat.getCalcCl() : version.getTarget()));
             result.put("limits", limits);
             result.put("paramVersionId", version.getId());
             result.put("versionNo", version.getVersionNo());
             result.put("chartType", version.getChartType() != null ? version.getChartType() : "I_MR");
             result.put("subgroupSize", version.getSubgroupSize() != null ? version.getSubgroupSize() : 1);
-
-            SpcStatResult stat = spcStatService.getLatestStat(version.getId(), null);
-            if (stat == null && !allData.isEmpty()) {
-                stat = spcStatService.calculateAndSave(version.getId(), null, "AUTO");
-            }
             if (stat != null && !allData.isEmpty()) {
                 Map<String, Object> capability = new LinkedHashMap<>();
                 capability.put("cp", stat.getCp());

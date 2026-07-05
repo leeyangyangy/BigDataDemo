@@ -64,13 +64,14 @@ public class SpcDataImportExportServiceImpl implements SpcDataImportExportServic
             }
 
             Row headerRow = sheet.getRow(0);
-            int batchCol = -1, valueCol = -1, timeCol = -1;
+            int batchCol = -1, valueCol = -1, timeCol = -1, sampleSizeCol = -1;
 
             for (int i = 0; i < headerRow.getLastCellNum(); i++) {
                 String cellValue = getCellValue(headerRow.getCell(i));
                 if ("批次号".equals(cellValue)) batchCol = i;
                 else if ("测量值".equals(cellValue)) valueCol = i;
                 else if ("采集时间".equals(cellValue)) timeCol = i;
+                else if ("样本量".equals(cellValue)) sampleSizeCol = i;
             }
 
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -133,6 +134,23 @@ public class SpcDataImportExportServiceImpl implements SpcDataImportExportServic
                     }
 
                     data.setFillTime(LocalDateTime.now());
+
+                    // 样本量(可选, 仅计数型图 P/NP/U 需要)
+                    if (sampleSizeCol >= 0 && row.getCell(sampleSizeCol) != null) {
+                        String szStr = getCellValue(row.getCell(sampleSizeCol)).trim();
+                        if (!szStr.isEmpty()) {
+                            try {
+                                int sz = Integer.parseInt(szStr);
+                                if (sz > 0) {
+                                    data.setSampleSize(sz);
+                                } else {
+                                    throw new IllegalArgumentException("样本量必须为正整数: " + szStr);
+                                }
+                            } catch (NumberFormatException e) {
+                                throw new IllegalArgumentException("样本量格式错误: '" + szStr + "'，请输入正整数");
+                            }
+                        }
+                    }
 
                     // 走 uploadData 统一通道：自动解析当前版本、评估 OOC/OOS、缓存最新数据、触发判异
                     SpcData saved = spcDataService.uploadData(data, role);
@@ -215,7 +233,7 @@ public class SpcDataImportExportServiceImpl implements SpcDataImportExportServic
             CellStyle dateStyle = createDateStyle(workbook);
 
             Row headerRow = sheet.createRow(0);
-            String[] headers = {"序号", "批次号", "测量值", "采集时间", "录入时间", "OOC", "OOS"};
+            String[] headers = {"序号", "批次号", "测量值", "样本量", "采集时间", "录入时间", "OOC", "OOS"};
             for (int i = 0; i < headers.length; i++) {
                 Cell cell = headerRow.createCell(i);
                 cell.setCellValue(headers[i]);
@@ -230,18 +248,23 @@ public class SpcDataImportExportServiceImpl implements SpcDataImportExportServic
                 if (data.getMeasuredValue() != null) {
                     row.createCell(2).setCellValue(data.getMeasuredValue().doubleValue());
                 }
+                if (data.getSampleSize() != null) {
+                    row.createCell(3).setCellValue(data.getSampleSize());
+                } else {
+                    row.createCell(3).setCellValue("");
+                }
                 if (data.getCollectTime() != null) {
-                    Cell timeCell = row.createCell(3);
+                    Cell timeCell = row.createCell(4);
                     timeCell.setCellValue(data.getCollectTime());
                     timeCell.setCellStyle(dateStyle);
                 }
                 if (data.getFillTime() != null) {
-                    Cell fillCell = row.createCell(4);
+                    Cell fillCell = row.createCell(5);
                     fillCell.setCellValue(data.getFillTime());
                     fillCell.setCellStyle(dateStyle);
                 }
-                row.createCell(5).setCellValue(data.getIsOoc() != null ? data.getIsOoc() : 0);
-                row.createCell(6).setCellValue(data.getIsOos() != null ? data.getIsOos() : 0);
+                row.createCell(6).setCellValue(data.getIsOoc() != null ? data.getIsOoc() : 0);
+                row.createCell(7).setCellValue(data.getIsOos() != null ? data.getIsOos() : 0);
             }
 
             for (int i = 0; i < headers.length; i++) {
@@ -267,7 +290,7 @@ public class SpcDataImportExportServiceImpl implements SpcDataImportExportServic
             CellStyle headerStyle = createHeaderStyle(workbook);
 
             Row headerRow = sheet.createRow(0);
-            String[] headers = {"批次号", "测量值", "采集时间"};
+            String[] headers = {"批次号", "测量值", "样本量", "采集时间"};
             for (int i = 0; i < headers.length; i++) {
                 Cell cell = headerRow.createCell(i);
                 cell.setCellValue(headers[i]);
@@ -277,16 +300,19 @@ public class SpcDataImportExportServiceImpl implements SpcDataImportExportServic
             Row exampleRow = sheet.createRow(1);
             exampleRow.createCell(0).setCellValue("BATCH-20260429-001");
             exampleRow.createCell(1).setCellValue(25.5);
-            exampleRow.createCell(2).setCellValue("2026-04-29 10:30:00");
+            exampleRow.createCell(2).setCellValue("");
+            exampleRow.createCell(3).setCellValue("2026-04-29 10:30:00");
 
             Row noteRow = sheet.createRow(3);
             noteRow.createCell(0).setCellValue("说明:");
             Row note1 = sheet.createRow(4);
             note1.createCell(0).setCellValue("- 批次号: 可选填");
             Row note2 = sheet.createRow(5);
-            note2.createCell(0).setCellValue("- 测量值: 必填, 数值类型");
+            note2.createCell(0).setCellValue("- 测量值: 必填, 数值类型(计数图填不合格数/缺陷数)");
             Row note3 = sheet.createRow(6);
-            note3.createCell(0).setCellValue("- 采集时间: 可选填, 格式 yyyy-MM-dd HH:mm:ss, 不填则使用当前时间");
+            note3.createCell(0).setCellValue("- 样本量: 计数型图(P/NP/U)必填, 连续型不填");
+            Row note4 = sheet.createRow(7);
+            note4.createCell(0).setCellValue("- 采集时间: 可选填, 格式 yyyy-MM-dd HH:mm:ss, 不填则使用当前时间");
 
             for (int i = 0; i < headers.length; i++) {
                 sheet.autoSizeColumn(i);

@@ -22,6 +22,7 @@ public class SpcData extends BaseEntity {
     private Long equipmentId;
     private String workstationNo;
     private BigDecimal measuredValue;
+    private Integer sampleSize;
     private Integer subgroupIdx;
     private Integer subgroupSize;
     private Long subgroupSeq;

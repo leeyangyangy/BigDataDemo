@@ -82,15 +82,18 @@ public class ParamVersionServiceImpl extends ServiceImpl<ParamVersionMapper, Par
 
     @Override
     public ParamVersion createNewVersion(ParamVersion newVersion) {
+        if (newVersion.getProductId() == null) {
+            newVersion.setProductId(0L);
+        }
+
+        // 新版本号基于含软删除记录在内的最大 version_no + 1, 避免唯一键 uk_param_product_version 冲突
+        Integer maxVersionNo = baseMapper.selectMaxVersionNo(newVersion.getParamId(), newVersion.getProductId());
+        int nextVersionNo = (maxVersionNo != null) ? maxVersionNo + 1 : 1;
+
         ParamVersion current = getCurrentVersion(newVersion.getParamId(), newVersion.getProductId());
-
-        int nextVersionNo = 1;
         Long prevVersionId = null;
-
         if (current != null) {
-            nextVersionNo = current.getVersionNo() + 1;
             prevVersionId = current.getId();
-
             current.setIsCurrent(0);
             current.setEffectiveTo(LocalDateTime.now());
             updateById(current);
@@ -100,9 +103,6 @@ public class ParamVersionServiceImpl extends ServiceImpl<ParamVersionMapper, Par
         newVersion.setPrevVersionId(prevVersionId);
         newVersion.setIsCurrent(1);
         newVersion.setStatus(1);
-        if (newVersion.getProductId() == null) {
-            newVersion.setProductId(0L);
-        }
         newVersion.setEffectiveFrom(LocalDateTime.now());
         newVersion.setEffectiveTo(null);
 

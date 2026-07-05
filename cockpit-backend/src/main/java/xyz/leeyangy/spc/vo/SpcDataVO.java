@@ -19,6 +19,7 @@ public class SpcDataVO {
     private Long equipmentId;
     private String workstationNo;
     private BigDecimal measuredValue;
+    private Integer sampleSize;
     private Integer subgroupIdx;
     private Integer subgroupSize;
     private Long subgroupSeq;
@@ -64,6 +65,7 @@ public class SpcDataVO {
         vo.setEquipmentId(entity.getEquipmentId());
         vo.setWorkstationNo(entity.getWorkstationNo());
         vo.setMeasuredValue(entity.getMeasuredValue());
+        vo.setSampleSize(entity.getSampleSize());
         vo.setSubgroupIdx(entity.getSubgroupIdx());
         vo.setSubgroupSize(entity.getSubgroupSize());
         vo.setSubgroupSeq(entity.getSubgroupSeq());

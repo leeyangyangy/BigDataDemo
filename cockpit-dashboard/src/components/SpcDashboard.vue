@@ -145,7 +145,7 @@
         <span class="info-label">当前标准:</span>
         <strong>{{ selectedParamObj?.paramName || '-' }}</strong>
         <span class="info-unit" v-if="selectedParamObj?.unit">单位: {{ selectedParamObj.unit }}</span>
-        <span class="info-type-badge" :class="'type-' + (selectedParamObj?.dataType || 'continuous')">{{ selectedParamObj?.dataType === 'discrete' ? '离散' : '连续' }}</span>
+        <span class="info-type-badge" :class="'type-' + (selectedParamObj?.dataType || 'CONTINUOUS')">{{ formatDataType(selectedParamObj?.dataType) }}</span>
         <span class="info-dp" v-if="selectedParamObj?.decimalPlaces">精度: {{ selectedParamObj.decimalPlaces }}位</span>
         <span class="info-limits" v-if="currentVersion">
           USL={{ currentVersion.usl ?? '-' }}
@@ -366,6 +366,12 @@ const selectedParamObj = computed(() => {
   if (!selectedParam.value || !params.value.length) return null
   return params.value.find(p => p.id === selectedParam.value) || null
 })
+
+const DATA_TYPE_LABELS = { CONTINUOUS: '连续', DISCRETE: '离散', COUNT: '计数' }
+function formatDataType(val) {
+  if (!val) return '连续'
+  return DATA_TYPE_LABELS[val] || val
+}
 
 const hasManualLimit = computed(() => {
   const m = manualLimits.value
@@ -655,7 +661,7 @@ async function loadAllProcessCharts() {
           if (res.code === 200) chartD = res.data
         } catch (e) { }
 
-        if (chartD && useManualLimits.value && hasManualLimit.value && chartD.limits) {
+        if (chartD && useManualLimits.value && hasManualLimit.value && chartD.limits && !['P','NP','C','U'].includes((chartD.chartType || '').toUpperCase())) {
           const m = manualLimits.value
           if (m.usl != null) chartD.limits.usl = m.usl
           if (m.lsl != null) chartD.limits.lsl = m.lsl
@@ -734,7 +740,7 @@ async function loadSingleChart() {
 
     if (!cd) { chartData.value = null; return }
 
-    if (useManualLimits.value && hasManualLimit.value && cd.limits) {
+    if (useManualLimits.value && hasManualLimit.value && cd.limits && !['P','NP','C','U'].includes((cd.chartType || '').toUpperCase())) {
       const m = manualLimits.value
       if (m.usl != null) cd.limits.usl = m.usl
       if (m.lsl != null) cd.limits.lsl = m.lsl
@@ -824,7 +830,7 @@ async function loadEquipAllParams() {
       if (res.code === 200) chartD = res.data
     } catch (e) { }
 
-    if (chartD && useManualLimits.value && hasManualLimit.value && chartD.limits) {
+    if (chartD && useManualLimits.value && hasManualLimit.value && chartD.limits && !['P','NP','C','U'].includes((chartD.chartType || '').toUpperCase())) {
       const m = manualLimits.value
       if (m.usl != null) chartD.limits.usl = m.usl
       if (m.lsl != null) chartD.limits.lsl = m.lsl
@@ -901,7 +907,7 @@ async function loadParamAcrossEquipments() {
       if (res.code === 200) chartD = res.data
     } catch (e) { }
 
-    if (chartD && useManualLimits.value && hasManualLimit.value && chartD.limits) {
+    if (chartD && useManualLimits.value && hasManualLimit.value && chartD.limits && !['P','NP','C','U'].includes((chartD.chartType || '').toUpperCase())) {
       const m = manualLimits.value
       if (m.usl != null) chartD.limits.usl = m.usl
       if (m.lsl != null) chartD.limits.lsl = m.lsl
@@ -1542,8 +1548,9 @@ watch(() => props.isLoggedIn, (val) => {
   display: inline-block; font-size: 10px; font-weight: 500;
   padding: 2px 8px; border-radius: 10px; line-height: 1.5; letter-spacing: 0.3px;
 }
-.info-type-badge.type-continuous { background: #e6f4ff; color: #1677ff; }
-.info-type-badge.type-discrete { background: #f6ffed; color: #52c41a; }
+.info-type-badge.type-CONTINUOUS { background: #e6f4ff; color: #1677ff; }
+.info-type-badge.type-DISCRETE { background: #f6ffed; color: #52c41a; }
+.info-type-badge.type-COUNT { background: #fff7e6; color: #fa8c16; }
 
 .info-dp {
   background: rgba(250, 173, 20, 0.12);

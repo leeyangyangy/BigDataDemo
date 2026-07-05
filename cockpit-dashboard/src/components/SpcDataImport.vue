@@ -167,6 +167,13 @@
                               :class="isValueOOS(ri, pid) ? 'dot-danger' : (isValueWarning(ri, pid) ? 'dot-warn' : 'dot-ok')"
                               :title="getCellStatusText(ri, pid)"></span>
                       </div>
+                      <div class="cell-sample-wrap" v-if="getParamDataType(pid) === 'COUNT'">
+                        <input :model-value="getSampleSize(ri, pid)"
+                               @input="setSampleSize(ri, pid, $event.target.valueAsNumber || null)"
+                               type="number" min="1" step="1"
+                               class="form-input sample-input cell-input"
+                               placeholder="样本量n" />
+                      </div>
                     </td>
                     <td class="cell-action">
                       <button type="button" class="btn-del-row" @click="removeRow(ri)" :disabled="uploadRows.length <= 1" title="删除此行">✕</button>
@@ -315,6 +322,7 @@ const batchInputRef = ref(null)
 
 const uploadSelectedParamIds = ref([])
 const uploadRows = ref([{}])
+const uploadSampleSizes = ref([{}])
 const uploadParamVersionMap = reactive({})
 const uploadLoadingVersions = ref(new Set())
 
@@ -326,17 +334,28 @@ function setRowValue(rowIndex, pid, val) {
   uploadRows.value[rowIndex][pid] = val
 }
 function getRowValue(rowIndex, pid) { return (uploadRows.value[rowIndex] || {})[pid] }
+function getSampleSize(rowIndex, pid) { return (uploadSampleSizes.value[rowIndex] || {})[pid] }
+function setSampleSize(rowIndex, pid, val) {
+  if (!uploadSampleSizes.value[rowIndex]) uploadSampleSizes.value[rowIndex] = {}
+  uploadSampleSizes.value[rowIndex][pid] = val
+}
 
 const hasAnyValue = computed(() => {
   return uploadRows.value.some(row => row && Object.values(row).some(v => v !== null && v !== undefined && v !== ''))
 })
 
 function addRow() {
-  if (uploadRows.value.length < MAX_ROWS) uploadRows.value.push({})
+  if (uploadRows.value.length < MAX_ROWS) {
+    uploadRows.value.push({})
+    uploadSampleSizes.value.push({})
+  }
 }
 
 function removeRow(index) {
-  if (uploadRows.value.length > 1) uploadRows.value.splice(index, 1)
+  if (uploadRows.value.length > 1) {
+    uploadRows.value.splice(index, 1)
+    uploadSampleSizes.value.splice(index, 1)
+  }
 }
 
 function hasRowValue(rowIndex) {
@@ -369,12 +388,12 @@ function getParamUnit(id) {
 
 function getParamDataType(id) {
   const p = uploadParams.value.find(p => p.id === id)
-  return p ? (p.dataType || 'continuous') : 'continuous'
+  return p ? (p.dataType || 'CONTINUOUS') : 'CONTINUOUS'
 }
 
 function getParamDataTypeLabel(id) {
   const t = getParamDataType(id)
-  const map = { continuous: '连续', discrete: '离散' }
+  const map = { CONTINUOUS: '连续', DISCRETE: '离散', COUNT: '计数' }
   return map[t] || t
 }
 
@@ -1005,6 +1024,7 @@ async function onUploadProcessChange() {
   uploadParams.value = []
   uploadSelectedParamIds.value = []
   uploadRows.value = [{}]
+  uploadSampleSizes.value = [{}]
   uploadEquipmentList.value = []
   Object.keys(uploadParamVersionMap).forEach(k => delete uploadParamVersionMap[k])
   uploadLoadingVersions.value = new Set()
@@ -1038,6 +1058,9 @@ function onMultiParamChange(param) {
   if (!isChecked) {
     delete uploadParamVersionMap[param.id]
     for (const row of uploadRows.value) {
+      if (row) delete row[param.id]
+    }
+    for (const row of uploadSampleSizes.value) {
       if (row) delete row[param.id]
     }
     return
@@ -1149,6 +1172,24 @@ async function submitData() {
     return
   }
 
+  // 计数型图数据校验: 样本量必填
+  const missingSampleSizes = []
+  for (let ri = 0; ri < uploadRows.value.length; ri++) {
+    for (const pid of uploadSelectedParamIds.value) {
+      if (getParamDataType(pid) === 'COUNT') {
+        const val = getRowValue(ri, pid)
+        if (val !== null && val !== undefined && val !== '') {
+          const sz = getSampleSize(ri, pid)
+          if (!sz || sz <= 0) missingSampleSizes.push(`第${ri + 1}行-${getParamName(pid)}`)
+        }
+      }
+    }
+  }
+  if (missingSampleSizes.length > 0) {
+    uploadResult.value = { success: false, message: `计数型数据需填写样本量: ${missingSampleSizes.slice(0, 5).join(', ')}${missingSampleSizes.length > 5 ? ` 等${missingSampleSizes.length}处` : ''}` }
+    return
+  }
+
   uploading.value = true
   uploadResult.value = null
 
@@ -1171,6 +1212,7 @@ async function submitData() {
           equipmentId: uploadData.value.equipmentId,
           batchId: uploadData.value.batchId || null,
           measuredValue: getRowValue(ri, pid),
+          sampleSize: getParamDataType(pid) === 'COUNT' ? (getSampleSize(ri, pid) || null) : null,
           fillTime: normalizedFillTime
         })
       }
@@ -1668,8 +1710,9 @@ onUnmounted(() => {
   padding: 1px 6px; border-radius: 8px; line-height: 1.5;
   letter-spacing: 0.3px;
 }
-.th-type-badge.type-continuous { background: #e6f4ff; color: #1677ff; }
-.th-type-badge.type-discrete { background: #f6ffed; color: #52c41a; }
+.th-type-badge.type-CONTINUOUS { background: #e6f4ff; color: #1677ff; }
+.th-type-badge.type-DISCRETE { background: #f6ffed; color: #52c41a; }
+.th-type-badge.type-COUNT { background: #fff7e6; color: #fa8c16; }
 
 .th-limit-hint {
   display: flex; align-items: center; gap: 6px;
@@ -1682,6 +1725,8 @@ onUnmounted(() => {
 
 .cell-input-wrap { position: relative; display: flex; align-items: center; }
 .cell-input-wrap .cell-input { padding-right: 22px !important; }
+.cell-sample-wrap { margin-top: 4px; }
+.cell-sample-wrap .sample-input { font-size: 12px; color: #fa8c16; border-color: #ffd591; }
 
 .cell-status-dot {
   position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
@@ -1746,8 +1791,9 @@ onUnmounted(() => {
   display: inline-block; font-size: 10px; font-weight: 500;
   padding: 1px 7px; border-radius: 8px; line-height: 1.5;
 }
-.limit-card-type.type-continuous { background: #dbeafe; color: #2563eb; }
-.limit-card-type.type-discrete { background: #dcfce7; color: #16a34a; }
+.limit-card-type.type-CONTINUOUS { background: #dbeafe; color: #2563eb; }
+.limit-card-type.type-DISCRETE { background: #dcfce7; color: #16a34a; }
+.limit-card-type.type-COUNT { background: #fef3c7; color: #d97706; }
 
 .limit-card-body { padding: 8px 12px; }
 

@@ -29,6 +29,9 @@ public class Rule6FourOfFive1Sigma implements SpcRule {
         double centerLine = ctx.getCl().doubleValue();
         double upper1sigma = centerLine + ctx.getOneSigma().doubleValue();
         double lower1sigma = centerLine - ctx.getOneSigma().doubleValue();
+        // 单边场景只检查存在的侧
+        boolean checkUpper = !"LOWER".equals(ctx.getSided());
+        boolean checkBelow = !"UPPER".equals(ctx.getSided());
 
         for (int end = 5; end <= n; end++) {
             int countAbove1S = 0;
@@ -36,8 +39,8 @@ public class Rule6FourOfFive1Sigma implements SpcRule {
             int lastAboveIdx = -1;
             int lastBelowIdx = -1;
             for (int i = end - 5; i < end; i++) {
-                if (values[i] > upper1sigma) { countAbove1S++; lastAboveIdx = i; }
-                if (values[i] < lower1sigma) { countBelow1S++; lastBelowIdx = i; }
+                if (checkUpper && values[i] > upper1sigma) { countAbove1S++; lastAboveIdx = i; }
+                if (checkBelow && values[i] < lower1sigma) { countBelow1S++; lastBelowIdx = i; }
             }
             if (countAbove1S >= 4 || countBelow1S >= 4) {
                 int triggerIdx = (countAbove1S >= 4) ? lastAboveIdx : lastBelowIdx;

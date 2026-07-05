@@ -39,7 +39,7 @@
             <td><strong>{{ item.paramCode }}</strong></td>
             <td>{{ item.paramName }}</td>
             <td><span class="unit-tag">{{ item.unit || '-' }}</span></td>
-            <td>{{ item.dataType || '连续型' }}</td>
+            <td>{{ formatDataType(item.dataType) }}</td>
             <td>{{ item.decimalPlaces ?? 3 }}</td>
             <td><span class="process-tag">{{ getProcessName(item.processId) }}</span></td>
             <td>{{ getVersionNo(item.id) || '-' }}</td>
@@ -114,9 +114,9 @@
                   <td><input v-model="row.unit" type="text" class="form-input-sm" placeholder="mm/μm/V" /></td>
                   <td>
                     <select v-model="row.dataType" class="form-input-sm">
-                      <option value="">连续型</option>
-                      <option value="离散型">离散型</option>
-                      <option value="计数型">计数型</option>
+                      <option value="CONTINUOUS">连续型</option>
+                      <option value="DISCRETE">离散型</option>
+                      <option value="COUNT">计数型</option>
                     </select>
                   </td>
                   <td><input v-model.number="row.decimalPlaces" type="number" class="form-input-sm" placeholder="3" min="0" max="6" /></td>
@@ -166,9 +166,9 @@
           <div class="form-field">
             <label>数据类型</label>
             <select v-model="editForm.dataType" class="form-input">
-              <option value="">连续型</option>
-              <option value="离散型">离散型</option>
-              <option value="计数型">计数型</option>
+              <option value="CONTINUOUS">连续型</option>
+              <option value="DISCRETE">离散型</option>
+              <option value="COUNT">计数型</option>
             </select>
           </div>
           <div class="form-field">
@@ -217,7 +217,10 @@
                 <option value="XBAR_R">Xbar-R</option>
                 <option value="XBAR_S">Xbar-S</option>
                 <option value="I_MR">I-MR</option>
-                <option value="P">P图</option>
+                <option value="P">P图(不合格率)</option>
+                <option value="NP">NP图(不合格数)</option>
+                <option value="C">C图(缺陷数)</option>
+                <option value="U">U图(单位缺陷数)</option>
               </select>
             </div>
             <div class="form-field">
@@ -281,7 +284,10 @@
                     <option value="XBAR_R">Xbar-R</option>
                     <option value="XBAR_S">Xbar-S</option>
                     <option value="I_MR">I-MR</option>
-                    <option value="P">P图</option>
+                    <option value="P">P图(不合格率)</option>
+                    <option value="NP">NP图(不合格数)</option>
+                    <option value="C">C图(缺陷数)</option>
+                    <option value="U">U图(单位缺陷数)</option>
                   </select>
                 </div>
                 <div class="form-field"><label>子组大小</label><input v-model.number="editVersionForm.subgroupSize" type="number" class="form-input form-input-sm" min="1" /></div>
@@ -313,6 +319,12 @@ const current = ref(1)
 const pageSize = ref(15)
 const loading = ref(false)
 
+const DATA_TYPE_LABELS = { CONTINUOUS: '连续型', DISCRETE: '离散型', COUNT: '计数型' }
+function formatDataType(val) {
+  if (!val) return '连续型'
+  return DATA_TYPE_LABELS[val] || val
+}
+
 const keyword = ref('')
 const filterProductId = ref('')
 const filterProcessId = ref('')
@@ -342,7 +354,7 @@ const versionHistoryList = ref([])
 const batchForm = ref({
   processId: null,
   rows: [
-    { paramCode: '', paramName: '', unit: '', dataType: '', decimalPlaces: 3 }
+    { paramCode: '', paramName: '', unit: '', dataType: 'CONTINUOUS', decimalPlaces: 3 }
   ]
 })
 
@@ -455,7 +467,7 @@ async function loadData() {
 function openBatchAdd() {
   batchForm.value = {
     processId: filterProcessId.value ? Number(filterProcessId.value) : null,
-    rows: [{ paramCode: '', paramName: '', unit: '', dataType: '', decimalPlaces: 3 }]
+    rows: [{ paramCode: '', paramName: '', unit: '', dataType: 'CONTINUOUS', decimalPlaces: 3 }]
   }
   formMsg.value = ''
   showBatchForm.value = true
@@ -466,7 +478,7 @@ function closeBatchForm() {
 }
 
 function addBatchRow() {
-  batchForm.value.rows.push({ paramCode: '', paramName: '', unit: '', dataType: '', decimalPlaces: 3 })
+  batchForm.value.rows.push({ paramCode: '', paramName: '', unit: '', dataType: 'CONTINUOUS', decimalPlaces: 3 })
 }
 
 function removeBatchRow(idx) {
@@ -531,7 +543,7 @@ function openEdit(item) {
     paramCode: item.paramCode,
     paramName: item.paramName,
     unit: item.unit || '',
-    dataType: item.dataType || '',
+    dataType: item.dataType || 'CONTINUOUS',
     decimalPlaces: item.decimalPlaces ?? 3,
     status: item.status
   }

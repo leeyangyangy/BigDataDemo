@@ -80,7 +80,10 @@ function normalizeChartType(raw) {
     'I_MR': 'imr', 'IMR': 'imr',
     'XBAR_R': 'xbar_r', 'XBARR': 'xbar_r',
     'XBAR_S': 'xbar_r', 'XBARS': 'xbar_r',
-    'P': 'imr', 'P_CHART': 'imr'
+    'P': 'pchart', 'P_CHART': 'pchart',
+    'NP': 'pchart', 'NP_CHART': 'pchart',
+    'C': 'pchart', 'C_CHART': 'pchart',
+    'U': 'pchart', 'U_CHART': 'pchart'
   }
   const normalized = raw.replace(/[-_]/g, '').toUpperCase()
   for (const [k, v] of Object.entries(map)) {
@@ -113,6 +116,7 @@ const boxplotStats = ref(null)
 const chartTypes = [
   { value: 'imr', label: 'I-MR图' },
   { value: 'xbar_r', label: 'Xbar-R图' },
+  { value: 'pchart', label: '计数图' },
   { value: 'histogram', label: '直方图' },
   { value: 'boxplot', label: '箱线图' },
   { value: 'scatter', label: '散点图' }
@@ -208,9 +212,27 @@ function buildMarkLines(limits) {
 
 function buildSpecLines(limits) {
   const lines = []
-  if (limits.usl != null) lines.push({ yAxis: limits.usl, name: 'USL', lineStyle: { color: '#ff4d4f', type: 'dotted', width: 1.5 }, label: { position: 'insideEndTop', formatter: 'USL: {c}', fontSize: 9, color: '#ff4d4f' } })
-  if (limits.lsl != null) lines.push({ yAxis: limits.lsl, name: 'LSL', lineStyle: { color: '#ff4d4f', type: 'dotted', width: 1.5 }, label: { position: 'insideEndBottom', formatter: 'LSL: {c}', fontSize: 9, color: '#ff4d4f' } })
+  if (limits.usl != null) lines.push({ yAxis: limits.usl, name: 'USL', lineStyle: { color: '#fa8c16', type: 'dotted', width: 1.5 }, label: { position: 'insideEndTop', formatter: 'USL: {c}', fontSize: 9, color: '#fa8c16' } })
+  if (limits.lsl != null) lines.push({ yAxis: limits.lsl, name: 'LSL', lineStyle: { color: '#fa8c16', type: 'dotted', width: 1.5 }, label: { position: 'insideEndBottom', formatter: 'LSL: {c}', fontSize: 9, color: '#fa8c16' } })
   return lines
+}
+
+/** 构建目标值 Target 标线 */
+function buildTargetLine(limits) {
+  if (limits.target == null) return []
+  return [{ yAxis: limits.target, name: 'Target', lineStyle: { color: '#1677ff', type: 'dashdot', width: 1.5 }, label: { position: 'insideEndTop', formatter: 'Target: {c}', fontSize: 9, color: '#1677ff' } }]
+}
+
+/** 构建图例辅助 series：data:[null] 让 series 有效但不可见(透明线+无符号)，仅用于 legend 显示标线颜色含义
+ *  categories: 数组，元素为 { name, color, type } */
+function buildLegendSeries(categories) {
+  return categories.map(c => ({
+    name: c.name, type: 'line', data: [null],
+    lineStyle: { color: c.color, type: c.type, width: 2, opacity: 0 },
+    itemStyle: { color: c.color, opacity: 0 },
+    showSymbol: false,
+    silent: true
+  }))
 }
 
 function getPointColors(values, oocFlags, oosFlags, zones) {
@@ -300,13 +322,26 @@ function renderIMR(data) {
   const { timeSeries, values, zones, oocFlags, limits } = data
   if (!values || !values.length) return
 
-  const allMarkLines = [...buildMarkLines(limits), ...buildSpecLines(limits)]
+  // 统一颜色方案: 控制限红、中心线绿、规格限橙、目标值蓝
+  const COLOR_CTRL = '#f5222d'
+  const COLOR_CL = '#52c41a'
+  const COLOR_SPEC = '#fa8c16'
+  const COLOR_TARGET = '#1677ff'
+
+  const allMarkLines = [...buildMarkLines(limits), ...buildSpecLines(limits), ...buildTargetLine(limits)]
   const oosFlags = computeOosFlags(values, limits)
   const clientOocFlags = computeOocFlags(values, limits)
   const effectiveOocFlags = mergeOocFlags(oocFlags, clientOocFlags, values.length)
   const pointColors = getPointColors(values, effectiveOocFlags, oosFlags, zones)
   const pointSymbols = getPointSymbols(values, effectiveOocFlags, oosFlags, zones)
   const pointSizes = getPointSizes(values, effectiveOocFlags, oosFlags, zones)
+
+  // I 图图例 categories: 主系列 + 按实际存在的标线类型
+  const iLegendCats = [{ name: '测量值', color: '#1890ff', type: 'solid' }]
+  if (limits.usl != null || limits.lsl != null) iLegendCats.push({ name: '规格限 USL/LSL', color: COLOR_SPEC, type: 'dotted' })
+  if (limits.target != null) iLegendCats.push({ name: '目标值 Target', color: COLOR_TARGET, type: 'dashdot' })
+  if (limits.ucl != null || limits.lcl != null) iLegendCats.push({ name: '控制限 UCL/LCL', color: COLOR_CTRL, type: 'dashed' })
+  if (limits.cl != null) iLegendCats.push({ name: '中心线 CL', color: COLOR_CL, type: 'solid' })
 
   const iOption = {
     title: {
@@ -353,20 +388,23 @@ function renderIMR(data) {
       return html
     } },
     legend: {
-      data: ['测量值'],
+      data: iLegendCats.map(c => c.name),
       top: 32, itemGap: 16, textStyle: { fontSize: 11 }
     },
     grid: { left: 80, right: 45, top: 60, bottom: 55, containLabel: false },
     xAxis: { type: 'category', data: indexLabels(values.length), name: '数据点序号', nameTextStyle: { fontSize: 11 }, nameGap: 28, axisLabel: { fontSize: 10, interval: Math.floor(values.length / 15) || 0, margin: 8 }, axisTick: { alignWithLabel: true } },
     yAxis: { type: 'value', scale: true, name: '测量值', nameTextStyle: { fontSize: 11 }, nameGap: 16, splitLine: { lineStyle: { type: 'dashed', opacity: 0.4 } } },
-    series: [{
-      name: '测量值', type: 'line', data: values,
-      symbol: (val, params) => pointSymbols[params.dataIndex] || 'circle',
-      symbolSize: (val, params) => pointSizes[params.dataIndex] || 6,
-      lineStyle: { color: '#1890ff', width: 1.5 },
-      itemStyle: { color(params) { return pointColors[params.dataIndex] || '#1890ff' } },
-      markLine: { silent: true, symbol: 'none', data: allMarkLines }
-    }]
+    series: [
+      {
+        name: '测量值', type: 'line', data: values,
+        symbol: (val, params) => pointSymbols[params.dataIndex] || 'circle',
+        symbolSize: (val, params) => pointSizes[params.dataIndex] || 6,
+        lineStyle: { color: '#1890ff', width: 1.5 },
+        itemStyle: { color(params) { return pointColors[params.dataIndex] || '#1890ff' } },
+        markLine: { silent: true, symbol: 'none', data: allMarkLines }
+      },
+      ...buildLegendSeries(iLegendCats.filter(c => c.name !== '测量值'))
+    ]
   }
 
   const mrValues = values.map((v, i) => i === 0 ? null : Math.abs(v - values[i - 1]))
@@ -385,6 +423,11 @@ function renderIMR(data) {
   if (mrUcl != null) mrMarkLines.push({ yAxis: mrUcl, name: 'UCL', lineStyle: { color: '#f5222d', type: 'dashed', width: 2 }, label: { position: 'end', formatter: 'MR-UCL: {c}', fontSize: 10 } })
   if (mrCl != null) mrMarkLines.push({ yAxis: mrCl, name: 'CL', lineStyle: { color: '#52c41a', type: 'solid', width: 1.5 }, label: { position: 'insideEndTop', formatter: 'MR-CL: {c}', fontSize: 10, color: '#52c41a' } })
 
+  // MR 图图例 categories: 主系列 + 控制限/中心线
+  const mrLegendCats = [{ name: '移动极差', color: '#722ed1', type: 'solid' }]
+  if (mrUcl != null) mrLegendCats.push({ name: '控制限 MR-UCL', color: COLOR_CTRL, type: 'dashed' })
+  if (mrCl != null) mrLegendCats.push({ name: '中心线 MR-CL', color: COLOR_CL, type: 'solid' })
+
   const mrOption = {
     title: { text: 'MR 图 - 移动极差', left: 'center', textStyle: { fontSize: 13, fontWeight: 600 }, top: 6 },
     tooltip: { trigger: 'axis', confine: true, formatter(params) {
@@ -396,15 +439,22 @@ function renderIMR(data) {
       params.forEach(p => { html += `<br/>${p.marker}${p.seriesName}: ${p.data}` })
       return html
     } },
-    grid: { left: 80, right: 45, top: 38, bottom: 40 },
+    legend: {
+      data: mrLegendCats.map(c => c.name),
+      top: 28, itemGap: 14, textStyle: { fontSize: 11 }
+    },
+    grid: { left: 80, right: 45, top: 56, bottom: 40, containLabel: false },
     xAxis: { type: 'category', data: indexLabels(values.length).slice(1), name: '数据点序号', nameTextStyle: { fontSize: 10 }, nameGap: 24, axisLabel: { fontSize: 9, interval: Math.floor(values.length / 18) || 0, margin: 6 }, axisTick: { alignWithLabel: true } },
     yAxis: { type: 'value', min: 0, scale: true, name: '极差 MR', nameTextStyle: { fontSize: 10 }, nameGap: 14, splitLine: { lineStyle: { type: 'dashed', opacity: 0.4 } } },
-    series: [{
-      name: '移动极差', type: 'line', data: mrValues.slice(1), symbol: 'circle', symbolSize: 4,
-      lineStyle: { color: '#722ed1', width: 1.5 },
-      itemStyle: { color: '#722ed1' },
-      markLine: { silent: true, symbol: 'none', data: mrMarkLines }
-    }]
+    series: [
+      {
+        name: '移动极差', type: 'line', data: mrValues.slice(1), symbol: 'circle', symbolSize: 4,
+        lineStyle: { color: '#722ed1', width: 1.5 },
+        itemStyle: { color: '#722ed1' },
+        markLine: { silent: true, symbol: 'none', data: mrMarkLines }
+      },
+      ...buildLegendSeries(mrLegendCats.filter(c => c.name !== '移动极差'))
+    ]
   }
 
   chartInstance.setOption(iOption, true)
@@ -464,7 +514,33 @@ function renderXbarR(data) {
   const rUcl = D4 * avgRange
   const rLcl = D3 * avgRange
 
-  const allMarkLines = [...buildMarkLines(limits), ...buildSpecLines(limits)]
+  // X̄ 图控制限: 优先使用 version 手动限, 否则用 A2 系数计算值(避免同时画两套造成重复)
+  const xbarEffUcl = limits.ucl != null ? limits.ucl : xbarUcl
+  const xbarEffLcl = limits.lcl != null ? limits.lcl : xbarLcl
+  const xbarEffCl = limits.cl != null ? limits.cl : grandMean
+
+  // 统一颜色方案: 控制限红、中心线绿、规格限橙、目标值蓝
+  const COLOR_CTRL = '#f5222d'
+  const COLOR_CL = '#52c41a'
+  const COLOR_SPEC = '#fa8c16'
+  const COLOR_TARGET = '#1677ff'
+
+  // X̄ 图标线: 规格限 + 目标值 + 控制限(去重后)
+  const xbarMarkLines = [
+    ...buildSpecLines(limits),
+    ...buildTargetLine(limits),
+    { yAxis: Number(xbarEffUcl).toFixed(4), name: 'UCL', lineStyle: { color: COLOR_CTRL, type: 'dashed', width: 2 }, label: { position: 'end', formatter: 'UCL: {c}', fontSize: 10, color: COLOR_CTRL } },
+    { yAxis: Number(xbarEffLcl).toFixed(4), name: 'LCL', lineStyle: { color: COLOR_CTRL, type: 'dashed', width: 2 }, label: { position: 'end', formatter: 'LCL: {c}', fontSize: 10, color: COLOR_CTRL } },
+    { yAxis: Number(xbarEffCl).toFixed(4), name: 'CL', lineStyle: { color: COLOR_CL, type: 'solid', width: 1.5 }, label: { position: 'insideEndTop', formatter: 'CL: {c}', fontSize: 10, color: COLOR_CL } }
+  ]
+
+  // X̄ 图图例: 按实际存在的标线类型构建 categories(用于生成不可见 series 让 legend 显示颜色)
+  const xbarLegendCats = [{ name: '子组均值', color: '#1890ff', type: 'solid' }]
+  if (limits.usl != null || limits.lsl != null) xbarLegendCats.push({ name: '规格限 USL/LSL', color: COLOR_SPEC, type: 'dotted' })
+  if (limits.target != null) xbarLegendCats.push({ name: '目标值 Target', color: COLOR_TARGET, type: 'dashdot' })
+  xbarLegendCats.push({ name: '控制限 UCL/LCL', color: COLOR_CTRL, type: 'dashed' })
+  xbarLegendCats.push({ name: '中心线 CL', color: COLOR_CL, type: 'solid' })
+
   const xbarOosFlags = computeOosFlags(xbarData, limits)
   const xbarClientOocFlags = computeOocFlags(xbarData, limits)
   const xbarEffectiveOoc = mergeOocFlags(null, xbarClientOocFlags, xbarData.length)
@@ -495,7 +571,7 @@ function renderXbarR(data) {
         html += `<br/><span style="color:#f5222d;font-weight:600">⚡ 超控制限 (OOC)</span>`
       } else if (limits) {
         const inSpec = (limits.usl == null || xbarData[idx] <= limits.usl) && (limits.lsl == null || xbarData[idx] >= limits.lsl)
-        const inCtrl = (limits.ucl == null || xbarData[idx] <= limits.ucl) && (limits.lcl == null || xbarData[idx] >= limits.lcl)
+        const inCtrl = (xbarEffUcl == null || xbarData[idx] <= xbarEffUcl) && (xbarEffLcl == null || xbarData[idx] >= xbarEffLcl)
         if (inSpec && inCtrl) {
           html += `<br/><span style="color:#52c41a">✓ 正常</span>`
         } else if (inSpec && !inCtrl) {
@@ -507,30 +583,35 @@ function renderXbarR(data) {
       return html
     } },
     legend: {
-      data: ['子组均值'],
-      top: 32, itemGap: 16, textStyle: { fontSize: 11 }
+      data: xbarLegendCats.map(c => c.name),
+      top: 34, itemGap: 14, textStyle: { fontSize: 11 }
     },
-    grid: { left: 80, right: 45, top: 60, bottom: 55, containLabel: false },
+    grid: { left: 80, right: 45, top: 64, bottom: 55, containLabel: false },
     xAxis: { type: 'category', data: indexLabels(xbarData.length), name: '子组序号', nameTextStyle: { fontSize: 11 }, nameGap: 28, axisLabel: { fontSize: 10, interval: Math.floor(xbarData.length / 12) || 0, margin: 8 }, axisTick: { alignWithLabel: true } },
     yAxis: { type: 'value', scale: true, name: '均值 X̄', nameTextStyle: { fontSize: 11 }, nameGap: 16, splitLine: { lineStyle: { type: 'dashed', opacity: 0.4 } } },
-    series: [{
-      name: '子组均值', type: 'line', data: xbarData,
-      symbol: (val, params) => pointSymbols[params.dataIndex] || 'circle',
-      symbolSize: (val, params) => pointSizes[params.dataIndex] || 8,
-      lineStyle: { color: '#1890ff', width: 2 },
-      itemStyle: { color(params) { return pointColors[params.dataIndex] || '#1890ff' } },
-      markLine: {
-        silent: true,
-        symbol: 'none',
-        data: [
-          ...allMarkLines,
-          { yAxis: xbarUcl.toFixed(4), name: 'UCL', lineStyle: { color: '#f5222d', type: 'dashed', width: 2 }, label: { position: 'end', formatter: 'UCL: {c}', fontSize: 10 } },
-          { yAxis: xbarLcl.toFixed(4), name: 'LCL', lineStyle: { color: '#f5222d', type: 'dashed', width: 2 }, label: { position: 'end', formatter: 'LCL: {c}', fontSize: 10 } },
-          { yAxis: grandMean.toFixed(4), name: 'CL', lineStyle: { color: '#52c41a', type: 'solid', width: 1.5 }, label: { position: 'insideEndTop', formatter: 'CL: {c}', fontSize: 10, color: '#52c41a' } }
-        ]
-      }
-    }]
+    series: [
+      {
+        name: '子组均值', type: 'line', data: xbarData,
+        symbol: (val, params) => pointSymbols[params.dataIndex] || 'circle',
+        symbolSize: (val, params) => pointSizes[params.dataIndex] || 8,
+        lineStyle: { color: '#1890ff', width: 2 },
+        itemStyle: { color(params) { return pointColors[params.dataIndex] || '#1890ff' } },
+        markLine: {
+          silent: true,
+          symbol: 'none',
+          data: xbarMarkLines
+        }
+      },
+      ...buildLegendSeries(xbarLegendCats.filter(c => c.name !== '子组均值'))
+    ]
   }
+
+  // R 图图例: 仅控制限(规格限不适用于极差图) - 用 categories 生成不可见 series
+  const rLegendCats = [
+    { name: '极差', color: '#722ed1', type: 'solid' },
+    { name: '控制限 R-UCL/R-LCL', color: COLOR_CTRL, type: 'dashed' },
+    { name: '中心线 R-CL', color: COLOR_CL, type: 'solid' }
+  ]
 
   const rOption = {
     title: { text: 'R 图 - 极差控制图', left: 'center', textStyle: { fontSize: 13, fontWeight: 600 }, top: 6 },
@@ -539,26 +620,33 @@ function renderXbarR(data) {
       const idx = params[0]?.dataIndex ?? 0
       let html = `<strong>子组 ${idx + 1}</strong>`
       if (xbarTimeLabels[idx]) html += `<br/><small style="color:#8c8c8c">${formatTimeLabel(xbarTimeLabels[idx])}</small>`
-      params.forEach(p => { html += `<br/>${p.marker}${p.seriesName}: ${p.data}` })
+      params.forEach(p => { if (p.value != null) html += `<br/>${p.marker}${p.seriesName}: ${p.data}` })
       return html
     } },
-    grid: { left: 80, right: 45, top: 38, bottom: 40 },
+    legend: {
+      data: rLegendCats.map(c => c.name),
+      top: 30, itemGap: 14, textStyle: { fontSize: 11 }
+    },
+    grid: { left: 80, right: 45, top: 56, bottom: 40, containLabel: false },
     xAxis: { type: 'category', data: indexLabels(rData.length), name: '子组序号', nameTextStyle: { fontSize: 10 }, nameGap: 24, axisLabel: { fontSize: 9, interval: Math.floor(rData.length / 15) || 0, margin: 6 }, axisTick: { alignWithLabel: true } },
     yAxis: { type: 'value', min: 0, scale: true, name: '极差 R', nameTextStyle: { fontSize: 10 }, nameGap: 14, splitLine: { lineStyle: { type: 'dashed', opacity: 0.4 } } },
-    series: [{
-      name: '极差', type: 'line', data: rData, symbol: 'circle', symbolSize: 6,
-      lineStyle: { color: '#722ed1', width: 2 },
-      itemStyle: { color: '#722ed1' },
-      markLine: {
-        silent: true,
-        symbol: 'none',
-        data: [
-          { yAxis: rUcl.toFixed(4), name: 'UCL', lineStyle: { color: '#f5222d', type: 'dashed', width: 2 }, label: { position: 'end', formatter: 'R-UCL: {c}', fontSize: 10 } },
-          ...(rLcl > 0 ? [{ yAxis: rLcl.toFixed(4), name: 'LCL', lineStyle: { color: '#f5222d', type: 'dashed', width: 2 }, label: { position: 'end', formatter: 'R-LCL: {c}', fontSize: 10 } }] : []),
-          { yAxis: avgRange.toFixed(4), name: 'CL', lineStyle: { color: '#52c41a', type: 'solid', width: 1.5 }, label: { position: 'insideEndTop', formatter: 'R-CL: {c}', fontSize: 10, color: '#52c41a' } }
-        ]
-      }
-    }]
+    series: [
+      {
+        name: '极差', type: 'line', data: rData, symbol: 'circle', symbolSize: 6,
+        lineStyle: { color: '#722ed1', width: 2 },
+        itemStyle: { color: '#722ed1' },
+        markLine: {
+          silent: true,
+          symbol: 'none',
+          data: [
+            { yAxis: rUcl.toFixed(4), name: 'R-UCL', lineStyle: { color: COLOR_CTRL, type: 'dashed', width: 2 }, label: { position: 'end', formatter: 'R-UCL: {c}', fontSize: 10, color: COLOR_CTRL } },
+            ...(rLcl > 0 ? [{ yAxis: rLcl.toFixed(4), name: 'R-LCL', lineStyle: { color: COLOR_CTRL, type: 'dashed', width: 2 }, label: { position: 'end', formatter: 'R-LCL: {c}', fontSize: 10, color: COLOR_CTRL } }] : []),
+            { yAxis: avgRange.toFixed(4), name: 'R-CL', lineStyle: { color: COLOR_CL, type: 'solid', width: 1.5 }, label: { position: 'insideEndTop', formatter: 'R-CL: {c}', fontSize: 10, color: COLOR_CL } }
+          ]
+        }
+      },
+      ...buildLegendSeries(rLegendCats.filter(c => c.name !== '极差'))
+    ]
   }
 
   chartInstance.setOption(xbarOption, true)
@@ -747,7 +835,8 @@ function renderScatter(data) {
   const { timeSeries, values, zones, oocFlags, limits } = data
   if (!values || !values.length) return
 
-  const pointColors = getPointColors(values, oocFlags, zones)
+  const oosFlags = computeOosFlags(values, limits)
+  const pointColors = getPointColors(values, oocFlags, oosFlags, zones)
   const scatterData = values.map((v, i) => [i, v])
 
   const allMarkLines = [...buildMarkLines(limits), ...buildSpecLines(limits)]
@@ -843,9 +932,106 @@ function updateChart(data) {
     case 'scatter':
       renderScatter(data)
       break
+    case 'pchart':
+      renderCountChart(data)
+      break
     default:
       renderIMR(data)
   }
+}
+
+// 计数型图渲染(P/NP/C/U)：单面板，P/U 描点为比率，NP/C 描点为计数
+function renderCountChart(data) {
+  if (!chartInstance || !data) return
+  const { timeSeries, values, sampleSizes, zones, oocFlags, limits } = data
+  if (!values || !values.length) return
+
+  // 统一颜色方案: 控制限红、中心线绿、规格限橙、目标值蓝
+  const COLOR_CTRL = '#f5222d'
+  const COLOR_CL = '#52c41a'
+  const COLOR_SPEC = '#fa8c16'
+  const COLOR_TARGET = '#1677ff'
+
+  const rawType = (props.chartType || 'P').replace(/[-_]/g, '').toUpperCase()
+  const isRateChart = rawType === 'P' || rawType === 'U'
+  const chartTitleMap = { P: 'P 图 - 不合格率控制图', NP: 'NP 图 - 不合格数控制图', C: 'C 图 - 缺陷数控制图', U: 'U 图 - 单位缺陷数控制图' }
+  const yAxisNameMap = { P: '不合格率 p', NP: '不合格数 np', C: '缺陷数 c', U: '单位缺陷数 u' }
+  const seriesNameMap = { P: '不合格率', NP: '不合格数', C: '缺陷数', U: '单位缺陷数' }
+  const chartTitle = chartTitleMap[rawType] || '计数型控制图'
+  const yAxisName = yAxisNameMap[rawType] || '值'
+  const seriesName = seriesNameMap[rawType] || '值'
+
+  // P/U 图描点值为 比率 = 不合格数/样本量；NP/C 图描点值为原始计数
+  const plotValues = values.map((v, i) => {
+    if (isRateChart) {
+      const sz = sampleSizes && sampleSizes[i] ? Number(sampleSizes[i]) : 1
+      return sz > 0 ? Number(v) / sz : 0
+    }
+    return Number(v)
+  })
+
+  const allMarkLines = [...buildMarkLines(limits), ...buildSpecLines(limits), ...buildTargetLine(limits)]
+  const oosFlags = computeOosFlags(plotValues, limits)
+  const clientOocFlags = computeOocFlags(plotValues, limits)
+  const effectiveOocFlags = mergeOocFlags(oocFlags, clientOocFlags, plotValues.length)
+  const pointColors = getPointColors(plotValues, effectiveOocFlags, oosFlags, zones)
+  const pointSymbols = getPointSymbols(plotValues, effectiveOocFlags, oosFlags, zones)
+  const pointSizes = getPointSizes(plotValues, effectiveOocFlags, oosFlags, zones)
+
+  // 计数图图例 categories: 主系列 + 按实际存在的标线类型
+  const countLegendCats = [{ name: seriesName, color: '#fa8c16', type: 'solid' }]
+  if (limits.usl != null || limits.lsl != null) countLegendCats.push({ name: '规格限 USL/LSL', color: COLOR_SPEC, type: 'dotted' })
+  if (limits.target != null) countLegendCats.push({ name: '目标值 Target', color: COLOR_TARGET, type: 'dashdot' })
+  if (limits.ucl != null || limits.lcl != null) countLegendCats.push({ name: '控制限 UCL/LCL', color: COLOR_CTRL, type: 'dashed' })
+  if (limits.cl != null) countLegendCats.push({ name: '中心线 CL', color: COLOR_CL, type: 'solid' })
+
+  const option = {
+    title: { text: chartTitle, left: 'center', textStyle: { fontSize: 14, fontWeight: 600 }, top: 8 },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'cross' }, confine: true, extraCssText: 'z-index:999', formatter(params) {
+      if (!Array.isArray(params)) params = [params]
+      const idx = params[0]?.dataIndex ?? 0
+      const val = plotValues[idx]
+      const rawVal = values[idx]
+      const sz = sampleSizes && sampleSizes[idx] ? sampleSizes[idx] : null
+      let html = `<strong>样本 ${idx + 1}</strong>`
+      if (timeSeries && timeSeries[idx]) html += `<br/><small style="color:#8c8c8c">${formatTimeLabel(timeSeries[idx])}</small>`
+      html += `<br/>${params[0].marker}${seriesName}: <strong>${val.toFixed(4)}</strong>`
+      if (isRateChart && sz != null) html += `<br/><small style="color:#8c8c8c">(${rawVal}/${sz})</small>`
+
+      const isOOS = oosFlags && oosFlags[idx] === 1
+      const isOOC = effectiveOocFlags && effectiveOocFlags[idx] === 1
+      if (isOOS) {
+        html += `<br/><span style="color:#cf1322;font-weight:600">⚠ 超规格限 (OOS)</span>`
+        if (limits) html += `<br/><small style="color:#8c8c8c">USL=${limits.usl ?? '-'} LSL=${limits.lsl ?? '-'}</small>`
+      } else if (isOOC) {
+        html += `<br/><span style="color:#f5222d;font-weight:600">⚡ 超控制限 (OOC)</span>`
+        if (limits) html += `<br/><small style="color:#8c8c8c">UCL=${limits.ucl ?? '-'} LCL=${limits.lcl ?? '-'}</small>`
+      } else if (limits) {
+        const inSpec = (limits.usl == null || val <= limits.usl) && (limits.lsl == null || val >= limits.lsl)
+        const inCtrl = (limits.ucl == null || val <= limits.ucl) && (limits.lcl == null || val >= limits.lcl)
+        if (inSpec && inCtrl) html += `<br/><span style="color:#52c41a">✓ 正常</span>`
+        else if (!inCtrl) html += `<br/><span style="color:#faad14;font-weight:500">⚠ 接近控制限</span>`
+        else html += `<br/><span style="color:#8c8c8c">待评估</span>`
+      }
+      return html
+    } },
+    legend: { data: countLegendCats.map(c => c.name), top: 32, itemGap: 16, textStyle: { fontSize: 11 } },
+    grid: { left: 80, right: 45, top: 60, bottom: 55, containLabel: false },
+    xAxis: { type: 'category', data: indexLabels(plotValues.length), name: '样本序号', nameTextStyle: { fontSize: 11 }, nameGap: 28, axisLabel: { fontSize: 10, interval: Math.floor(plotValues.length / 15) || 0, margin: 8 }, axisTick: { alignWithLabel: true } },
+    yAxis: { type: 'value', scale: true, name: yAxisName, nameTextStyle: { fontSize: 11 }, nameGap: 16, splitLine: { lineStyle: { type: 'dashed', opacity: 0.4 } } },
+    series: [
+      {
+        name: seriesName, type: 'line', data: plotValues,
+        symbol: (val, params) => pointSymbols[params.dataIndex] || 'circle',
+        symbolSize: (val, params) => pointSizes[params.dataIndex] || 6,
+        lineStyle: { color: '#fa8c16', width: 1.5 },
+        itemStyle: { color(params) { return pointColors[params.dataIndex] || '#fa8c16' } },
+        markLine: { silent: true, symbol: 'none', data: allMarkLines }
+      },
+      ...buildLegendSeries(countLegendCats.filter(c => c.name !== seriesName))
+    ]
+  }
+  chartInstance.setOption(option, true)
 }
 
 function capClass(val) {

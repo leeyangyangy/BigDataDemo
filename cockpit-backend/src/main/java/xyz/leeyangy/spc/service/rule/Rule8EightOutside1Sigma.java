@@ -23,6 +23,8 @@ public class Rule8EightOutside1Sigma implements SpcRule {
 
     @Override
     public void check(SpcRuleContext ctx, Set<Integer> flagged, List<SpcAlert> alerts) {
+        // Rule8 检测连续8点在1σ外且两侧分布，显式依赖双侧，单边控制限场景跳过
+        if (!"BOTH".equals(ctx.getSided())) return;
         double[] values = ctx.getValues();
         int n = values.length;
         if (n < 8) return;

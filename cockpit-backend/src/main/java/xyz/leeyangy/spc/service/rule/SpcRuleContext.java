@@ -50,6 +50,13 @@ public class SpcRuleContext {
     private BigDecimal threeSigma;
 
     /**
+     * 控制限方向：BOTH(双边)/UPPER(仅上限)/LOWER(仅下限)
+     * <p>单边场景下，依赖双侧分区的规则(Rule7/Rule8)将跳过，
+     * Rule1/Rule5/Rule6 只检查存在的侧，Rule2/Rule3/Rule4 不依赖对称可正常运行。</p>
+     */
+    private String sided;
+
+    /**
      * 创建报警对象（由规则命中后调用）。
      *
      * @param data     命中数据点

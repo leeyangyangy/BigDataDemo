@@ -24,16 +24,20 @@ public class Rule1Beyond3Sigma implements SpcRule {
     @Override
     public void check(SpcRuleContext ctx, Set<Integer> flagged, List<SpcAlert> alerts) {
         double[] values = ctx.getValues();
-        double ucl = ctx.getUcl().doubleValue();
-        double lcl = ctx.getLcl().doubleValue();
+        Double ucl = ctx.getUcl() != null ? ctx.getUcl().doubleValue() : null;
+        Double lcl = ctx.getLcl() != null ? ctx.getLcl().doubleValue() : null;
         double tolerance = ctx.getThreeSigma().doubleValue() * 0.001;
 
         for (int i = 0; i < values.length; i++) {
             if (flagged.contains(i)) continue;
             double v = values[i];
-            if (v > ucl + tolerance || v < lcl - tolerance) {
+            if (ucl != null && v > ucl + tolerance) {
                 alerts.add(ctx.createAlert(ctx.getDataList().get(i), ruleCode(),
-                        "数据点超出3σ控制限: 值=" + v + (v > ucl ? " > UCL" : " < LCL")));
+                        "数据点超出3σ控制限: 值=" + v + " > UCL"));
+                flagged.add(i);
+            } else if (lcl != null && v < lcl - tolerance) {
+                alerts.add(ctx.createAlert(ctx.getDataList().get(i), ruleCode(),
+                        "数据点超出3σ控制限: 值=" + v + " < LCL"));
                 flagged.add(i);
             }
         }

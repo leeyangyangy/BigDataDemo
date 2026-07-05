@@ -50,6 +50,12 @@ public class SpcCalculator {
         result.setStatTime(LocalDateTime.now());
         result.setTriggerSource(triggerSource);
 
+        // 计数型图(P/NP/C/U)走独立算法分支，不适用计量值的均值/σ/Cpk 逻辑
+        int n = dataList.size();
+        if (isCountChart(version.getChartType())) {
+            return computeCountStatistics(dataList, version, result, n);
+        }
+
         BigDecimal sum = BigDecimal.ZERO;
         BigDecimal sumSq = BigDecimal.ZERO;
         BigDecimal minVal = null;
@@ -63,7 +69,6 @@ public class SpcCalculator {
             if (maxVal == null || v.compareTo(maxVal) > 0) maxVal = v;
         }
 
-        int n = dataList.size();
         BigDecimal mean = sum.divide(BigDecimal.valueOf(n), 10, RoundingMode.HALF_UP);
         BigDecimal range = maxVal != null ? maxVal.subtract(minVal) : BigDecimal.ZERO;
 
@@ -91,32 +96,52 @@ public class SpcCalculator {
 
         BigDecimal usl = version.getUsl();
         BigDecimal lsl = version.getLsl();
+        boolean hasUsl = usl != null;
+        boolean hasLsl = lsl != null;
 
-        if (usl != null && lsl != null) {
+        // 规格限存在性决定能力指数计算方式：
+        //   双边(USL&LSL): Cp=(USL-LSL)/6σ, Cpk=min(Cpu,Cpl), Pp/Ppk 同理
+        //   单边上限(仅USL): Cpk=Cpu=(USL-μ)/3σ, Cp/Pp 不计算(置null, 符合AIAG SPC手册)
+        //   单边下限(仅LSL): Cpk=Cpl=(μ-LSL)/3σ, Cp/Pp 不计算
+        if (hasUsl || hasLsl) {
             // Cp/Cpk 用 σ_within（组内标准差）
             if (stdDevWithin.compareTo(BigDecimal.ZERO) > 0) {
-                BigDecimal specRange = usl.subtract(lsl);
-                BigDecimal sixSigmaWithin = stdDevWithin.multiply(BigDecimal.valueOf(6));
-                result.setCp(specRange.divide(sixSigmaWithin, 4, RoundingMode.HALF_UP));
-                BigDecimal cpu = usl.subtract(mean).divide(stdDevWithin.multiply(BigDecimal.valueOf(3)), 4, RoundingMode.HALF_UP);
-                BigDecimal cpl = mean.subtract(lsl).divide(stdDevWithin.multiply(BigDecimal.valueOf(3)), 4, RoundingMode.HALF_UP);
-                result.setCpk(cpu.min(cpl));
+                BigDecimal threeSigmaWithin = stdDevWithin.multiply(BigDecimal.valueOf(3));
+                if (hasUsl && hasLsl) {
+                    BigDecimal cpu = usl.subtract(mean).divide(threeSigmaWithin, 4, RoundingMode.HALF_UP);
+                    BigDecimal cpl = mean.subtract(lsl).divide(threeSigmaWithin, 4, RoundingMode.HALF_UP);
+                    result.setCp(usl.subtract(lsl).divide(stdDevWithin.multiply(BigDecimal.valueOf(6)), 4, RoundingMode.HALF_UP));
+                    result.setCpk(cpu.min(cpl));
+                } else if (hasUsl) {
+                    result.setCpk(usl.subtract(mean).divide(threeSigmaWithin, 4, RoundingMode.HALF_UP));
+                } else {
+                    result.setCpk(mean.subtract(lsl).divide(threeSigmaWithin, 4, RoundingMode.HALF_UP));
+                }
             }
 
             // Pp/Ppk 用 σ_overall（整体标准差）
             if (stdDevOverall.compareTo(BigDecimal.ZERO) > 0) {
-                BigDecimal specRange = usl.subtract(lsl);
-                BigDecimal sixSigmaOverall = stdDevOverall.multiply(BigDecimal.valueOf(6));
-                result.setPp(specRange.divide(sixSigmaOverall, 4, RoundingMode.HALF_UP));
-                BigDecimal ppu = usl.subtract(mean).divide(stdDevOverall.multiply(BigDecimal.valueOf(3)), 4, RoundingMode.HALF_UP);
-                BigDecimal ppl = mean.subtract(lsl).divide(stdDevOverall.multiply(BigDecimal.valueOf(3)), 4, RoundingMode.HALF_UP);
-                result.setPpk(ppu.min(ppl));
+                BigDecimal threeSigmaOverall = stdDevOverall.multiply(BigDecimal.valueOf(3));
+                if (hasUsl && hasLsl) {
+                    BigDecimal ppu = usl.subtract(mean).divide(threeSigmaOverall, 4, RoundingMode.HALF_UP);
+                    BigDecimal ppl = mean.subtract(lsl).divide(threeSigmaOverall, 4, RoundingMode.HALF_UP);
+                    result.setPp(usl.subtract(lsl).divide(stdDevOverall.multiply(BigDecimal.valueOf(6)), 4, RoundingMode.HALF_UP));
+                    result.setPpk(ppu.min(ppl));
+                } else if (hasUsl) {
+                    result.setPpk(usl.subtract(mean).divide(threeSigmaOverall, 4, RoundingMode.HALF_UP));
+                } else {
+                    result.setPpk(mean.subtract(lsl).divide(threeSigmaOverall, 4, RoundingMode.HALF_UP));
+                }
             }
 
+            // 合格率按实际存在的规格限判定（单边时只判一侧）
             int passCnt = 0;
             for (SpcData d : dataList) {
                 BigDecimal v = d.getMeasuredValue();
-                if (v.compareTo(lsl) >= 0 && v.compareTo(usl) <= 0) passCnt++;
+                boolean pass = true;
+                if (hasUsl && v.compareTo(usl) > 0) pass = false;
+                if (hasLsl && v.compareTo(lsl) < 0) pass = false;
+                if (pass) passCnt++;
             }
             result.setPassCount(passCnt);
             result.setFailCount(n - passCnt);
@@ -251,6 +276,127 @@ public class SpcCalculator {
         String upper = chartType.replace("-", "_").replace(" ", "").toUpperCase();
         return "XBAR_R".equals(upper) || "XBARR".equals(upper)
                 || "XBAR_S".equals(upper) || "XBARS".equals(upper);
+    }
+
+    /** 判断是否为计数型图(P/NP/C/U) */
+    private boolean isCountChart(String chartType) {
+        if (chartType == null) return false;
+        String upper = chartType.replace("-", "_").replace(" ", "").toUpperCase();
+        return "P".equals(upper) || "NP".equals(upper) || "C".equals(upper) || "U".equals(upper);
+    }
+
+    /**
+     * 计数型图(P/NP/C/U)统计计算
+     *
+     * <p>数据约定：measuredValue 存不合格数(P/NP)或缺陷数(C/U)，sampleSize 存样本量/检查单位数。
+     * <br>P图: CL=p̄=Σd/Σn, σ=√(p̄(1-p̄)/n̄), 描点值= d_i/n_i
+     * <br>NP图: CL=np̄=p̄×n̄, σ=√(np̄(1-p̄)), 描点值= d_i
+     * <br>C图: CL=c̄=Σd/k, σ=√c̄, 描点值= d_i
+     * <br>U图: CL=ū=Σd/Σn, σ=√(ū/n̄), 描点值= d_i/n_i
+     * <p>计数型数据不计算 Cp/Cpk/Pp/Ppk(属性数据能力用 DPMO/σ水平)，不做正态性检验。</p>
+     */
+    private SpcStatResult computeCountStatistics(List<SpcData> dataList, ParamVersion version,
+                                                   SpcStatResult result, int n) {
+        String chartType = version.getChartType().replace("-", "_").replace(" ", "").toUpperCase();
+
+        BigDecimal sumCount = BigDecimal.ZERO;
+        BigDecimal sumSample = BigDecimal.ZERO;
+        for (SpcData d : dataList) {
+            sumCount = sumCount.add(d.getMeasuredValue());
+            int sz = d.getSampleSize() != null ? d.getSampleSize() : 1;
+            sumSample = sumSample.add(BigDecimal.valueOf(sz));
+        }
+        BigDecimal nBar = sumSample.divide(BigDecimal.valueOf(n), 10, RoundingMode.HALF_UP);
+        if (nBar.compareTo(BigDecimal.ZERO) == 0) nBar = BigDecimal.ONE;
+        // 防御 sumSample=0 导致 P/NP/U 图除零(数据入口应已校验 sampleSize>0，此处兜底)
+        if (sumSample.compareTo(BigDecimal.ZERO) == 0) sumSample = BigDecimal.ONE;
+
+        BigDecimal cl;
+        BigDecimal sigma;
+
+        switch (chartType) {
+            case "P": {
+                cl = sumCount.divide(sumSample, 10, RoundingMode.HALF_UP);
+                double p = cl.doubleValue();
+                double sig = p > 0 && p < 1 ? Math.sqrt(p * (1 - p) / nBar.doubleValue()) : 0;
+                sigma = BigDecimal.valueOf(sig);
+                break;
+            }
+            case "NP": {
+                BigDecimal pBar = sumCount.divide(sumSample, 10, RoundingMode.HALF_UP);
+                cl = pBar.multiply(nBar);
+                // 与 P 图守卫一致: pBar 超出 (0,1) 时 σ=0，避免 Math.sqrt 负数产生 NaN
+                double sig = (cl.doubleValue() > 0 && pBar.doubleValue() > 0 && pBar.doubleValue() < 1)
+                        ? Math.sqrt(cl.doubleValue() * (1 - pBar.doubleValue())) : 0;
+                sigma = BigDecimal.valueOf(sig);
+                break;
+            }
+            case "C": {
+                cl = sumCount.divide(BigDecimal.valueOf(n), 10, RoundingMode.HALF_UP);
+                double sig = cl.doubleValue() > 0 ? Math.sqrt(cl.doubleValue()) : 0;
+                sigma = BigDecimal.valueOf(sig);
+                break;
+            }
+            case "U": {
+                cl = sumCount.divide(sumSample, 10, RoundingMode.HALF_UP);
+                double sig = cl.doubleValue() > 0 ? Math.sqrt(cl.doubleValue() / nBar.doubleValue()) : 0;
+                sigma = BigDecimal.valueOf(sig);
+                break;
+            }
+            default:
+                return result;
+        }
+
+        BigDecimal sigmaWidth = version.getSigmaWidth() != null ? version.getSigmaWidth() : BigDecimal.valueOf(3);
+        BigDecimal ucl = cl.add(sigmaWidth.multiply(sigma));
+        BigDecimal lcl = cl.subtract(sigmaWidth.multiply(sigma));
+        if (lcl.compareTo(BigDecimal.ZERO) < 0) lcl = BigDecimal.ZERO;
+
+        // rangeValue: 描点值极差
+        BigDecimal minPlot = null, maxPlot = null;
+        for (SpcData d : dataList) {
+            BigDecimal v = plottedCountValue(d, chartType);
+            if (minPlot == null || v.compareTo(minPlot) < 0) minPlot = v;
+            if (maxPlot == null || v.compareTo(maxPlot) > 0) maxPlot = v;
+        }
+        BigDecimal range = minPlot != null ? maxPlot.subtract(minPlot) : BigDecimal.ZERO;
+
+        result.setMeanValue(cl);
+        result.setStdDev(sigma);
+        result.setRangeValue(range);
+        result.setCalcCl(cl);
+        result.setCalcUcl(ucl);
+        result.setCalcLcl(lcl);
+
+        // 合格率: 仅在版本设置规格限时按描点值判定
+        BigDecimal usl = version.getUsl();
+        BigDecimal lsl = version.getLsl();
+        if (usl != null || lsl != null) {
+            int passCnt = 0;
+            for (SpcData d : dataList) {
+                BigDecimal v = plottedCountValue(d, chartType);
+                boolean pass = true;
+                if (usl != null && v.compareTo(usl) > 0) pass = false;
+                if (lsl != null && v.compareTo(lsl) < 0) pass = false;
+                if (pass) passCnt++;
+            }
+            result.setPassCount(passCnt);
+            result.setFailCount(n - passCnt);
+            result.setPassRate(BigDecimal.valueOf(passCnt * 100)
+                    .divide(BigDecimal.valueOf(n), 2, RoundingMode.HALF_UP));
+        }
+        // 计数型数据不做正态性检验、不计算 Cp/Cpk/Pp/Ppk
+        return result;
+    }
+
+    /** 计数型图描点值：P/U 图为比率(d/n)，NP/C 图为原始计数(d) */
+    private BigDecimal plottedCountValue(SpcData d, String chartType) {
+        if ("P".equals(chartType) || "U".equals(chartType)) {
+            // 防御 sampleSize<=0 导致除零(数据入口应已校验，此处兜底)
+            int sz = (d.getSampleSize() != null && d.getSampleSize() > 0) ? d.getSampleSize() : 1;
+            return d.getMeasuredValue().divide(BigDecimal.valueOf(sz), 10, RoundingMode.HALF_UP);
+        }
+        return d.getMeasuredValue();
     }
 
     private BigDecimal sqrt(BigDecimal value, int scale) {

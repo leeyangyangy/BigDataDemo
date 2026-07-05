@@ -267,7 +267,7 @@
                   <td>{{ bp.paramName }}</td>
                   <td>{{ bp.paramType || '-' }}</td>
                   <td>{{ bp.unit || '-' }}</td>
-                  <td>{{ bp.dataType || '-' }}</td>
+                  <td>{{ formatDataType(bp.dataType) }}</td>
                   <td class="actions">
                     <button
                         class="btn-action"
@@ -300,7 +300,7 @@
                   <td>{{ p.paramName }}</td>
                   <td>{{ p.paramType || '-' }}</td>
                   <td>{{ p.unit || '-' }}</td>
-                  <td>{{ p.dataType || '-' }}</td>
+                  <td>{{ formatDataType(p.dataType) }}</td>
                   <td class="actions">
                     <button
                       class="btn-action"
@@ -333,6 +333,12 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { adminApi, spcApi } from '@/utils/api.js'
+
+const DATA_TYPE_LABELS = { CONTINUOUS: '连续型', DISCRETE: '离散型', COUNT: '计数型' }
+function formatDataType(val) {
+  if (!val) return '连续型'
+  return DATA_TYPE_LABELS[val] || val
+}
 
 const list = ref([])
 const total = ref(0)

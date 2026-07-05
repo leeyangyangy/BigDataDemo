@@ -23,6 +23,8 @@ public class Rule7FifteenIn1Sigma implements SpcRule {
 
     @Override
     public void check(SpcRuleContext ctx, Set<Integer> flagged, List<SpcAlert> alerts) {
+        // Rule7 检测连续15点落在1σ内(分层)，依赖双侧1σ区间，单边控制限场景跳过
+        if (!"BOTH".equals(ctx.getSided())) return;
         double[] values = ctx.getValues();
         int n = values.length;
         if (n < 15) return;

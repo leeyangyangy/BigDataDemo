@@ -19,13 +19,16 @@ import xyz.leeyangy.spc.common.exception.ParamValidationException;
 import xyz.leeyangy.spc.common.exception.ResourceNotFoundException;
 import xyz.leeyangy.spc.entity.ParamVersion;
 import xyz.leeyangy.spc.entity.SpcData;
+import xyz.leeyangy.spc.entity.SpcStatResult;
 import xyz.leeyangy.spc.mapper.SpcDataMapper;
+import xyz.leeyangy.spc.mapper.SpcStatResultMapper;
 import xyz.leeyangy.spc.service.ParamVersionService;
 import xyz.leeyangy.spc.service.SpcDataService;
 import xyz.leeyangy.spc.service.SpcRuleEngine;
 import xyz.leeyangy.spc.vo.SpcDataDetailVO;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -41,6 +44,7 @@ public class SpcDataServiceImpl extends ServiceImpl<SpcDataMapper, SpcData> impl
     private final StringRedisTemplate redisTemplate;
     private final SpcRuleEngine spcRuleEngine;
     private final ObjectMapper objectMapper;
+    private final SpcStatResultMapper spcStatResultMapper;
 
     private static final String IDEMPOTENT_PREFIX = "spc:idempotent:";
     private static final String LATEST_DATA_PREFIX = "spc:latest:";
@@ -129,9 +133,21 @@ public class SpcDataServiceImpl extends ServiceImpl<SpcDataMapper, SpcData> impl
             data.setFillTime(LocalDateTime.now());
         }
 
+        // 计数型图(P/NP/U)数据校验: 样本量必填且 >0；C 图不依赖样本量无需校验
+        String ct = version.getChartType() != null
+                ? version.getChartType().replace("-", "_").replace(" ", "").toUpperCase() : "";
+        if ("P".equals(ct) || "NP".equals(ct) || "U".equals(ct)) {
+            if (data.getSampleSize() == null || data.getSampleSize() <= 0) {
+                throw new ParamValidationException("计数型图(" + ct + ")要求样本量 sampleSize > 0");
+            }
+        }
+
         evaluateData(data, version);
 
         save(data);
+
+        // 写入新数据后清除列表缓存，避免 5 分钟 TTL 内后台列表与实际写入不同步
+        clearListCache();
 
         try {
             cacheLatestData(data);
@@ -179,36 +195,71 @@ public class SpcDataServiceImpl extends ServiceImpl<SpcDataMapper, SpcData> impl
             data.setDeviation(value.subtract(target));
         }
 
+        // 判断图表类型: 计数图(P/NP/C/U)需特化处理
+        String ct = version.getChartType() != null
+                ? version.getChartType().replace("-", "_").replace(" ", "").toUpperCase() : "";
+        boolean isCountChart = "P".equals(ct) || "NP".equals(ct) || "C".equals(ct) || "U".equals(ct);
+        boolean isRateChart = "P".equals(ct) || "U".equals(ct);
+
         BigDecimal ucl = version.getUcl();
         BigDecimal lcl = version.getLcl();
         BigDecimal usl = version.getUsl();
         BigDecimal lsl = version.getLsl();
+        BigDecimal cl = version.getCl();
+
+        // 计数图: version 手动限为空时, 从最新 SpcStatResult 取动态计算限
+        // 计数图控制限由 p̄/c̄/ū 等算法得出, 通常不存于 ParamVersion
+        if (isCountChart && ucl == null && lcl == null && cl == null) {
+            try {
+                SpcStatResult stat = spcStatResultMapper.selectOne(
+                        new LambdaQueryWrapper<SpcStatResult>()
+                                .eq(SpcStatResult::getParamVersionId, version.getId())
+                                .eq(SpcStatResult::getDeleted, 0)
+                                .orderByDesc(SpcStatResult::getStatTime)
+                                .last("LIMIT 1"));
+                if (stat != null) {
+                    ucl = stat.getCalcUcl();
+                    lcl = stat.getCalcLcl();
+                    cl = stat.getCalcCl();
+                }
+            } catch (Exception e) {
+                log.warn("[Evaluate] 计数图查询历史统计结果失败, 跳过动态限: {}", e.getMessage());
+            }
+        }
+
+        // 计数图 P/U 图描点值为比率(d/n), 与比率控制限比较
+        BigDecimal plotValue = value;
+        if (isRateChart && data.getSampleSize() != null && data.getSampleSize() > 0) {
+            plotValue = value.divide(BigDecimal.valueOf(data.getSampleSize()), 10, RoundingMode.HALF_UP);
+        }
 
         data.setIsOoc(0);
         data.setIsOos(0);
 
-        if (ucl != null && value.compareTo(ucl) > 0) {
+        if (ucl != null && plotValue.compareTo(ucl) > 0) {
             data.setIsOoc(1);
         }
-        if (lcl != null && value.compareTo(lcl) < 0) {
+        if (lcl != null && plotValue.compareTo(lcl) < 0) {
             data.setIsOoc(1);
         }
-        if (usl != null && value.compareTo(usl) > 0) {
+        if (usl != null && plotValue.compareTo(usl) > 0) {
             data.setIsOos(1);
         }
-        if (lsl != null && value.compareTo(lsl) < 0) {
+        if (lsl != null && plotValue.compareTo(lsl) < 0) {
             data.setIsOos(1);
         }
 
-        if (ucl != null && lcl != null && target != null) {
+        // zone 计算: 中心线优先用 cl(计数图 cl 即均值), 不强制 target 存在
+        BigDecimal centerLine = cl != null ? cl : target;
+        if (ucl != null && lcl != null && centerLine != null) {
             BigDecimal range = ucl.subtract(lcl);
-            BigDecimal sigma = range.divide(BigDecimal.valueOf(6), 6, BigDecimal.ROUND_HALF_UP);
-            if (sigma.compareTo(BigDecimal.ZERO) > 0) {
-                BigDecimal deviation = value.subtract(target).abs();
-                data.setSigmaLevel(deviation.divide(sigma, 4, BigDecimal.ROUND_HALF_UP));
+            if (range.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal sigma = range.divide(BigDecimal.valueOf(6), 6, RoundingMode.HALF_UP);
+                BigDecimal deviation = plotValue.subtract(centerLine).abs();
+                data.setSigmaLevel(deviation.divide(sigma, 4, RoundingMode.HALF_UP));
 
-                BigDecimal zoneWidth = range.divide(BigDecimal.valueOf(6), 6, BigDecimal.ROUND_HALF_UP);
-                BigDecimal distFromCl = value.subtract(target).abs();
+                BigDecimal zoneWidth = range.divide(BigDecimal.valueOf(6), 6, RoundingMode.HALF_UP);
+                BigDecimal distFromCl = plotValue.subtract(centerLine).abs();
                 if (distFromCl.compareTo(zoneWidth) <= 0) {
                     data.setZone(1);
                 } else if (distFromCl.compareTo(zoneWidth.multiply(BigDecimal.valueOf(2))) <= 0) {

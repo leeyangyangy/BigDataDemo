@@ -301,7 +301,7 @@ function zoneClass(z) {
 
 function chartTypeText(c) {
   if (!c) return '-'
-  const map = { I_MR: 'I-MR', XBAR_R: 'Xbar-R', XBAR_S: 'Xbar-S', P: 'P图' }
+  const map = { I_MR: 'I-MR', XBAR_R: 'Xbar-R', XBAR_S: 'Xbar-S', P: 'P图', NP: 'NP图', C: 'C图', U: 'U图' }
   return map[c] || c
 }
 

@@ -13,6 +13,7 @@
             d.equipment_id            AS equipmentId,
             d.workstation_no          AS workstationNo,
             d.measured_value          AS measuredValue,
+            d.sample_size             AS sampleSize,
             d.subgroup_idx            AS subgroupIdx,
             d.subgroup_size           AS subgroupSize,
             d.subgroup_seq            AS subgroupSeq,

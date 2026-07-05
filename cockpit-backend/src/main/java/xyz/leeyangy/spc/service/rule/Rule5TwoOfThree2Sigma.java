@@ -29,6 +29,9 @@ public class Rule5TwoOfThree2Sigma implements SpcRule {
         double centerLine = ctx.getCl().doubleValue();
         double upper2sigma = centerLine + ctx.getTwoSigma().doubleValue();
         double lower2sigma = centerLine - ctx.getTwoSigma().doubleValue();
+        // 单边场景只检查存在的侧
+        boolean checkUpper = !"LOWER".equals(ctx.getSided());
+        boolean checkBelow = !"UPPER".equals(ctx.getSided());
 
         for (int end = 3; end <= n; end++) {
             int countAbove2S = 0;
@@ -36,8 +39,8 @@ public class Rule5TwoOfThree2Sigma implements SpcRule {
             int lastAboveIdx = -1;
             int lastBelowIdx = -1;
             for (int i = end - 3; i < end; i++) {
-                if (values[i] > upper2sigma) { countAbove2S++; lastAboveIdx = i; }
-                if (values[i] < lower2sigma) { countBelow2S++; lastBelowIdx = i; }
+                if (checkUpper && values[i] > upper2sigma) { countAbove2S++; lastAboveIdx = i; }
+                if (checkBelow && values[i] < lower2sigma) { countBelow2S++; lastBelowIdx = i; }
             }
             if (countAbove2S >= 2 || countBelow2S >= 2) {
                 int triggerIdx = (countAbove2S >= 2) ? lastAboveIdx : lastBelowIdx;
