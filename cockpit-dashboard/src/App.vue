@@ -104,6 +104,7 @@ import BottomNav from './components/BottomNav.vue'
 import ThemeSwitcher from './components/ThemeSwitcher.vue'
 import LoginForm from './components/LoginForm.vue'
 import { getToken, getUser, removeToken, isLoggedIn, yieldApi } from './utils/api.js'
+import { startSessionWatcher, stopSessionWatcher } from './utils/tokenSecurity.js'
 import './styles/theme.css'
 import OperationLogManagement from "@/components/admin/OperationLogManagement.vue";
 import ChangeLogManagement from "@/components/admin/ChangeLogManagement.vue";
@@ -193,6 +194,7 @@ function onLoginSuccess(data) {
 
 function handleLogout() {
   removeToken()
+  stopSessionWatcher()
   showUserMenu.value = false
   yieldAccessible.value = false
   localStorage.removeItem(YIELD_ACCESS_KEY)
@@ -243,11 +245,19 @@ function closeUserMenu(e) {
 
 onMounted(() => {
   checkAuth()
+  // 启动会话超时检测 (等保三级: 会话超时自动退出)
+  startSessionWatcher(() => {
+    console.warn('[Session] 会话已超时, 自动登出')
+    loggedIn.value = false
+    userInfo.value = null
+    showLogin.value = true
+  })
   window.addEventListener('auth:expired', onAuthExpired)
   document.addEventListener('click', closeUserMenu)
 })
 
 onUnmounted(() => {
+  stopSessionWatcher()
   window.removeEventListener('auth:expired', onAuthExpired)
   document.removeEventListener('click', closeUserMenu)
 })

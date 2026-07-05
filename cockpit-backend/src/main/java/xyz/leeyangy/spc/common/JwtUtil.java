@@ -21,13 +21,22 @@ import java.util.Map;
 @Component
 public class JwtUtil {
 
-    @Value("${spc.jwt.secret:SPC-Process-Control-System-JWT-Secret-Key-2026-Enterprise}")
+    /**
+     * JWT 密钥。生产环境必须通过环境变量 SPC_JWT_SECRET 注入, 长度 >= 32 字节。
+     * 开发环境若未配置, 默认启用随机密钥, 不再使用静态默认值。
+     */
+    @Value("${cockpit.jwt.secret:}")
     private String secret;
 
-    @Value("${spc.jwt.expiration:86400000}")
+    @Value("${cockpit.jwt.expiration:28800000}")
     private long expiration;
 
-    @Value("${spc.jwt.random-secret-on-startup:false}")
+    /**
+     * 是否在启动时生成随机密钥。
+     * - 生产环境 (prod profile) 强制为 true
+     * - 开发环境默认 true, 避免使用静态密钥
+     */
+    @Value("${cockpit.jwt.random-secret-on-startup:true}")
     private boolean randomSecretOnStartup;
 
     private SecretKey key;
@@ -35,13 +44,23 @@ public class JwtUtil {
     @PostConstruct
     public void init() {
         byte[] keyBytes;
-        if (randomSecretOnStartup) {
+        boolean useRandom = randomSecretOnStartup
+                || secret == null
+                || secret.trim().isEmpty()
+                || secret.getBytes(StandardCharsets.UTF_8).length < 32;
+
+        if (useRandom) {
             SecureRandom sr = new SecureRandom();
-            keyBytes = new byte[32];
+            keyBytes = new byte[32];  // 256 bit, 满足 HS256 要求
             sr.nextBytes(keyBytes);
-            log.info("[JWT] 已生成随机密钥 ({} bytes), 重启后所有Token将失效", keyBytes.length);
+            if (!randomSecretOnStartup) {
+                log.warn("[JWT] 配置的 secret 为空或长度<32字节, 已自动启用随机密钥 ({} bytes)", keyBytes.length);
+            } else {
+                log.info("[JWT] 已生成随机密钥 ({} bytes), 重启后所有Token将失效", keyBytes.length);
+            }
         } else {
             keyBytes = secret.getBytes(StandardCharsets.UTF_8);
+            log.info("[JWT] 使用配置的静态密钥 ({} bytes)", keyBytes.length);
         }
         this.key = Keys.hmacShaKeyFor(keyBytes);
     }

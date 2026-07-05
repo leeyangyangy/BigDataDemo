@@ -16,7 +16,7 @@ import org.springframework.context.annotation.Configuration;
 public class YieldRabbitConfig {
 
     public static final String EXCHANGE_NAME = "yield_dashboard";
-    public static final String QUEUE_NAME = "spc-yield-dashboard-queue";
+    public static final String QUEUE_NAME = "cockpit-yield-dashboard-queue";
 
     @Bean
     public FanoutExchange yieldDashboardExchange() {

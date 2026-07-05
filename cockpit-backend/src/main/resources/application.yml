@@ -86,7 +86,7 @@ logging:
     xyz.leeyangy.spc: debug
     com.baomidou.mybatisplus: debug
 
-spc:
+cockpit:
   data:
     shard-enabled: false
   ws:
@@ -111,14 +111,10 @@ spc:
     secret: YOUR_APP_SECRET
     enabled: false
   jwt:
-    secret: SPC-Process-Control-System-JWT-Secret-Key-2026-Enterprise
-    random-secret-on-startup: false
-#    expiration: 7200000     # 2 H
-#    expiration: 28800000     # 8 H
-    expiration: 86400000  # 24 H
-#    expiration: 604800000      # 7 D
-#    expiration: 2592000000     # 30 D
-
+    # 开发环境默认启用随机密钥, 重启后所有Token失效。
+    # 生产环境通过 application-prod.yml 配置 COCKPIT_JWT_SECRET (>=32字节) 或保持启用随机密钥。
+    random-secret-on-startup: true
+    expiration: 28800000  # 8 H (符合等保三级 会话超时要求)
   cors:
     allowed-origins: http://localhost:5174,http://localhost:5173,http://127.0.0.1:5174,http://192.168.1.111:5174
 
@@ -140,6 +136,11 @@ management:
     login:
       max-attempts: 20
       window-seconds: 60
+      lockout-seconds: 1800  # 开发环境: 失败 20 次后锁定 30 分钟
     api:
       max-requests: 500
       window-seconds: 60
+
+  security:
+    password:
+      history-count: 5  # 密码历史保留数量 (等保三级防重用)

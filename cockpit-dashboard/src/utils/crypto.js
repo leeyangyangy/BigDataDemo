@@ -3,7 +3,7 @@ import JSEncrypt from 'jsencrypt'
 
 // 会话级 AES key/iv, 登录时由前端随机生成, RSA 加密上送给后端。
 // sessionStorage 确保标签页关闭即清除, 不在 localStorage 长期保存。
-const KV_KEY = 'spc_enc_kv'
+const KV_KEY = 'cockpit_enc_kv'
 
 // 开发环境不加密, 与后端 AESUtil.isEncryptionEnabled() 保持一致。
 const ENCRYPTION_ENABLED = import.meta.env.MODE !== 'development'
@@ -155,7 +155,7 @@ export function decrypt(encryptedData) {
   if (typeof encryptedData !== 'string') return encryptedData
   const kv = loadKv()
   if (!kv) {
-    console.warn('[Crypto] decrypt 跳过: sessionStorage 无 KV (spc_enc_kv). 可能未登录或 key-exchange 未完成')
+    console.warn('[Crypto] decrypt 跳过: sessionStorage 无 KV (cockpit_enc_kv). 可能未登录或 key-exchange 未完成')
     return encryptedData
   }
   try {

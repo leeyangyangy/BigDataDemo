@@ -11,19 +11,31 @@ import {
   generateAndExchangeKey,
   clearKey
 } from './crypto.js'
+import {
+  secureSetToken,
+  secureRemoveToken,
+  isTokenExpired,
+  updateLastActivity
+} from './tokenSecurity.js'
 
 export function getToken() {
-  return localStorage.getItem(TOKEN_KEY)
+  const token = localStorage.getItem(TOKEN_KEY)
+  // Token 过期前端预检 (等保三级: 会话超时)
+  if (token && isTokenExpired(token)) {
+    console.warn('[Auth] Token 已过期, 自动清除')
+    secureRemoveToken()
+    window.dispatchEvent(new CustomEvent('auth:expired'))
+    return null
+  }
+  return token
 }
 
 export function setToken(token) {
-  localStorage.setItem(TOKEN_KEY, token)
+  secureSetToken(token)
 }
 
 export function removeToken() {
-  localStorage.removeItem(TOKEN_KEY)
-  localStorage.removeItem(USER_KEY)
-  clearKey()
+  secureRemoveToken()
 }
 
 export function getUser() {
@@ -36,7 +48,8 @@ export function setUser(user) {
 }
 
 export function isLoggedIn() {
-  return !!getToken()
+  const token = localStorage.getItem(TOKEN_KEY)
+  return !!token && !isTokenExpired(token)
 }
 
 const StatusCodeMsg = {
@@ -132,6 +145,11 @@ class ApiClient {
 
     try {
       const response = await fetch(`${this.baseURL}${url}`, config)
+
+      // 请求成功发出即更新活动时间 (用于会话超时检测)
+      if (token) {
+        updateLastActivity()
+      }
 
       if (response.status === 401) {
         removeToken()

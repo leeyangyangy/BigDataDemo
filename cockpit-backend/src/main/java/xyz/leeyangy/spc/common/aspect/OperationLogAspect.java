@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import xyz.leeyangy.spc.common.R;
 import xyz.leeyangy.spc.common.annotation.OperationLog;
 import xyz.leeyangy.spc.common.constants.OperationLogConstants;
+import xyz.leeyangy.spc.common.util.SensitiveDataMasker;
 import xyz.leeyangy.spc.service.OperationLogService;
 
 import javax.servlet.http.HttpServletRequest;
@@ -49,6 +50,7 @@ import java.util.Map;
 public class OperationLogAspect {
 
     private final OperationLogService operationLogService;
+    private final SensitiveDataMasker sensitiveDataMasker;
 
     private final ExpressionParser parser = new SpelExpressionParser();
     private final ParameterNameDiscoverer paramNameDiscoverer = new DefaultParameterNameDiscoverer();
@@ -108,14 +110,18 @@ public class OperationLogAspect {
             fullContent = content + " [" + errorType + ": " + errorMsg + "]";
         }
 
+        // 脱敏处理: 避免 phone/email/idCard/password 等敏感数据明文写入操作日志
+        String maskedContent = sensitiveDataMasker.maskContent(fullContent);
+        String maskedErrorMsg = sensitiveDataMasker.maskContent(errorMsg);
+
         operationLogService.record(
                 operationLog.module(),
                 operationLog.action(),
                 targetId,
                 operationLog.targetType(),
-                fullContent,
+                maskedContent,
                 resultCode,
-                errorMsg,
+                maskedErrorMsg,
                 0,
                 request,
                 operatorId,

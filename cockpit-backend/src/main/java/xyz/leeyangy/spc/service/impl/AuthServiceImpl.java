@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import xyz.leeyangy.spc.common.JwtUtil;
 import xyz.leeyangy.spc.entity.SysUser;
 import xyz.leeyangy.spc.service.AuthService;
+import xyz.leeyangy.spc.service.LoginAttemptService;
 import xyz.leeyangy.spc.service.SysUserService;
 
 import java.util.HashMap;
@@ -20,6 +21,7 @@ public class AuthServiceImpl implements AuthService {
     private final SysUserService sysUserService;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
+    private final LoginAttemptService loginAttemptService;
 
     @Override
     public Map<String, Object> login(String empNo, String password, String ip) {
@@ -30,9 +32,19 @@ public class AuthServiceImpl implements AuthService {
             return result;
         }
 
+        // 1. 账号锁定检查 (等保三级: 限制非法登录次数)
+        Long remainingLock = loginAttemptService.getRemainingLockSeconds(empNo);
+        if (remainingLock != null) {
+            log.warn("[Auth] 登录拒绝: 账号已锁定 - empNo={} 剩余秒数={}", empNo, remainingLock);
+            result.put("error", "账号已被锁定, 请 " + (remainingLock / 60 + 1) + " 分钟后再试");
+            return result;
+        }
+
         SysUser user = sysUserService.getByEmpNo(empNo.trim());
         if (user == null) {
             log.warn("[Auth] 登录失败: 用户不存在 - empNo={}", empNo);
+            // 仍记录失败次数, 防止通过返回信息差异进行用户枚举
+            loginAttemptService.recordFailedAttempt(empNo, ip);
             result.put("error", "用户不存在或密码错误");
             return result;
         }
@@ -44,6 +56,7 @@ public class AuthServiceImpl implements AuthService {
 
         if (!passwordEncoder.matches(password, user.getPassword())) {
             log.warn("[Auth] 登录失败: 密码错误 - empNo={}", empNo);
+            loginAttemptService.recordFailedAttempt(empNo, ip);
             result.put("error", "用户不存在或密码错误");
             return result;
         }
@@ -53,6 +66,9 @@ public class AuthServiceImpl implements AuthService {
             result.put("error", "账号已停用，请联系管理员");
             return result;
         }
+
+        // 2. 登录成功: 清空失败计数
+        loginAttemptService.recordSuccess(empNo);
 
         String token = jwtUtil.generateToken(user.getId(), user.getEmpNo(), user.getUsername(), user.getRole());
 

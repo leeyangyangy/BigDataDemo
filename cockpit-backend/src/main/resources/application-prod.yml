@@ -1,6 +1,84 @@
-spc:
+# ============================================================
+# 生产环境配置 (符合等保三级安全要求)
+#
+# 所有敏感配置通过环境变量注入, 不在代码仓库中保存明文。
+# 部署前请完成 .env.example 中的安全配置清单。
+# ============================================================
+
+spring:
+  profiles:
+    active: prod
+
+  # 数据库连接 - 生产环境强制启用 SSL
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DATABASE}?\
+      useUnicode=true&\
+      characterEncoding=utf8&\
+      zeroDateTimeBehavior=convertToNull&\
+      useSSL=${MYSQL_SSL_ENABLED:true}&\
+      requireSSL=true&\
+      verifyServerCertificate=true&\
+      trustCertificateKeyStoreUrl=file:${MYSQL_TRUSTSTORE_PATH:/app/ssl/mysql-truststore.jks}&\
+      trustCertificateKeyStorePassword=${MYSQL_TRUSTSTORE_PASSWORD}&\
+      trustCertificateKeyStoreType=JKS&\
+      serverTimezone=Asia/Shanghai&\
+      allowPublicKeyRetrieval=false
+    username: ${MYSQL_USER}     # 必须使用专用账户, 禁止使用 root
+    password: ${MYSQL_PASSWORD}
+    druid:
+      initial-size: 5
+      min-idle: 5
+      max-active: 30
+      max-wait: 60000
+      time-between-eviction-runs-millis: 60000
+      min-evictable-idle-time-millis: 300000
+      validation-query: SELECT 1
+      test-while-idle: true
+      test-on-borrow: false
+      test-on-return: false
+      pool-prepared-statements: true
+      max-pool-prepared-statement-per-connection-size: 20
+      # Druid 监控页面 - 生产环境必须关闭或加固
+      stat-view-servlet:
+        enabled: false  # 关闭 SQL 监控页面, 防止信息泄露
+      web-stat-filter:
+        enabled: false
+
+  # Redis - 生产环境必须设置密码
+  redis:
+    host: ${REDIS_HOST}
+    port: ${REDIS_PORT}
+    password: ${REDIS_PASSWORD}  # 生产环境必须设置密码
+    database: 0
+    timeout: 5000
+    lettuce:
+      pool:
+        max-active: 20
+        max-idle: 10
+        min-idle: 5
+        max-wait: 3000
+
+  # RabbitMQ - 生产环境使用专用账户
+  rabbitmq:
+    host: ${RABBITMQ_HOST}
+    port: ${RABBITMQ_PORT}
+    username: ${RABBITMQ_USER}     # 禁止使用 guest
+    password: ${RABBITMQ_PASSWORD}
+    virtual-host: ${RABBITMQ_VHOST:collect_data_vhost}
+
+  # 文件上传限制
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 50MB
+
+# SPC 安全配置
+cockpit:
   security:
     encryption:
+      # 生产环境必须启用加密 (前后端 AES+RSA 密钥交换)
       enabled: true
       exclude-paths:
         - /api/auth/login
@@ -9,31 +87,52 @@ spc:
         - /api/auth/key-exchange
         - /api/actuator/**
         - /api/spc/data/export/**
+
   jwt:
-    secret: ${SPC_JWT_SECRET}
-    random-secret-on-startup: false
-    expiration: 28800000
+    # 生产环境支持两种模式:
+    #   1. 配置静态密钥 (COCKPIT_JWT_SECRET >=32字节, 多实例部署时使用)
+    #   2. 启用随机密钥 (单实例部署时使用, 重启后Token失效)
+    secret: ${COCKPIT_JWT_SECRET:}
+    random-secret-on-startup: ${COCKPIT_JWT_RANDOM_SECRET:false}
+    expiration: 28800000  # 8小时 (符合等保三级会话超时要求)
+
   cors:
-    allowed-origins: ${SPC_ALLOWED_ORIGINS}
+    # 生产环境必须使用 HTTPS 域名
+    allowed-origins: ${COCKPIT_ALLOWED_ORIGINS}
+
   rate-limit:
     login:
-      max-attempts: 5
-      window-seconds: 300
+      max-attempts: 5       # 5次失败后锁定
+      window-seconds: 300   # 5分钟窗口
+      lockout-seconds: 1800 # 锁定30分钟
     api:
       max-requests: 100
       window-seconds: 60
 
+# Actuator 端点 - 生产环境严格限制
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info  # 仅暴露必要端点
   endpoint:
     health:
-      show-details: when-authorized
+      show-details: when-authorized  # 需要授权才能查看详情
 
+# 日志配置 - 生产环境
 logging:
   level:
     xyz.leeyangy.spc: info
     com.baomidou.mybatisplus: warn
     org.springframework.security: warn
+    # 关闭敏感信息日志
+    org.springframework.web: warn
+    com.zaxxer.hikari: warn
+  file:
+    name: /app/logs/spc-application.log
+  logback:
+    rollingpolicy:
+      max-file-size: 100MB
+      max-history: 30
+      total-size-cap: 3GB
+      clean-history-on-startup: true

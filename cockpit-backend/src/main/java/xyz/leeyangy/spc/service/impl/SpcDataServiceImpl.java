@@ -46,15 +46,15 @@ public class SpcDataServiceImpl extends ServiceImpl<SpcDataMapper, SpcData> impl
     private final ObjectMapper objectMapper;
     private final SpcStatResultMapper spcStatResultMapper;
 
-    private static final String IDEMPOTENT_PREFIX = "spc:idempotent:";
-    private static final String LATEST_DATA_PREFIX = "spc:latest:";
+    private static final String IDEMPOTENT_PREFIX = "cockpit:idempotent:";
+    private static final String LATEST_DATA_PREFIX = "cockpit:latest:";
 
-    /** 后台 SPC 数据列表缓存 key 前缀 */
-    private static final String LIST_CACHE_PREFIX = "spc:admin:data:page:";
+    /** 后台 cockpit 数据列表缓存 key 前缀 */
+    private static final String LIST_CACHE_PREFIX = "cockpit:admin:data:page:";
     /** 列表缓存 TTL */
     private static final Duration LIST_CACHE_TTL = Duration.ofMinutes(5);
-    /** 图表查询缓存 key 前缀（与 SpcChartController 中保持一致） */
-    private static final String CHART_CACHE_PREFIX = "spc:chart:";
+    /** 图表查询缓存 key 前缀（与 cockpitChartController 中保持一致） */
+    private static final String CHART_CACHE_PREFIX = "cockpit:chart:";
 
     /** 列表缓存值结构（仅缓存必要字段，避免序列化 MyBatis-Plus Page 内部字段） */
     @Data

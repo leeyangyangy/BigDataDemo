@@ -24,16 +24,16 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
 
-    @Value("${spc.rate-limit.login.max-attempts:5}")
+    @Value("${cockpit.rate-limit.login.max-attempts:5}")
     private int loginMaxAttempts;
 
-    @Value("${spc.rate-limit.login.window-seconds:60}")
+    @Value("${cockpit.rate-limit.login.window-seconds:60}")
     private int loginWindowSeconds;
 
-    @Value("${spc.rate-limit.api.max-requests:200}")
+    @Value("${cockpit.rate-limit.api.max-requests:200}")
     private int apiMaxRequests;
 
-    @Value("${spc.rate-limit.api.window-seconds:60}")
+    @Value("${cockpit.rate-limit.api.window-seconds:60}")
     private int apiWindowSeconds;
 
     public RateLimitFilter(StringRedisTemplate redisTemplate, ObjectMapper objectMapper) {

@@ -14,7 +14,7 @@ import java.util.List;
 @Configuration
 public class CorsConfig {
 
-    @Value("${spc.cors.allowed-origins:http://localhost:5174,http://localhost:5173,http://127.0.0.1:5174}")
+    @Value("${cockpit.cors.allowed-origins:http://localhost:5174,http://localhost:5173,http://127.0.0.1:5174}")
     private String allowedOrigins;
 
     @Bean

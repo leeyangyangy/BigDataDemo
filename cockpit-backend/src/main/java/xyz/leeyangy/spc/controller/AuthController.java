@@ -16,6 +16,7 @@ import xyz.leeyangy.spc.dto.WechatLoginDTO;
 import xyz.leeyangy.spc.entity.SysUser;
 import xyz.leeyangy.spc.entity.Workshop;
 import xyz.leeyangy.spc.service.AuthService;
+import xyz.leeyangy.spc.service.PasswordHistoryService;
 import xyz.leeyangy.spc.service.SysUserService;
 import xyz.leeyangy.spc.service.SysUserWorkshopService;
 import xyz.leeyangy.spc.service.TokenBlacklistService;
@@ -41,6 +42,7 @@ public class AuthController {
     private final AESUtil aesUtil;
     private final SysUserWorkshopService sysUserWorkshopService;
     private final WorkshopService workshopService;
+    private final PasswordHistoryService passwordHistoryService;
 
     /**
      * 下发 RSA 公钥 (Base64 编码, X.509 SubjectPublicKeyInfo)。
@@ -160,7 +162,20 @@ public class AuthController {
         if (!passwordEncoder.matches(req.getOldPassword(), user.getPassword())) {
             return R.fail("原密码错误");
         }
+        // 等保三级: 密码防重用 (新密码不能与最近 N 次密码相同)
+        if (passwordHistoryService.isPasswordReused(userId, req.getNewPassword())) {
+            return R.fail("新密码不能与最近使用过的密码相同, 请更换");
+        }
+        // 同时检查新密码不能与当前密码相同
+        if (passwordEncoder.matches(req.getNewPassword(), user.getPassword())) {
+            return R.fail("新密码不能与当前密码相同");
+        }
+
+        String newHash = passwordEncoder.encode(req.getNewPassword());
         sysUserService.updatePassword(userId, req.getNewPassword());
+        // 记录密码历史 (在密码更新成功后)
+        passwordHistoryService.recordPasswordChange(userId, newHash);
+        // 踢出该用户所有会话, 强制重新登录
         tokenBlacklistService.kickUser(userId);
         log.info("[Auth] 用户修改密码: id={} empNo={}", userId, user.getEmpNo());
         return R.ok(null);

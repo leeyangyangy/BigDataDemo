@@ -9,7 +9,6 @@ import xyz.leeyangy.spc.common.R;
 import xyz.leeyangy.spc.common.annotation.OperationLog;
 import xyz.leeyangy.spc.dto.ProcessParamBindDTO;
 import xyz.leeyangy.spc.entity.Equipment;
-import xyz.leeyangy.spc.entity.Process;
 import xyz.leeyangy.spc.service.EquipmentService;
 import xyz.leeyangy.spc.service.ProcessParamService;
 import xyz.leeyangy.spc.service.ProcessService;

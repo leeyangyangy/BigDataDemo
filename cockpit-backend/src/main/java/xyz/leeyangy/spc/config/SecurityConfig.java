@@ -26,6 +26,7 @@ import java.util.Map;
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
+    private final CsrfProtectionFilter csrfProtectionFilter;
     private final ObjectMapper objectMapper;
 
     @Bean
@@ -90,7 +91,9 @@ public class SecurityConfig {
                             );
                         })
                 )
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                // CSRF 防护 (适配无状态 JWT, 通过 Origin/Referer 校验)
+                .addFilterBefore(csrfProtectionFilter, JwtAuthFilter.class);
 
         return http.build();
     }

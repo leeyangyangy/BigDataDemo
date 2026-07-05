@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component;
 
 @Data
 @Component
-@ConfigurationProperties(prefix = "spc.wecom")
+@ConfigurationProperties(prefix = "cockpit.wecom")
 public class WeComProperties {
 
     private String corpId = "YOUR_CORP_ID";
