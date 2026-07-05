@@ -8,6 +8,6 @@ import org.springframework.context.annotation.Import;
 @Configuration
 @EnableConfigurationProperties
 @Import({DecryptRequestFilter.class, EncryptResponseAdvice.class})
-@ConditionalOnProperty(name = "spc.security.encryption.enabled", havingValue = "true", matchIfMissing = false)
+@ConditionalOnProperty(name = "cockpit.security.encryption.enabled", havingValue = "true", matchIfMissing = false)
 public class EncryptionConfig {
 }

@@ -31,7 +31,7 @@ public class CryptoKeyService {
     private final StringRedisTemplate redisTemplate;
     private final RsaKeyHolder rsaKeyHolder;
 
-    @Value("${spc.jwt.expiration:86400000}")
+    @Value("${cockpit.jwt.expiration:86400000}")
     private long jwtExpirationMs;
 
     private static final String KEY_PREFIX = "enc:kv:";

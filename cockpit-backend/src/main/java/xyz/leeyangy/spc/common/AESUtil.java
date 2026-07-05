@@ -19,16 +19,16 @@ import java.util.List;
  *
  * 兼容策略:
  *   - dev/development/local profile 一律不加密, 直接返回原文
- *   - prod profile 且 spc.security.encryption.enabled=true 才启用
+ *   - prod profile 且 cockpit.security.encryption.enabled=true 才启用
  *   - 启用后若 Redis 中没有该用户的 KV (尚未 key-exchange), 也不加密, 避免登录死循环
  */
 @Component
 public class AESUtil {
 
-    @Value("${spc.security.encryption.enabled:false}")
+    @Value("${cockpit.security.encryption.enabled:false}")
     private boolean encryptionEnabledConfig;
 
-    @Value("${spc.security.encryption.exclude-paths:}")
+    @Value("${cockpit.security.encryption.exclude-paths:}")
     private List<String> excludePaths;
 
     private final Environment environment;
