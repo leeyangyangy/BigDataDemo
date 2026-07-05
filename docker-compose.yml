@@ -15,36 +15,32 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
       TZ: Asia/Shanghai
-      # ----- external MySQL -----
-      SPRING_DATASOURCE_URL: jdbc:mysql://${MYSQL_HOST:-192.168.1.106}:${MYSQL_PORT:-3306}/${MYSQL_DATABASE:-cockpit_all_stack}?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-root}
-      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-root}
+      # ----- external MySQL (占位符由 application-prod.yml 读取) -----
+      MYSQL_HOST: ${MYSQL_HOST:-192.168.1.106}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-cockpit_all_stack}
+      MYSQL_USER: ${MYSQL_USER:-root}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-root}
+      MYSQL_SSL_ENABLED: ${MYSQL_SSL_ENABLED:-false}
       # ----- external Redis -----
-      SPRING_REDIS_HOST: ${REDIS_HOST:-192.168.1.106}
-      SPRING_REDIS_PORT: ${REDIS_PORT:-6379}
-      # SPRING_REDIS_PASSWORD 仅在 Redis 启用了认证时通过 .env 注入；
-      # 此处置空会让 Spring Boot 把 spring.redis.password 当作 "" 而非 null,
-      # Redisson 会对无密码的 Redis 发起 AUTH 并报错,因此默认不设置。
-      # 如需启用,在 .env 中设置 REDIS_PASSWORD 并取消下一行注释:
-      # SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_HOST: ${REDIS_HOST:-192.168.1.106}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      # REDIS_PASSWORD 留空时, application-prod.yml 中 password 解析为空字符串,
+      # Redisson 不会发起 AUTH, 兼容无密码 Redis。
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       # ----- external RabbitMQ -----
-      SPRING_RABBITMQ_HOST: ${RABBITMQ_HOST:-192.168.1.106}
-      SPRING_RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
-      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-root}
-      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-password}
-      SPRING_RABBITMQ_VIRTUAL_HOST: ${RABBITMQ_VHOST:-collect_data_vhost}
-      # ----- secrets (read by application-prod.yml) -----
-      # AES key/iv 已改由前端随机生成、RSA 加密上送, 见 /api/auth/key-exchange,
+      RABBITMQ_HOST: ${RABBITMQ_HOST:-192.168.1.106}
+      RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+      RABBITMQ_USER: ${RABBITMQ_USER:-root}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-password}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-collect_data_vhost}
+      # ----- secrets (占位符由 application-prod.yml 读取) -----
+      # AES key/iv 由前端随机生成、RSA 加密上送, 见 /api/auth/key-exchange,
       # 不再从环境变量读取静态值, 见 RsaKeyHolder / CryptoKeyService。
-      COCKPIT_JWT_SECRET: ${COCKPIT_JWT_SECRET}
-      COCKPIT_ALLOWED_ORIGINS: ${COCKPIT_ALLOWED_ORIGINS}
-      # ----- example -----
-      # ----- secrets (read by application-prod.yml) -----
-      # 以下为本地开发默认值, 生产环境务必在 .env 中覆盖:
-      #   COCKPIT_JWT_SECRET    需 >= 32 字节 (HS256)
-      #   COCKPIT_ALLOWED_ORIGINS  逗号分隔的 CORS 允许来源
-      #   COCKPIT_JWT_SECRET: ${COCKPIT_JWT_SECRET:-SPC-Process-Control-System-JWT-Secret-Key-2026-Enterprise}
-      #   COCKPIT_ALLOWED_ORIGINS: ${COCKPIT_ALLOWED_ORIGINS:-http://localhost,http://127.0.0.1}
+      # COCKPIT_JWT_SECRET 留空时, 后端按 cockpit.jwt.random-secret-on-startup 启用随机密钥
+      # (单实例部署可用, 重启后所有Token失效)。
+      COCKPIT_JWT_SECRET: ${COCKPIT_JWT_SECRET:-}
+      COCKPIT_ALLOWED_ORIGINS: ${COCKPIT_ALLOWED_ORIGINS:-}
     ports:
       - "8080:8080"
 
