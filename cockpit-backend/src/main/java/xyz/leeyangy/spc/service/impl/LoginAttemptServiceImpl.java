@@ -52,8 +52,11 @@ public class LoginAttemptServiceImpl implements LoginAttemptService {
             }
             return ttl;
         } catch (Exception e) {
-            log.warn("[LoginAttempt] 读取锁定状态失败(降级为未锁定): empNo={} cause={}", empNo, e.getMessage());
-            return null;
+            // fail-closed: Redis 异常时假定账号已锁定, 防止暴力破解绕过锁定机制
+            // 等保三级要求: 安全机制失效时应拒绝访问而非放行
+            log.error("[SECURITY_ALERT] 读取锁定状态失败, fail-closed 假定已锁定: empNo={} cause={}",
+                    empNo, e.getMessage());
+            return (long) lockoutSeconds;
         }
     }
 
@@ -91,8 +94,11 @@ public class LoginAttemptServiceImpl implements LoginAttemptService {
             }
             return currentFailures;
         } catch (Exception e) {
-            log.warn("[LoginAttempt] 记录失败次数异常(不影响登录流程): empNo={} cause={}", empNo, e.getMessage());
-            return 0;
+            // fail-closed: Redis 异常时返回 maxAttempts, 触发 AuthServiceImpl 的锁定检查
+            // 配合 getRemainingLockSeconds 的 fail-closed 行为, 确保异常时账号被锁定
+            log.error("[SECURITY_ALERT] 记录失败次数异常, fail-closed 返回阈值: empNo={} ip={} cause={}",
+                    empNo, ip, e.getMessage());
+            return maxAttempts;
         }
     }
 

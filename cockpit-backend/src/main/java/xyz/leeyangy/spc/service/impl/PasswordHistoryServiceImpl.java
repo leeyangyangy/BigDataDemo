@@ -48,9 +48,11 @@ public class PasswordHistoryServiceImpl implements PasswordHistoryService {
             }
             return false;
         } catch (Exception e) {
-            log.warn("[PasswordHistory] 检查密码历史异常(降级为允许, 但记录日志): userId={} cause={}",
+            // fail-closed: 异常时假定密码已重用, 拒绝密码变更
+            // 等保三级要求: 安全机制失效时应拒绝而非放行, 防止密码重用绕过
+            log.error("[SECURITY_ALERT] 检查密码历史异常, fail-closed 拒绝密码变更: userId={} cause={}",
                     userId, e.getMessage());
-            return false;
+            return true;
         }
     }
 
