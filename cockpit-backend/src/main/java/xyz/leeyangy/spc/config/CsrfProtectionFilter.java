@@ -72,7 +72,7 @@ public class CsrfProtectionFilter extends OncePerRequestFilter {
         }
 
         if (!checkOriginOrReferer(request)) {
-            log.warn("[CSRF] 请求被拒绝: 不可信来源 uri={} method={} ip={}",
+            log.warn("[SECURITY_ALERT] CSRF 防护拦截: 不可信来源 uri={} method={} ip={}",
                     uri, method, request.getRemoteAddr());
             writeForbidden(response, "请求来源不可信, 已拒绝 (CSRF 防护)");
             return;
