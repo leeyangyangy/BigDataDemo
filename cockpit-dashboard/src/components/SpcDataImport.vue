@@ -261,6 +261,8 @@
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import * as echarts from 'echarts'
 import { spcApi, getToken, getUser } from '@/utils/api'
+import { StatusCode } from '@/utils/statusCode'
+import { StatusMsg } from '@/utils/statusMsg'
 import { decryptResponse, isEncryptionEnabled } from '@/utils/crypto.js'
 
 const props = defineProps({
@@ -549,7 +551,7 @@ async function submitImport() {
       result = decryptResponse(result)
     }
 
-    if (result.code === 200) {
+    if (result.code === StatusCode.SUCCESS) {
       importResult.value = { success: true, message: `导入完成: 成功${result.data.successCount}条, 失败${result.data.failCount}条` }
       setTimeout(() => {
         showImport.value = false
@@ -1013,7 +1015,7 @@ async function onUploadProductChange() {
 
   try {
     const res = await spcApi.getProcessPage({ current: 1, size: 100 })
-    if (res.code === 200) uploadProcesses.value = res.data.records
+    if (res.code === StatusCode.SUCCESS) uploadProcesses.value = res.data.records
   } catch (e) {
     console.error('加载工序失败', e)
   }
@@ -1033,14 +1035,14 @@ async function onUploadProcessChange() {
 
   try {
     const res = await spcApi.getParamPage({ current: 1, size: 100 })
-    if (res.code === 200) uploadParams.value = res.data.records.filter(p => p.processId === uploadData.value.processId)
+    if (res.code === StatusCode.SUCCESS) uploadParams.value = res.data.records.filter(p => p.processId === uploadData.value.processId)
   } catch (e) {
     console.error('加载参数失败', e)
   }
 
   try {
     const equipRes = await spcApi.getProcessEquipment(uploadData.value.processId)
-    if (equipRes.code === 200 && equipRes.data) {
+    if (equipRes.code === StatusCode.SUCCESS && equipRes.data) {
       uploadEquipmentList.value = equipRes.data.map(eq => ({
         id: eq.id,
         name: eq.equipName || eq.equipCode,
@@ -1078,7 +1080,7 @@ async function loadParamVersion(paramId) {
       paramId: paramId,
       productId: uploadData.value.productId
     })
-    if (res.code === 200 && res.data) {
+    if (res.code === StatusCode.SUCCESS && res.data) {
       uploadParamVersionMap[paramId] = res.data
     }
   } catch (e) {
@@ -1222,7 +1224,7 @@ async function submitData() {
 
     let okCount = 0
     let failCount = 0
-    if (res.code === 200 && Array.isArray(res.data)) {
+    if (res.code === StatusCode.SUCCESS && Array.isArray(res.data)) {
       okCount = res.data.length
     } else {
       failCount = records.length
@@ -1240,7 +1242,7 @@ async function submitData() {
       uploadResult.value = { success: false, message: '全部提交失败，请检查网络或数据格式' }
     }
   } catch (e) {
-    const errMsg = e.response?.data?.msg || e.message || '提交异常'
+    const errMsg = e.response?.data?.msg || e.message || StatusMsg.SUBMIT_EXCEPTION
     uploadResult.value = { success: false, message: errMsg }
   } finally {
     uploading.value = false

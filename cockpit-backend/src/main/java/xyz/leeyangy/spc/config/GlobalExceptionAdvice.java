@@ -13,6 +13,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import xyz.leeyangy.spc.common.R;
 import xyz.leeyangy.spc.common.StatusCode;
+import xyz.leeyangy.spc.common.StatusMsg;
 import xyz.leeyangy.spc.common.constants.OperationLogConstants;
 import xyz.leeyangy.spc.common.exception.BusinessException;
 import xyz.leeyangy.spc.service.OperationLogService;
@@ -48,7 +49,7 @@ public class GlobalExceptionAdvice {
                     errorMsg, OperationLogConstants.RESULT_FAIL, getStackTraceSnippet(e), 0,
                     request, null, null);
         } catch (Exception ignored) { }
-        return R.fail("系统内部错误，请稍后重试");
+        return R.fail(StatusMsg.SYSTEM_ERROR);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -69,28 +70,28 @@ public class GlobalExceptionAdvice {
                 .map(err -> err.getField() + ": " + err.getDefaultMessage())
                 .reduce((a, b) -> a + "; " + b)
                 .orElse("参数绑定失败");
-        return R.fail(400, msg);
+        return R.fail(StatusCode.BAD_REQUEST, msg);
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public R<Void> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
         log.warn("[Global] 参数类型错误: name={} value={}", e.getName(), e.getValue());
-        return R.fail(400, "参数 '" + e.getName() + "' 类型错误");
+        return R.fail(StatusCode.BAD_REQUEST, StatusMsg.PARAM_TYPE_ERROR_PREFIX + e.getName() + StatusMsg.PARAM_TYPE_ERROR_SUFFIX);
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     @ResponseStatus(HttpStatus.PAYLOAD_TOO_LARGE)
     public R<Void> handleUploadSize(MaxUploadSizeExceededException e) {
         log.warn("[Global] 文件上传超限");
-        return R.fail(413, "文件大小超出限制");
+        return R.fail(StatusCode.PAYLOAD_TOO_LARGE, StatusMsg.UPLOAD_TOO_LARGE);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public R<Void> handleIllegalArgument(IllegalArgumentException e) {
         log.warn("[Global] 参数非法: {}", e.getMessage());
-        return R.fail(400, e.getMessage());
+        return R.fail(StatusCode.BAD_REQUEST, e.getMessage());
     }
 
     /**
@@ -109,7 +110,7 @@ public class GlobalExceptionAdvice {
         } catch (Exception ignored) { }
 
         // 不向客户端泄露 e.getMessage(), 仅返回通用提示
-        return R.fail(500, "系统内部错误，请稍后重试");
+        return R.fail(StatusCode.FAIL, StatusMsg.SYSTEM_ERROR);
     }
 
     @ExceptionHandler(SecurityException.class)
@@ -122,7 +123,7 @@ public class GlobalExceptionAdvice {
                     e.getMessage(), OperationLogConstants.RESULT_FAIL, null, 0,
                     request, null, null);
         } catch (Exception ignored) { }
-        return R.fail(403, "权限不足");
+        return R.fail(StatusCode.FORBIDDEN, StatusMsg.FORBIDDEN);
     }
 
     private String getStackTraceSnippet(Exception e) {

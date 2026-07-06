@@ -115,6 +115,7 @@ import ProductComprehensiveChart from './ProductComprehensiveChart.vue'
 import ProductCodeBarCharts from './ProductCodeBarCharts.vue'
 import ProductCodePositionCompare from './ProductCodePositionCompare.vue'
 import { yieldApi } from '@/utils/api.js'
+import { StatusCode } from '@/utils/statusCode'
 
 const REFRESH_INTERVAL = 5000
 const STORAGE_KEY_WORKSHOP = 'yield-dashboard-workshop'
@@ -151,12 +152,12 @@ function toggleExpand() {
 async function loadWorkshops() {
   try {
     const res = await yieldApi.getWorkshops()
-    if (res && res.code === 200 && Array.isArray(res.data) && res.data.length > 0) {
+    if (res && res.code === StatusCode.SUCCESS && Array.isArray(res.data) && res.data.length > 0) {
       workshops.value = res.data
       if (!workshops.value.includes(selectedWorkshop.value)) {
         selectedWorkshop.value = workshops.value[0]
       }
-    } else if (res && res.code === 403) {
+    } else if (res && res.code === StatusCode.FORBIDDEN) {
       error.value = '无良率数据查看权限, 请联系管理员'
     }
   } catch (e) {
@@ -183,7 +184,7 @@ async function fetchData() {
     } else {
       res = await yieldApi.getData(params)
     }
-    if (res && res.code === 200 && res.data) {
+    if (res && res.code === StatusCode.SUCCESS && res.data) {
       currentYieldRates.value = res.data.currentYieldRates || []
       historicalData.value = res.data.historicalData || {}
       updateTime.value = formatNow()

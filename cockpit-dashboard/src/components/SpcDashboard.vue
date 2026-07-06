@@ -41,6 +41,13 @@
           <option :value="100">最近100</option>
           <option :value="200">最近200</option>
           <option :value="500">最近500</option>
+          <option :value="1000">最近1000</option>
+          <option :value="2000">最近2000</option>
+<!--          <option :value="3000">最近3000</option>-->
+<!--          <option :value="5000">最近5000</option>-->
+<!--          <option :value="10000">最近10000</option>-->
+<!--          <option :value="20000">最近20000</option>-->
+<!--          <option :value="30000">最近30000</option>-->
         </select>
       </div>
       <div class="filter-group">
@@ -273,6 +280,7 @@ import SpcControlChart from './SpcControlChart.vue'
 import SpcAlertPanel from './SpcAlertPanel.vue'
 import SpcDataImport from './SpcDataImport.vue'
 import { spcApi, adminApi } from '@/utils/api.js'
+import { StatusCode } from '@/utils/statusCode'
 import { isValidRuleId, sanitizeRuleIds, formatValidRange } from '@/utils/spcRules'
 
 const props = defineProps({
@@ -478,7 +486,7 @@ async function loadProducts() {
   if (cached) { products.value = cached; return }
   try {
     const res = await spcApi.getProductPage({ current: 1, size: 100 })
-    if (res.code === 200) {
+    if (res.code === StatusCode.SUCCESS) {
       products.value = res.data.records
       setCache('products', res.data.records)
     }
@@ -504,10 +512,10 @@ async function onProductChange(save = true) {
     if (cached) { processes.value = cached; if (save) saveFilterState(); return }
 
     const res = await spcApi.getProductProcesses(selectedProduct.value)
-    if (res.code === 200 && res.data && res.data.length > 0) {
+    if (res.code === StatusCode.SUCCESS && res.data && res.data.length > 0) {
       const processIds = res.data.map(p => p.processId)
       const allProcessesRes = await spcApi.getProcessPage({ current: 1, size: 100 })
-      if (allProcessesRes.code === 200) {
+      if (allProcessesRes.code === StatusCode.SUCCESS) {
         const bound = allProcessesRes.data.records.filter(p => processIds.includes(p.id))
           .sort((a, b) => {
             const pa = res.data.find(pp => pp.processId === a.id)
@@ -567,7 +575,7 @@ async function onProcessChange(save = true) {
           spcApi.getProcessParams(selectedProcess.value),
           spcApi.getParamPage({ current: 1, size: 200 })
         ])
-        if (bindRes.code === 200 && bindRes.data && allParamRes.code === 200) {
+        if (bindRes.code === StatusCode.SUCCESS && bindRes.data && allParamRes.code === StatusCode.SUCCESS) {
           const boundIds = bindRes.data.map(b => b.paramId)
           const bound = allParamRes.data.records
             .filter(p => boundIds.includes(p.id))
@@ -601,7 +609,7 @@ async function loadEquipmentByProcess() {
 
   try {
     const res = await spcApi.getProcessEquipment(selectedProcess.value)
-    if (res.code === 200 && res.data) {
+    if (res.code === StatusCode.SUCCESS && res.data) {
       const mapped = res.data.map(eq => ({
         id: eq.id,
         code: eq.equipCode,
@@ -622,7 +630,7 @@ async function loadAllProcessCharts() {
   if (!targetEquipList.length && selectedProcess.value) {
     try {
       const res = await spcApi.getProcessEquipment(selectedProcess.value)
-      if (res.code === 200 && res.data) {
+      if (res.code === StatusCode.SUCCESS && res.data) {
         targetEquipList = res.data.map(eq => ({
           id: eq.id,
           code: eq.equipCode,
@@ -646,7 +654,7 @@ async function loadAllProcessCharts() {
             paramId: param.id,
             productId: selectedProduct.value
           })
-          if (verRes.code === 200) version = verRes.data
+          if (verRes.code === StatusCode.SUCCESS) version = verRes.data
         } catch (e) { }
 
         let chartD = null
@@ -658,7 +666,7 @@ async function loadAllProcessCharts() {
             limit: dataLimit.value,
             ...getTimeRangeParams()
           })
-          if (res.code === 200) chartD = res.data
+          if (res.code === StatusCode.SUCCESS) chartD = res.data
         } catch (e) { }
 
         if (chartD && useManualLimits.value && hasManualLimit.value && chartD.limits && !['P','NP','C','U'].includes((chartD.chartType || '').toUpperCase())) {
@@ -708,7 +716,7 @@ async function onParamChange(save = true) {
       paramId: selectedParam.value,
       productId: selectedProduct.value
     })
-    if (res.code === 200) currentVersion.value = res.data
+    if (res.code === StatusCode.SUCCESS) currentVersion.value = res.data
   } catch (e) { console.error('加载版本失败', e) }
 
   await refreshAllCharts()
@@ -732,10 +740,10 @@ async function loadSingleChart() {
         ...baseParams,
         equipmentId: selectedEquipment.value
       })
-      cd = res.code === 200 ? res.data : null
+      cd = res.code === StatusCode.SUCCESS ? res.data : null
     } else {
       const res = await spcApi.getControlChart(baseParams)
-      cd = res.code === 200 ? res.data : null
+      cd = res.code === StatusCode.SUCCESS ? res.data : null
     }
 
     if (!cd) { chartData.value = null; return }
@@ -815,7 +823,7 @@ async function loadEquipAllParams() {
         paramId: param.id,
         productId: selectedProduct.value
       })
-      if (verRes.code === 200) version = verRes.data
+      if (verRes.code === StatusCode.SUCCESS) version = verRes.data
     } catch (e) { }
 
     let chartD = null
@@ -827,7 +835,7 @@ async function loadEquipAllParams() {
         limit: dataLimit.value,
         ...getTimeRangeParams()
       })
-      if (res.code === 200) chartD = res.data
+      if (res.code === StatusCode.SUCCESS) chartD = res.data
     } catch (e) { }
 
     if (chartD && useManualLimits.value && hasManualLimit.value && chartD.limits && !['P','NP','C','U'].includes((chartD.chartType || '').toUpperCase())) {
@@ -868,7 +876,7 @@ async function loadParamAcrossEquipments() {
       paramId: selectedParam.value,
       productId: selectedProduct.value
     })
-    if (verRes.code === 200) version = verRes.data
+    if (verRes.code === StatusCode.SUCCESS) version = verRes.data
   } catch (e) { }
 
   const paramInfo = params.value.find(p => p.id === selectedParam.value)
@@ -879,7 +887,7 @@ async function loadParamAcrossEquipments() {
   if (!targetEquipList.length && selectedProcess.value) {
     try {
       const res = await spcApi.getProcessEquipment(selectedProcess.value)
-      if (res.code === 200 && res.data) {
+      if (res.code === StatusCode.SUCCESS && res.data) {
         targetEquipList = res.data.map(eq => ({
           id: eq.id,
           code: eq.equipCode,
@@ -904,7 +912,7 @@ async function loadParamAcrossEquipments() {
         limit: dataLimit.value,
         ...getTimeRangeParams()
       })
-      if (res.code === 200) chartD = res.data
+      if (res.code === StatusCode.SUCCESS) chartD = res.data
     } catch (e) { }
 
     if (chartD && useManualLimits.value && hasManualLimit.value && chartD.limits && !['P','NP','C','U'].includes((chartD.chartType || '').toUpperCase())) {
@@ -956,7 +964,7 @@ async function loadAlerts() {
       ruleIds: validRules.join(','),
       ...getTimeRangeParams()
     })
-    if (res.code === 200 && res.data) {
+    if (res.code === StatusCode.SUCCESS && res.data) {
       alertList.value = res.data
     } else {
       alertList.value = []
@@ -996,7 +1004,7 @@ async function loadVersionHistory() {
       paramId: selectedParam.value,
       productId: selectedProduct.value
     })
-    if (res.code === 200) versionHistory.value = res.data
+    if (res.code === StatusCode.SUCCESS) versionHistory.value = res.data
   } catch (e) { console.error('加载版本历史失败', e) }
 }
 

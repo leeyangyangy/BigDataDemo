@@ -1,0 +1,64 @@
+/**
+ * 业务状态码常量 (与后端 xyz.leeyangy.spc.common.StatusCode 保持一致)。
+ *
+ * 统一约定: 所有 API 响应的提示文案 (msg) 一律取自响应体, 前端不再维护
+ * 本地消息映射; 此处仅维护前后端交互统一使用的状态码常量。
+ */
+export const StatusCode = Object.freeze({
+  // 通用
+  SUCCESS: 200,
+  FAIL: 500,
+
+  // HTTP 标准
+  UNAUTHORIZED: 401,
+  FORBIDDEN: 403,
+  NOT_FOUND: 404,
+  BAD_REQUEST: 400,
+  CONFLICT: 409,
+  PAYLOAD_TOO_LARGE: 413,
+
+  // 鉴权
+  AUTH_LOGIN_FAILED: 1001,
+  AUTH_ACCOUNT_DISABLED: 1002,
+  AUTH_TOKEN_EXPIRED: 1003,
+  AUTH_CAPTCHA_ERROR: 1004,
+
+  // 参数
+  PARAM_ERROR: 2001,
+  PARAM_REQUIRED: 2002,
+  PARAM_FORMAT_ERROR: 2003,
+
+  // 数据
+  DATA_NOT_FOUND: 3001,
+  DATA_SAVE_FAILED: 3002,
+  DATA_DELETE_FAILED: 3003,
+  DATA_OUT_OF_RANGE: 3004,
+
+  // 产品
+  PRODUCT_NOT_FOUND: 4001,
+  PRODUCT_EXISTS: 4002,
+  PRODUCT_DISABLED: 4003,
+
+  // 工序/参数/批次/版本
+  PROCESS_NOT_FOUND: 5001,
+  PARAM_NOT_FOUND: 5002,
+  BATCH_NOT_FOUND: 5003,
+  VERSION_NOT_FOUND: 5004,
+  VERSION_CONFLICT: 5005,
+
+  // SPC
+  SPC_CALC_FAILED: 6001,
+  SPC_NO_DATA: 6002,
+  SPC_OUT_OF_CONTROL: 6003,
+
+  // 报警
+  ALERT_NOT_FOUND: 7001,
+  ALERT_ACK_FAILED: 7002,
+  ALERT_RESOLVE_FAILED: 7003,
+
+  // 系统
+  SYSTEM_BUSY: 9001,
+  SYSTEM_ERROR: 9999
+})
+
+export default StatusCode

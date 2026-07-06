@@ -7,6 +7,7 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import xyz.leeyangy.spc.common.StatusMsg;
 import xyz.leeyangy.spc.common.exception.BusinessException;
 import xyz.leeyangy.spc.common.exception.ResourceNotFoundException;
 import xyz.leeyangy.spc.entity.SpcData;
@@ -37,19 +38,19 @@ public class SpcDataImportExportServiceImpl implements SpcDataImportExportServic
                                                Long processId, Long equipmentId, Long userId, String role) {
         // 业务级参数校验（与前端校验对齐，防止绕过前端直接调接口）
         if (file == null || file.isEmpty()) {
-            throw new BusinessException("导入文件不能为空");
+            throw new BusinessException(StatusMsg.IMPORT_FILE_REQUIRED);
         }
         if (paramId == null || paramId <= 0) {
-            throw new BusinessException("请先选择工艺参数后再导入数据");
+            throw new BusinessException(StatusMsg.IMPORT_PARAM_REQUIRED);
         }
         if (productId == null || productId <= 0) {
-            throw new BusinessException("请先选择产品后再导入数据");
+            throw new BusinessException(StatusMsg.IMPORT_PRODUCT_REQUIRED);
         }
         if (userId == null || userId <= 0) {
-            throw new BusinessException("用户未登录，无法导入数据");
+            throw new BusinessException(StatusMsg.IMPORT_USER_NOT_LOGIN);
         }
         if (role == null || role.trim().isEmpty()) {
-            throw new BusinessException("用户角色缺失，无法导入数据");
+            throw new BusinessException(StatusMsg.IMPORT_ROLE_MISSING);
         }
 
         Map<String, Object> result = new HashMap<>();

@@ -2,6 +2,7 @@ package xyz.leeyangy.spc.common.util;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import xyz.leeyangy.spc.common.StatusMsg;
 import xyz.leeyangy.spc.common.exception.BusinessStateException;
 import xyz.leeyangy.spc.service.SysUserWorkshopService;
 
@@ -67,7 +68,7 @@ public class WorkshopAccessHelper {
         }
         Set<Long> accessible = getAccessibleWorkshopIds(userId);
         if (!accessible.contains(workshopId)) {
-            throw new BusinessStateException("无权访问该车间数据");
+            throw new BusinessStateException(StatusMsg.WORKSHOP_ACCESS_DENIED);
         }
     }
 }

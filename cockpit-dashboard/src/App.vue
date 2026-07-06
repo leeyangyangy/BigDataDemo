@@ -104,6 +104,7 @@ import BottomNav from './components/BottomNav.vue'
 import ThemeSwitcher from './components/ThemeSwitcher.vue'
 import LoginForm from './components/LoginForm.vue'
 import { getToken, getUser, removeToken, isLoggedIn, yieldApi } from './utils/api.js'
+import { StatusCode } from './utils/statusCode.js'
 import { startSessionWatcher, stopSessionWatcher } from './utils/tokenSecurity.js'
 import './styles/theme.css'
 import OperationLogManagement from "@/components/admin/OperationLogManagement.vue";
@@ -169,7 +170,7 @@ function checkAuth() {
 async function refreshYieldAccess() {
   try {
     const res = await yieldApi.checkAccess()
-    if (res && res.code === 200 && res.data) {
+    if (res && res.code === StatusCode.SUCCESS && res.data) {
       const ok = res.data.accessible === true
       yieldAccessible.value = ok
       localStorage.setItem(YIELD_ACCESS_KEY, ok ? '1' : '0')

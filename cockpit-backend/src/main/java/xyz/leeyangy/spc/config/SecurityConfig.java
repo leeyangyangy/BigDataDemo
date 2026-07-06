@@ -17,6 +17,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import xyz.leeyangy.spc.common.R;
+import xyz.leeyangy.spc.common.StatusMsg;
 import xyz.leeyangy.spc.common.constants.RoleConstants;
 
 import javax.servlet.http.HttpServletResponse;
@@ -100,7 +101,7 @@ public class SecurityConfig {
                             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                             response.setContentType("application/json;charset=UTF-8");
                             response.getWriter().write(
-                                    objectMapper.writeValueAsString(R.fail("未登录或Token已过期，请先登录"))
+                                    objectMapper.writeValueAsString(R.fail(StatusMsg.NOT_LOGGED_IN))
                             );
                         })
                         .accessDeniedHandler((request, response, accessDeniedException) -> {
@@ -109,7 +110,7 @@ public class SecurityConfig {
                             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                             response.setContentType("application/json;charset=UTF-8");
                             response.getWriter().write(
-                                    objectMapper.writeValueAsString(R.fail("权限不足"))
+                                    objectMapper.writeValueAsString(R.fail(StatusMsg.FORBIDDEN))
                             );
                         })
                 )

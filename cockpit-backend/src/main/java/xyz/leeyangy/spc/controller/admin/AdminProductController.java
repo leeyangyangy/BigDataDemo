@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 import xyz.leeyangy.spc.common.PageConvert;
 import xyz.leeyangy.spc.common.R;
 import xyz.leeyangy.spc.common.StatusCode;
+import xyz.leeyangy.spc.common.StatusMsg;
 import xyz.leeyangy.spc.common.annotation.OperationLog;
 import xyz.leeyangy.spc.dto.ProductCreateDTO;
 import xyz.leeyangy.spc.dto.ProductUpdateDTO;
@@ -47,7 +48,7 @@ public class AdminProductController {
     public R<ProductVO> getById(@PathVariable Long id) {
         Product product = productService.getById(id);
         if (product == null) {
-            return R.fail(StatusCode.DATA_NOT_FOUND, "产品不存在");
+            return R.fail(StatusCode.DATA_NOT_FOUND, StatusMsg.PRODUCT_NOT_FOUND);
         }
         return R.ok(ProductVO.from(product));
     }
@@ -58,17 +59,17 @@ public class AdminProductController {
     @PostMapping
     public R<ProductVO> create(@Valid @RequestBody ProductCreateDTO req) {
         if (req.getProductCode() == null || req.getProductCode().trim().isEmpty()) {
-            return R.fail(StatusCode.PARAM_REQUIRED, "产品编码不能为空");
+            return R.fail(StatusCode.PARAM_REQUIRED, StatusMsg.PRODUCT_CODE_REQUIRED);
         }
         if (req.getProductName() == null || req.getProductName().trim().isEmpty()) {
-            return R.fail(StatusCode.PARAM_REQUIRED, "产品名称不能为空");
+            return R.fail(StatusCode.PARAM_REQUIRED, StatusMsg.PRODUCT_NAME_REQUIRED);
         }
 
         long count = productService.count(new LambdaQueryWrapper<Product>()
                 .eq(Product::getProductCode, req.getProductCode())
                 .eq(Product::getDeleted, 0));
         if (count > 0) {
-            return R.fail(StatusCode.PRODUCT_EXISTS, "产品编码已存在");
+            return R.fail(StatusCode.PRODUCT_EXISTS, StatusMsg.PRODUCT_CODE_EXISTS);
         }
 
         Product product = new Product();
@@ -80,7 +81,7 @@ public class AdminProductController {
 
         productService.save(product);
         log.info("[Admin] 创建产品: code={} name={}", product.getProductCode(), product.getProductName());
-        return R.ok("创建成功", ProductVO.from(product));
+        return R.ok(StatusMsg.CREATE_SUCCESS, ProductVO.from(product));
     }
 
     @OperationLog(module = "PRODUCT", action = "UPDATE", targetType = "Product",
@@ -90,7 +91,7 @@ public class AdminProductController {
     public R<ProductVO> update(@PathVariable Long id, @Valid @RequestBody ProductUpdateDTO req) {
         Product existProduct = productService.getById(id);
         if (existProduct == null) {
-            return R.fail(StatusCode.DATA_NOT_FOUND, "产品不存在");
+            return R.fail(StatusCode.DATA_NOT_FOUND, StatusMsg.PRODUCT_NOT_FOUND);
         }
 
         if (req.getProductName() != null) {
@@ -108,7 +109,7 @@ public class AdminProductController {
 
         productService.updateById(existProduct);
         log.info("[Admin] 更新产品: id={} code={}", id, existProduct.getProductCode());
-        return R.ok("更新成功", ProductVO.from(existProduct));
+        return R.ok(StatusMsg.UPDATE_SUCCESS, ProductVO.from(existProduct));
     }
 
     @OperationLog(module = "PRODUCT", action = "DELETE", targetType = "Product",
@@ -118,7 +119,7 @@ public class AdminProductController {
     public R<Void> delete(@PathVariable Long id) {
         Product product = productService.getById(id);
         if (product == null) {
-            return R.fail(StatusCode.DATA_NOT_FOUND, "产品不存在");
+            return R.fail(StatusCode.DATA_NOT_FOUND, StatusMsg.PRODUCT_NOT_FOUND);
         }
         productService.update(new LambdaUpdateWrapper<Product>()
                 .eq(Product::getId, id)

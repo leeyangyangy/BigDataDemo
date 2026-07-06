@@ -17,6 +17,8 @@ import {
   isTokenExpired,
   updateLastActivity
 } from './tokenSecurity.js'
+import { StatusCode } from './statusCode.js'
+import { StatusMsg } from './statusMsg.js'
 
 export function getToken() {
   const token = localStorage.getItem(TOKEN_KEY)
@@ -51,64 +53,6 @@ export function setUser(user) {
 export function isLoggedIn() {
   const token = localStorage.getItem(TOKEN_KEY)
   return !!token && !isTokenExpired(token)
-}
-
-const StatusCodeMsg = {
-  200: '操作成功',
-
-  401: '登录已过期，请重新登录',
-  403: '权限不足，无法执行此操作',
-  404: '请求的资源不存在',
-  400: '请求参数有误',
-  409: '数据冲突，请刷新后重试',
-
-  1001: '工号或密码错误',
-  1002: '账号已停用，请联系管理员',
-  1003: 'Token已过期，请重新登录',
-  1004: '验证码错误',
-
-  2001: '参数校验失败',
-  2002: '缺少必填参数',
-  2003: '参数格式不正确',
-
-  3001: '数据未找到',
-  3002: '数据保存失败',
-  3003: '数据删除失败',
-  3004: '数据超出范围',
-
-  4001: '产品不存在',
-  4002: '产品编码已存在',
-  4003: '产品已停用',
-
-  5001: '工序未找到',
-  5002: '参数未找到',
-  5003: '批次未找到',
-  5004: '版本配置未找到',
-  5005: '版本存在冲突',
-
-  6001: 'SPC计算失败',
-  6002: '没有足够的数据进行计算',
-  6003: '数据超出控制限',
-
-  7001: '报警记录未找到',
-  7002: '报警确认失败',
-  7003: '报警处理失败',
-
-  9001: '系统繁忙，请稍后重试',
-  9999: '系统内部错误'
-}
-
-function getStatusMsg(code, serverMsg) {
-  if (StatusCodeMsg[code]) {
-    return serverMsg || StatusCodeMsg[code]
-  }
-  if (code >= 400 && code < 500) {
-    return serverMsg || '请求失败'
-  }
-  if (code >= 500) {
-    return serverMsg || '服务器异常'
-  }
-  return serverMsg || '未知错误'
 }
 
 class ApiClient {
@@ -152,46 +96,48 @@ class ApiClient {
         updateLastActivity()
       }
 
-      if (response.status === 401) {
-        removeToken()
-        window.dispatchEvent(new CustomEvent('auth:expired'))
-        throw new Error(StatusCodeMsg[401])
-      }
-
-      if (response.status === 403) {
-        throw new Error(StatusCodeMsg[403])
-      }
-
-      if (!response.ok && response.status !== 200) {
-        const body = await response.json().catch(() => ({}))
-        const msg = getStatusMsg(response.code || response.status, body.msg)
-        throw new Error(msg)
-      }
-
       if (response.status === 204) {
         return null
       }
 
-      let result = await response.json()
+      // 统一读取响应体: msg 一律取自后端响应 (401/403 等错误响应通常为明文 JSON)
+      let result = null
+      try {
+        result = await response.json()
+      } catch {
+        result = null
+      }
 
-      if (isEncryptionEnabled() && result.encrypted) {
-        console.log(`[Crypto] 收到加密响应: ${url}, data长度=${result.data?.length || 0}`)
+      if (result && isEncryptionEnabled() && result.encrypted) {
         const before = result
         result = decryptResponse(result)
         const ok = result && typeof result === 'object' && result.code !== undefined
+        console.log(`[Crypto] 收到加密响应: ${url}, data长度=${before.data?.length || 0}`)
         console.log(`[Crypto] 解密${ok ? '成功' : '失败/异常'}: ${url}`, ok ? '' : '返回类型=' + typeof result, '原文data前40字符=' + (before.data || '').substring(0, 40))
       }
 
-      if (result.code !== undefined && result.code !== 200) {
-        const msg = getStatusMsg(result.code, result.msg)
-        console.warn(`[API] ${url} 返回业务错误: code=${result.code}, msg=${msg}`)
+      // HTTP 层鉴权失败: 清除本地凭证并触发过期事件, msg 取自响应体
+      if (response.status === StatusCode.UNAUTHORIZED) {
+        removeToken()
+        window.dispatchEvent(new CustomEvent('auth:expired'))
+        throw new Error(result?.msg || StatusMsg.UNAUTHORIZED)
+      }
+
+      // 其它 HTTP 错误: msg 一律取自响应体
+      if (!response.ok) {
+        throw new Error(result?.msg || `${StatusMsg.REQUEST_FAILED}(${response.status})`)
+      }
+
+      // 业务层: code 非 SUCCESS 时原样返回 result, 由调用方根据 result.code / result.msg 处理
+      if (result && result.code !== undefined && result.code !== StatusCode.SUCCESS) {
+        console.warn(`[API] ${url} 返回业务错误: code=${result.code}, msg=${result.msg}`)
         return result
       }
 
       return result
     } catch (error) {
       if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-        error.message = '网络连接失败，请检查网络或服务是否启动'
+        error.message = StatusMsg.NETWORK_ERROR
       }
       console.error(`[API] ${url} 请求失败:`, error.message)
       throw error

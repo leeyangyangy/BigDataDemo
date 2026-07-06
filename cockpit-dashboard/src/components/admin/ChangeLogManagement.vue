@@ -200,6 +200,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { adminApi } from '@/utils/api.js'
+import { StatusCode } from '@/utils/statusCode'
 
 const list = ref([])
 const total = ref(0)
@@ -289,7 +290,7 @@ function regenClass(status) {
 async function loadParams() {
   try {
     const res = await adminApi.standard.getPage({ current: 1, size: 500 })
-    if (res.code === 200 && res.data) {
+    if (res.code === StatusCode.SUCCESS && res.data) {
       const records = res.data.records || []
       paramList.value = records
       const m = {}
@@ -311,7 +312,7 @@ async function loadData() {
       endDate: endDate.value || undefined
     }
     const res = await adminApi.changeLog.getPage(params)
-    if (res.code === 200 && res.data) {
+    if (res.code === StatusCode.SUCCESS && res.data) {
       list.value = res.data.records || []
       total.value = res.data.total || 0
     }

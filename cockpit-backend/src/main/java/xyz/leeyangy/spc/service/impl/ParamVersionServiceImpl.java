@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import xyz.leeyangy.spc.common.StatusMsg;
 import xyz.leeyangy.spc.common.constants.TriggerSourceConstants;
 import xyz.leeyangy.spc.common.exception.BusinessStateException;
 import xyz.leeyangy.spc.common.exception.ResourceNotFoundException;
@@ -182,7 +183,7 @@ public class ParamVersionServiceImpl extends ServiceImpl<ParamVersionMapper, Par
         ParamVersion version = getById(id);
         if (version == null) throw new ResourceNotFoundException("参数版本", id);
         if (version.getIsCurrent() != null && version.getIsCurrent() == 1) {
-            throw new BusinessStateException("当前生效的版本不能删除，请先切换到其他版本");
+            throw new BusinessStateException(StatusMsg.VERSION_DELETE_CONFLICT);
         }
         return removeById(id);
     }

@@ -312,6 +312,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { adminApi, spcApi } from '@/utils/api.js'
+import { StatusCode } from '@/utils/statusCode'
+import { StatusMsg } from '@/utils/statusMsg'
 
 const list = ref([])
 const total = ref(0)
@@ -401,7 +403,7 @@ function getVersionInfo(paramId) {
 async function loadProcesses() {
   try {
     const res = await adminApi.process.getPage({ current: 1, size: 200 })
-    if (res.code === 200 && res.data) {
+    if (res.code === StatusCode.SUCCESS && res.data) {
       processList.value = res.data.records || []
     }
   } catch (e) { console.error('加载工序失败:', e) }
@@ -410,7 +412,7 @@ async function loadProcesses() {
 async function loadProducts() {
   try {
     const res = await adminApi.product.getPage({ current: 1, size: 100 })
-    if (res.code === 200 && res.data) {
+    if (res.code === StatusCode.SUCCESS && res.data) {
       productList.value = res.data.records || []
     }
   } catch (e) { console.error('加载产品失败:', e) }
@@ -431,7 +433,7 @@ async function loadVersionsForList() {
           paramId: item.id,
           productId: filterProductId.value || undefined
         })
-        if (res.code === 200 && res.data) {
+        if (res.code === StatusCode.SUCCESS && res.data) {
           versionMap.value[item.id] = res.data
         }
       } catch (e) { }
@@ -449,7 +451,7 @@ async function loadData() {
       keyword: keyword.value || undefined
     }
     const res = await adminApi.standard.getPage(params)
-    if (res.code === 200 && res.data) {
+    if (res.code === StatusCode.SUCCESS && res.data) {
       list.value = res.data.records || []
       total.value = res.data.total || 0
       if (filterProcessId.value) {
@@ -518,7 +520,7 @@ async function submitBatchAdd() {
       }
     }
 
-    const successCount = results.filter(r => r.code === 200).length
+    const successCount = results.filter(r => r.code === StatusCode.SUCCESS).length
     const failCount = results.length - successCount
 
     if (failCount === 0) {
@@ -563,12 +565,12 @@ async function submitEdit() {
 
   try {
     const res = await adminApi.standard.update(editId.value, editForm.value)
-    if (res.code === 200) {
-      formMsg.value = '更新成功'
+    if (res.code === StatusCode.SUCCESS) {
+      formMsg.value = StatusMsg.UPDATE_SUCCESS
       formMsgType.value = 'success'
       setTimeout(() => { closeEditForm(); loadData() }, 1000)
     } else {
-      formMsg.value = res.msg || '更新失败'
+      formMsg.value = res.msg || StatusMsg.UPDATE_FAILED
       formMsgType.value = 'error'
     }
   } catch (e) {
@@ -597,7 +599,7 @@ async function openVersionManage(item) {
       paramId: item.id,
       productId: filterProductId.value || undefined
     })
-    if (res.code === 200 && Array.isArray(res.data)) {
+    if (res.code === StatusCode.SUCCESS && Array.isArray(res.data)) {
       versionHistoryList.value = res.data
     }
   } catch (e) { console.error('加载版本历史失败:', e) }
@@ -621,10 +623,10 @@ async function submitNewVersion() {
     }
 
     const res = await adminApi.paramVersion.create(payload)
-    if (res.code === 200) {
+    if (res.code === StatusCode.SUCCESS) {
       await openVersionManage(versionItem.value)
     } else {
-      formMsg.value = res.msg || '创建版本失败'
+      formMsg.value = res.msg || StatusMsg.CREATE_VERSION_FAILED
       formMsgType.value = 'error'
     }
   } catch (e) {
@@ -640,7 +642,7 @@ async function handleDuplicate(item) {
 
   try {
     const res = await adminApi.standard.duplicate(item.id)
-    if (res.code === 200) {
+    if (res.code === StatusCode.SUCCESS) {
       loadData()
     }
   } catch (e) {
@@ -653,7 +655,7 @@ async function handleDelete(item) {
 
   try {
     const res = await adminApi.standard.delete(item.id)
-    if (res.code === 200) {
+    if (res.code === StatusCode.SUCCESS) {
       loadData()
     }
   } catch (e) {
@@ -664,7 +666,7 @@ async function handleDelete(item) {
 async function handleEnableVersion(v) {
   try {
     const res = await adminApi.paramVersion.enable(v.id)
-    if (res.code === 200) {
+    if (res.code === StatusCode.SUCCESS) {
       await openVersionManage(versionItem.value)
     }
   } catch (e) { console.error('启用版本失败:', e) }
@@ -674,20 +676,20 @@ async function handleDisableVersion(v) {
   if (!confirm(`确定停用版本 V${v.versionNo} 吗？`)) return
   try {
     const res = await adminApi.paramVersion.disable(v.id)
-    if (res.code === 200) {
+    if (res.code === StatusCode.SUCCESS) {
       await openVersionManage(versionItem.value)
     }
-  } catch (e) { alert(e.message || '停用失败: ' + (e.response?.data?.msg || '')) }
+  } catch (e) { alert(e.message || (StatusMsg.DISABLE_FAILED + ': ' + (e.response?.data?.msg || ''))) }
 }
 
 async function handleDeleteVersion(v) {
   if (!confirm(`确定删除版本 V${v.versionNo} 吗？此操作不可恢复！`)) return
   try {
     const res = await adminApi.paramVersion.delete(v.id)
-    if (res.code === 200) {
+    if (res.code === StatusCode.SUCCESS) {
       await openVersionManage(versionItem.value)
     }
-  } catch (e) { alert(e.message || '删除失败: ' + (e.response?.data?.msg || '')) }
+  } catch (e) { alert(e.message || (StatusMsg.DELETE_FAILED + ': ' + (e.response?.data?.msg || ''))) }
 }
 
 function handleEditVersion(v) {
@@ -708,11 +710,11 @@ async function submitEditVersion() {
   versionSubmitting.value = true
   try {
     const res = await adminApi.paramVersion.update(editingVersionId.value, editVersionForm.value)
-    if (res.code === 200) {
+    if (res.code === StatusCode.SUCCESS) {
       editingVersionId.value = null
       await openVersionManage(versionItem.value)
     }
-  } catch (e) { alert(e.message || '保存失败: ' + (e.response?.data?.msg || '')) } finally {
+  } catch (e) { alert(e.message || (StatusMsg.SAVE_FAILED + ': ' + (e.response?.data?.msg || ''))) } finally {
     versionSubmitting.value = false
   }
 }

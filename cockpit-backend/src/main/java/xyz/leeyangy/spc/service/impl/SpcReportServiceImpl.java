@@ -26,6 +26,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import xyz.leeyangy.spc.common.StatusMsg;
 import xyz.leeyangy.spc.common.exception.BusinessException;
 import xyz.leeyangy.spc.common.exception.ResourceNotFoundException;
 import xyz.leeyangy.spc.entity.ParamVersion;
@@ -107,7 +108,7 @@ public class SpcReportServiceImpl implements SpcReportService {
         }
         List<SpcData> dataList = spcDataService.list(wrapper);
         if (dataList.isEmpty()) {
-            throw new BusinessException("所选范围内无 SPC 数据,无法生成报告");
+            throw new BusinessException(StatusMsg.NO_SPC_DATA_FOR_REPORT);
         }
         // wrapper 按 collect_time DESC 返回（最新在前），反转成正序（旧→新）以便报告图表按时间方向渲染
         Collections.reverse(dataList);

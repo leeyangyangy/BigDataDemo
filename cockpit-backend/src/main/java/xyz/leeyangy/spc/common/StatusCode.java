@@ -12,6 +12,7 @@ public final class StatusCode {
     public static final int NOT_FOUND = 404;
     public static final int BAD_REQUEST = 400;
     public static final int CONFLICT = 409;
+    public static final int PAYLOAD_TOO_LARGE = 413;
 
     public static final int AUTH_LOGIN_FAILED = 1001;
     public static final int AUTH_ACCOUNT_DISABLED = 1002;

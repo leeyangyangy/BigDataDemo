@@ -118,6 +118,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { adminApi } from '../../utils/api.js'
+import { StatusCode } from '../../utils/statusCode.js'
+import { StatusMsg } from '../../utils/statusMsg.js'
 
 const list = ref([])
 const total = ref(0)
@@ -150,7 +152,7 @@ async function loadData() {
       size: pageSize.value,
       keyword: keyword.value || undefined
     })
-    if (res.code === 200 && res.data) {
+    if (res.code === StatusCode.SUCCESS && res.data) {
       list.value = res.data.records || []
       total.value = res.data.total || 0
     }
@@ -204,12 +206,12 @@ async function handleSubmit() {
       res = await adminApi.workshop.create(form.value)
     }
 
-    if (res.code === 200) {
-      formMsg.value = isEdit.value ? '更新成功' : '创建成功'
+    if (res.code === StatusCode.SUCCESS) {
+      formMsg.value = isEdit.value ? StatusMsg.UPDATE_SUCCESS : StatusMsg.CREATE_SUCCESS
       formMsgType.value = 'success'
       setTimeout(() => { closeForm(); loadData() }, 1000)
     } else {
-      formMsg.value = res.msg || '操作失败'
+      formMsg.value = res.msg || StatusMsg.OPERATION_FAILED
       formMsgType.value = 'error'
     }
   } catch (e) {
@@ -225,7 +227,7 @@ async function handleDelete(item) {
 
   try {
     const res = await adminApi.workshop.delete(item.id)
-    if (res.code === 200) {
+    if (res.code === StatusCode.SUCCESS) {
       loadData()
     }
   } catch (e) {

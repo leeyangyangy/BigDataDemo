@@ -176,6 +176,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { adminApi } from '../../utils/api.js'
+import { StatusCode } from '../../utils/statusCode.js'
+import { StatusMsg } from '../../utils/statusMsg.js'
 
 const list = ref([])
 const total = ref(0)
@@ -244,11 +246,11 @@ async function loadData() {
       }),
       adminApi.userWorkshop.listUsers()
     ])
-    if (res.code === 200 && res.data) {
+    if (res.code === StatusCode.SUCCESS && res.data) {
       list.value = res.data.records || []
       total.value = res.data.total || 0
     }
-    if (bindingsRes.code === 200 && bindingsRes.data) {
+    if (bindingsRes.code === StatusCode.SUCCESS && bindingsRes.data) {
       const map = {}
       for (const u of bindingsRes.data) {
         map[u.id] = u
@@ -309,12 +311,12 @@ async function handleSubmit() {
       res = await adminApi.user.create(payload)
     }
 
-    if (res.code === 200) {
-      formMsg.value = isEdit.value ? '更新成功' : '创建成功'
+    if (res.code === StatusCode.SUCCESS) {
+      formMsg.value = isEdit.value ? StatusMsg.UPDATE_SUCCESS : StatusMsg.CREATE_SUCCESS
       formMsgType.value = 'success'
       setTimeout(() => { closeForm(); loadData() }, 1000)
     } else {
-      formMsg.value = res.msg || '操作失败'
+      formMsg.value = res.msg || StatusMsg.OPERATION_FAILED
       formMsgType.value = 'error'
     }
   } catch (e) {
@@ -340,7 +342,7 @@ async function handleDelete(item) {
 
   try {
     const res = await adminApi.user.delete(item.id)
-    if (res.code === 200) {
+    if (res.code === StatusCode.SUCCESS) {
       loadData()
     }
   } catch (e) {
@@ -375,7 +377,7 @@ async function openWorkshopBinding(user) {
   showWorkshopForm.value = true
   try {
     const res = await adminApi.userWorkshop.getBindings(user.id)
-    if (res.code === 200 && res.data) {
+    if (res.code === StatusCode.SUCCESS && res.data) {
       workshopForm.value.workshopIds = res.data.workshopIds || []
       workshopForm.value.primaryWorkshopId = res.data.primaryWorkshopId || null
       workshopForm.value.testStationIds = res.data.testStationIds || []
@@ -402,13 +404,13 @@ async function saveWorkshopBinding() {
       return
     }
     const res = await adminApi.userWorkshop.rebind(editingUser.value.id, workshopForm.value)
-    if (res.code === 200) {
+    if (res.code === StatusCode.SUCCESS) {
       workshopFormMsg.value = '保存成功'
       workshopFormMsgType.value = 'success'
       await loadData()
       setTimeout(() => closeWorkshopForm(), 500)
     } else {
-      workshopFormMsg.value = res.msg || '保存失败'
+      workshopFormMsg.value = res.msg || StatusMsg.SAVE_FAILED
       workshopFormMsgType.value = 'error'
     }
   } catch (e) {
@@ -423,7 +425,7 @@ onMounted(() => {
   loadData()
   // 加载所有车间 (含生产车间和测试车间, 统一在所属车间列表中展示)
   adminApi.workshop.listAll().then(res => {
-    if (res.code === 200 && res.data) workshopList.value = res.data
+    if (res.code === StatusCode.SUCCESS && res.data) workshopList.value = res.data
   }).catch(() => {})
 })
 </script>

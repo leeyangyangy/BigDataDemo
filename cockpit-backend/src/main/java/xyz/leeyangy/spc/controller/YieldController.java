@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import xyz.leeyangy.spc.common.R;
 import xyz.leeyangy.spc.common.StatusCode;
+import xyz.leeyangy.spc.common.StatusMsg;
 import xyz.leeyangy.spc.common.constants.RoleConstants;
 import xyz.leeyangy.spc.entity.Workshop;
 import xyz.leeyangy.spc.service.SysUserWorkshopService;
@@ -63,7 +64,7 @@ public class YieldController {
         // 非管理员必须绑定车间
         String scopedWorkshop = scopeWorkshop(userId, role, workshop);
         if (scopedWorkshop == null && !RoleConstants.ADMIN.equals(role)) {
-            return R.fail(StatusCode.FORBIDDEN, "无绑定车间, 无法查看数据中心数据");
+            return R.fail(StatusCode.FORBIDDEN, StatusMsg.NO_WORKSHOP_ACCESS);
         }
         return R.ok(yieldService.getYieldData(scopedWorkshop, startDate, endDate));
     }
@@ -83,7 +84,7 @@ public class YieldController {
         String role = (String) request.getAttribute("role");
         String scopedWorkshop = scopeWorkshop(userId, role, workshop);
         if (scopedWorkshop == null && !RoleConstants.ADMIN.equals(role)) {
-            return R.fail(StatusCode.FORBIDDEN, "无绑定车间, 无法查看数据中心数据");
+            return R.fail(StatusCode.FORBIDDEN, StatusMsg.NO_WORKSHOP_ACCESS);
         }
         return R.ok(yieldService.searchYieldData(scopedWorkshop, keyword, startDate, endDate));
     }
@@ -101,7 +102,7 @@ public class YieldController {
         }
         List<String> workshopNames = getBoundWorkshopNames(userId);
         if (workshopNames.isEmpty()) {
-            return R.fail(StatusCode.FORBIDDEN, "无绑定车间, 无法查看数据中心数据");
+            return R.fail(StatusCode.FORBIDDEN, StatusMsg.NO_WORKSHOP_ACCESS);
         }
         return R.ok(workshopNames);
     }
@@ -145,7 +146,7 @@ public class YieldController {
                 ? getAllDataCenterWorkshopNames()
                 : getBoundWorkshopNames(userId);
         if (workshop == null || workshop.isEmpty() || !visible.contains(workshop)) {
-            return R.fail(StatusCode.FORBIDDEN, "无权访问该车间数据");
+            return R.fail(StatusCode.FORBIDDEN, StatusMsg.WORKSHOP_ACCESS_DENIED);
         }
         // 查车间ID
         Workshop w = workshopService.getOne(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Workshop>()

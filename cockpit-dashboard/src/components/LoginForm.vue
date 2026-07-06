@@ -90,6 +90,8 @@
 <script setup>
 import { ref, onUnmounted, nextTick } from 'vue'
 import { authApi, setToken, setUser, ensureCryptoReady, removeToken } from '../utils/api.js'
+import { StatusCode } from '../utils/statusCode.js'
+import { StatusMsg } from '../utils/statusMsg.js'
 
 const emit = defineEmits(['close', 'success'])
 
@@ -126,7 +128,7 @@ async function handleLogin() {
   loading.value = true
   try {
     const res = await authApi.login(empNo.value.trim(), password.value)
-    if (res.code === 200 && res.data) {
+    if (res.code === StatusCode.SUCCESS && res.data) {
       setToken(res.data.token)
       setUser({
         userId: res.data.userId,
@@ -151,7 +153,7 @@ async function handleLogin() {
       blockBackNavigation()
       window.location.reload()
     } else {
-      errorMsg.value = res.msg || '登录失败'
+      errorMsg.value = res.msg || StatusMsg.LOGIN_FAILED
     }
   } catch (e) {
     errorMsg.value = '网络错误，请稍后重试'
@@ -165,8 +167,8 @@ async function startWeComLogin() {
   wecomErrorMsg.value = ''
   try {
     const configRes = await authApi.getWeComConfig()
-    if (configRes.code !== 200 || !configRes.data) {
-      errorMsg.value = configRes.msg || '企业微信登录未配置，请联系管理员'
+    if (configRes.code !== StatusCode.SUCCESS || !configRes.data) {
+      errorMsg.value = configRes.msg || StatusMsg.WECOM_NOT_CONFIGURED
       return
     }
 
@@ -248,9 +250,9 @@ async function handleWecomCode(code) {
   try {
     const res = await authApi.weComCallback(code)
 
-    if (res.code !== 200) {
+    if (res.code !== StatusCode.SUCCESS) {
       wecomStatus.value = 'error'
-      wecomErrorMsg.value = res.msg || '扫码验证失败'
+      wecomErrorMsg.value = res.msg || StatusMsg.SCAN_VERIFY_FAILED
       return
     }
 
@@ -298,7 +300,7 @@ async function handleBind() {
   bindLoading.value = true
   try {
     const res = await authApi.weComBind(pendingWecomUserId.value, bindEmpNo.value.trim())
-    if (res.code === 200 && res.data) {
+    if (res.code === StatusCode.SUCCESS && res.data) {
       setToken(res.data.token)
       setUser({
         userId: res.data.userId,
@@ -321,7 +323,7 @@ async function handleBind() {
       blockBackNavigation()
       window.location.reload()
     } else {
-      bindErrorMsg.value = res.msg || '绑定失败'
+      bindErrorMsg.value = res.msg || StatusMsg.BIND_FAILED
     }
   } catch (e) {
     bindErrorMsg.value = '绑定请求失败: ' + (e.message || '网络错误')

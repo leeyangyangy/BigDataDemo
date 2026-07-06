@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 import xyz.leeyangy.spc.common.R;
 import xyz.leeyangy.spc.common.StatusCode;
+import xyz.leeyangy.spc.common.StatusMsg;
 import xyz.leeyangy.spc.common.annotation.OperationLog;
 import xyz.leeyangy.spc.dto.UserWorkshopRebindDTO;
 import xyz.leeyangy.spc.entity.SysUser;
@@ -76,7 +77,7 @@ public class SysUserWorkshopController {
     @GetMapping("/{userId}")
     public R<Map<String, Object>> getBindings(@PathVariable Long userId) {
         SysUser user = sysUserService.getById(userId);
-        if (user == null) return R.fail(StatusCode.DATA_NOT_FOUND, "用户不存在");
+        if (user == null) return R.fail(StatusCode.DATA_NOT_FOUND, StatusMsg.USER_NOT_FOUND);
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("userId", userId);
         m.put("empNo", user.getEmpNo());
@@ -100,7 +101,7 @@ public class SysUserWorkshopController {
             @PathVariable Long userId,
             @Valid @RequestBody UserWorkshopRebindDTO body) {
         SysUser user = sysUserService.getById(userId);
-        if (user == null) return R.fail(StatusCode.DATA_NOT_FOUND, "用户不存在");
+        if (user == null) return R.fail(StatusCode.DATA_NOT_FOUND, StatusMsg.USER_NOT_FOUND);
 
         List<Long> workshopIds = body.getWorkshopIds() != null ? body.getWorkshopIds() : new ArrayList<>();
         List<Long> testStationIds = body.getTestStationIds() != null ? body.getTestStationIds() : new ArrayList<>();
@@ -108,7 +109,7 @@ public class SysUserWorkshopController {
 
         // 校验主车间必须在 workshopIds 中
         if (primaryId != null && !workshopIds.contains(primaryId)) {
-            return R.fail("主车间必须在所选车间列表中，请重新指定");
+            return R.fail(StatusMsg.MAIN_WORKSHOP_REQUIRED);
         }
 
         sysUserWorkshopService.rebindWorkshops(userId, workshopIds, primaryId);
@@ -127,7 +128,7 @@ public class SysUserWorkshopController {
         result.put("workshopIds", workshopIds);
         result.put("primaryWorkshopId", primaryId);
         result.put("testStationIds", testStationIds);
-        return R.ok("绑定成功", result);
+        return R.ok(StatusMsg.BIND_SUCCESS, result);
     }
 
     /**

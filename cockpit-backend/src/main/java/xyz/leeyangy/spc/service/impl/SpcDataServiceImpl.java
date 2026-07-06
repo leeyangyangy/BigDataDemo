@@ -13,6 +13,7 @@ import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import xyz.leeyangy.spc.common.StatusMsg;
 import xyz.leeyangy.spc.common.constants.RoleConstants;
 import xyz.leeyangy.spc.common.exception.BusinessStateException;
 import xyz.leeyangy.spc.common.exception.ParamValidationException;
@@ -78,19 +79,19 @@ public class SpcDataServiceImpl extends ServiceImpl<SpcDataMapper, SpcData> impl
     @Transactional(rollbackFor = Exception.class)
     public SpcData uploadData(SpcData data, String role) {
         if (data.getParamId() == null || data.getParamId() <= 0) {
-            throw new ParamValidationException("工艺参数不能为空，请先选择工艺参数");
+            throw new ParamValidationException(StatusMsg.PARAM_REQUIRED_FOR_DATA);
         }
         if (data.getProductId() == null || data.getProductId() <= 0) {
-            throw new ParamValidationException("产品不能为空，请先选择产品");
+            throw new ParamValidationException(StatusMsg.PRODUCT_REQUIRED_FOR_DATA);
         }
         if (data.getProcessId() == null || data.getProcessId() <= 0) {
-            throw new ParamValidationException("工序不能为空，请先选择工序");
+            throw new ParamValidationException(StatusMsg.PROCESS_REQUIRED_FOR_DATA);
         }
         if (data.getEquipmentId() == null || data.getEquipmentId() <= 0) {
-            throw new ParamValidationException("设备ID不能为空，请选择设备");
+            throw new ParamValidationException(StatusMsg.EQUIPMENT_ID_REQUIRED);
         }
         if (data.getMeasuredValue() == null) {
-            throw new ParamValidationException("测量值不能为空");
+            throw new ParamValidationException(StatusMsg.MEASURE_VALUE_REQUIRED);
         }
 
         if (data.getMsgId() != null) {
@@ -129,7 +130,7 @@ public class SpcDataServiceImpl extends ServiceImpl<SpcDataMapper, SpcData> impl
                     paramVersionService.save(defaultVersion);
                     version = defaultVersion;
                 } else {
-                    throw new BusinessStateException("该工艺参数尚未配置标准版本，请联系工程师在【后台管理-工艺参数管理-版本】中创建版本后再提交数据");
+                    throw new BusinessStateException(StatusMsg.PARAM_VERSION_NOT_CONFIGURED);
                 }
             }
         }
@@ -188,7 +189,7 @@ public class SpcDataServiceImpl extends ServiceImpl<SpcDataMapper, SpcData> impl
     @Transactional(rollbackFor = Exception.class)
     public List<SpcData> batchUpload(List<SpcData> dataList, String role) {
         if (dataList == null || dataList.isEmpty()) {
-            throw new ParamValidationException("提交数据不能为空");
+            throw new ParamValidationException(StatusMsg.SUBMIT_DATA_REQUIRED);
         }
         for (SpcData data : dataList) {
             uploadData(data, role);

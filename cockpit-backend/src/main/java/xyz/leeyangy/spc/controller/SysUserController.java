@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import xyz.leeyangy.spc.common.PageConvert;
 import xyz.leeyangy.spc.common.R;
 import xyz.leeyangy.spc.common.StatusCode;
+import xyz.leeyangy.spc.common.StatusMsg;
 import xyz.leeyangy.spc.common.annotation.OperationLog;
 import xyz.leeyangy.spc.common.constants.RoleConstants;
 import xyz.leeyangy.spc.dto.UserCreateDTO;
@@ -65,7 +66,7 @@ public class SysUserController {
     public R<SysUserVO> getById(@PathVariable Long id) {
         SysUser user = sysUserService.getById(id);
         if (user == null) {
-            return R.fail(StatusCode.DATA_NOT_FOUND, "用户不存在");
+            return R.fail(StatusCode.DATA_NOT_FOUND, StatusMsg.USER_NOT_FOUND);
         }
         SysUserVO vo = SysUserVO.from(user);
         fillWorkshopBindings(vo);
@@ -86,20 +87,20 @@ public class SysUserController {
     @PostMapping
     public R<SysUserVO> create(@Valid @RequestBody UserCreateDTO req) {
         if (req.getEmpNo() == null || req.getEmpNo().trim().isEmpty()) {
-            return R.fail(StatusCode.PARAM_REQUIRED, "工号不能为空");
+            return R.fail(StatusCode.PARAM_REQUIRED, StatusMsg.EMP_NO_REQUIRED);
         }
         if (req.getUsername() == null || req.getUsername().trim().isEmpty()) {
-            return R.fail(StatusCode.PARAM_REQUIRED, "姓名不能为空");
+            return R.fail(StatusCode.PARAM_REQUIRED, StatusMsg.NAME_REQUIRED);
         }
         if (req.getPassword() == null || req.getPassword().trim().isEmpty()) {
-            return R.fail(StatusCode.PARAM_REQUIRED, "密码不能为空");
+            return R.fail(StatusCode.PARAM_REQUIRED, StatusMsg.PASSWORD_REQUIRED);
         }
 
         Long count = sysUserService.count(new LambdaQueryWrapper<SysUser>()
                 .eq(SysUser::getEmpNo, req.getEmpNo())
                 .eq(SysUser::getDeleted, 0));
         if (count > 0) {
-            return R.fail(StatusCode.CONFLICT, "工号已存在");
+            return R.fail(StatusCode.CONFLICT, StatusMsg.EMP_NO_EXISTS);
         }
 
         SysUser user = new SysUser();
@@ -117,7 +118,7 @@ public class SysUserController {
         log.info("[Admin] 创建用户: empNo={} username={}", user.getEmpNo(), user.getUsername());
         SysUserVO vo = SysUserVO.from(user);
         fillWorkshopBindings(vo);
-        return R.ok("创建成功", vo);
+        return R.ok(StatusMsg.CREATE_SUCCESS, vo);
     }
 
     @OperationLog(module = "USER", action = "UPDATE", targetType = "SysUser",
@@ -127,7 +128,7 @@ public class SysUserController {
     public R<SysUserVO> update(@PathVariable Long id, @Valid @RequestBody UserUpdateDTO req) {
         SysUser existUser = sysUserService.getById(id);
         if (existUser == null) {
-            return R.fail(StatusCode.DATA_NOT_FOUND, "用户不存在");
+            return R.fail(StatusCode.DATA_NOT_FOUND, StatusMsg.USER_NOT_FOUND);
         }
 
         // 密码变更前置检查: 密码历史防重用 (等保三级)
@@ -135,7 +136,7 @@ public class SysUserController {
         String newHash = null;
         if (req.getPassword() != null && !req.getPassword().trim().isEmpty()) {
             if (passwordHistoryService.isPasswordReused(id, req.getPassword())) {
-                return R.fail("新密码不能与最近使用过的密码相同, 请更换");
+                return R.fail(StatusMsg.PASSWORD_REUSED);
             }
             newHash = passwordEncoder.encode(req.getPassword());
             passwordChanged = true;
@@ -182,7 +183,7 @@ public class SysUserController {
         SysUser updated = sysUserService.getById(id);
         SysUserVO vo = SysUserVO.from(updated);
         fillWorkshopBindings(vo);
-        return R.ok("更新成功", vo);
+        return R.ok(StatusMsg.UPDATE_SUCCESS, vo);
     }
 
     @OperationLog(module = "USER", action = "STATUS_CHANGE", targetType = "SysUser",
@@ -192,7 +193,7 @@ public class SysUserController {
     public R<Void> toggleStatus(@PathVariable Long id, @Valid @RequestBody UserStatusDTO req) {
         SysUser user = sysUserService.getById(id);
         if (user == null) {
-            return R.fail(StatusCode.DATA_NOT_FOUND, "用户不存在");
+            return R.fail(StatusCode.DATA_NOT_FOUND, StatusMsg.USER_NOT_FOUND);
         }
         Integer newStatus = req.getStatus();
         if (newStatus == null) {
@@ -216,7 +217,7 @@ public class SysUserController {
     public R<Void> delete(@PathVariable Long id) {
         SysUser user = sysUserService.getById(id);
         if (user == null) {
-            return R.fail(StatusCode.DATA_NOT_FOUND, "用户不存在");
+            return R.fail(StatusCode.DATA_NOT_FOUND, StatusMsg.USER_NOT_FOUND);
         }
         sysUserService.update(new LambdaUpdateWrapper<SysUser>()
                 .eq(SysUser::getId, id)

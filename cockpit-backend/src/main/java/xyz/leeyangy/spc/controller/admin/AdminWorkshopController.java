@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 import xyz.leeyangy.spc.common.PageConvert;
 import xyz.leeyangy.spc.common.R;
+import xyz.leeyangy.spc.common.StatusMsg;
 import xyz.leeyangy.spc.common.annotation.OperationLog;
 import xyz.leeyangy.spc.dto.WorkshopCreateDTO;
 import xyz.leeyangy.spc.dto.WorkshopUpdateDTO;
@@ -64,7 +65,7 @@ public class AdminWorkshopController {
         long count = workshopService.count(new LambdaQueryWrapper<Workshop>()
                 .eq(Workshop::getWorkshopCode, workshop.getWorkshopCode().trim())
                 .eq(Workshop::getDeleted, 0));
-        if (count > 0) return R.fail("车间编码已存在");
+        if (count > 0) return R.fail(StatusMsg.WORKSHOP_CODE_EXISTS);
         Workshop entity = new Workshop();
         entity.setWorkshopCode(workshop.getWorkshopCode());
         entity.setWorkshopName(workshop.getWorkshopName());
@@ -75,7 +76,7 @@ public class AdminWorkshopController {
         entity.setSortOrder(workshop.getSortOrder());
         workshopService.save(entity);
         log.info("[Admin] 创建车间: code={} name={}", entity.getWorkshopCode(), entity.getWorkshopName());
-        return R.ok("创建成功", WorkshopVO.from(entity));
+        return R.ok(StatusMsg.CREATE_SUCCESS, WorkshopVO.from(entity));
     }
 
     @OperationLog(module = "WORKSHOP", action = "UPDATE", targetType = "Workshop",
@@ -84,7 +85,7 @@ public class AdminWorkshopController {
     @PutMapping("/{id}")
     public R<WorkshopVO> update(@PathVariable Long id, @Valid @RequestBody WorkshopUpdateDTO dto) {
         Workshop exist = workshopService.getById(id);
-        if (exist == null) return R.fail("车间不存在");
+        if (exist == null) return R.fail(StatusMsg.WORKSHOP_NOT_FOUND);
         if (dto.getWorkshopName() != null) exist.setWorkshopName(dto.getWorkshopName().trim());
         if (dto.getWorkshopType() != null) exist.setWorkshopType(dto.getWorkshopType());
         if (dto.getDataCenterVisible() != null) exist.setDataCenterVisible(dto.getDataCenterVisible());
@@ -93,7 +94,7 @@ public class AdminWorkshopController {
         if (dto.getSortOrder() != null) exist.setSortOrder(dto.getSortOrder());
         workshopService.updateById(exist);
         log.info("[Admin] 更新车间: id={} code={}", id, exist.getWorkshopCode());
-        return R.ok("更新成功", WorkshopVO.from(exist));
+        return R.ok(StatusMsg.UPDATE_SUCCESS, WorkshopVO.from(exist));
     }
 
     @OperationLog(module = "WORKSHOP", action = "DELETE", targetType = "Workshop",
@@ -102,7 +103,7 @@ public class AdminWorkshopController {
     @DeleteMapping("/{id}")
     public R<Void> delete(@PathVariable Long id) {
         Workshop workshop = workshopService.getById(id);
-        if (workshop == null) return R.fail("车间不存在");
+        if (workshop == null) return R.fail(StatusMsg.WORKSHOP_NOT_FOUND);
         workshopService.update(new LambdaUpdateWrapper<Workshop>()
                 .eq(Workshop::getId, id)
                 .set(Workshop::getDeleted, 1));

@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import xyz.leeyangy.spc.common.JwtUtil;
+import xyz.leeyangy.spc.common.StatusMsg;
 import xyz.leeyangy.spc.entity.SysUser;
 import xyz.leeyangy.spc.service.AuthService;
 import xyz.leeyangy.spc.service.LoginAttemptService;
@@ -35,7 +36,7 @@ public class AuthServiceImpl implements AuthService {
         Map<String, Object> result = new HashMap<>();
 
         if (empNo == null || empNo.trim().isEmpty()) {
-            result.put("error", "工号不能为空");
+            result.put("error", StatusMsg.EMP_NO_REQUIRED);
             return result;
         }
 
@@ -52,25 +53,25 @@ public class AuthServiceImpl implements AuthService {
             log.warn("[Auth] 登录失败: 用户不存在 - empNo={}", empNo);
             // 仍记录失败次数, 防止通过返回信息差异进行用户枚举
             loginAttemptService.recordFailedAttempt(empNo, ip);
-            result.put("error", "用户不存在或密码错误");
+            result.put("error", StatusMsg.LOGIN_FAILED);
             return result;
         }
 
         if (password == null || password.trim().isEmpty()) {
-            result.put("error", "密码不能为空");
+            result.put("error", StatusMsg.PASSWORD_REQUIRED);
             return result;
         }
 
         if (!passwordEncoder.matches(password, user.getPassword())) {
             log.warn("[Auth] 登录失败: 密码错误 - empNo={}", empNo);
             loginAttemptService.recordFailedAttempt(empNo, ip);
-            result.put("error", "用户不存在或密码错误");
+            result.put("error", StatusMsg.LOGIN_FAILED);
             return result;
         }
 
         if (user.getStatus() != 1) {
             log.warn("[Auth] 登录失败: 账号已停用 - empNo={}", empNo);
-            result.put("error", "账号已停用，请联系管理员");
+            result.put("error", StatusMsg.ACCOUNT_DISABLED);
             return result;
         }
 
@@ -115,7 +116,7 @@ public class AuthServiceImpl implements AuthService {
 
         if (code == null || code.trim().isEmpty()) {
             log.warn("[Auth] 企业微信登录失败: code为空");
-            result.put("error", "企业微信授权码无效");
+            result.put("error", StatusMsg.WECOM_CODE_INVALID);
             return result;
         }
 
@@ -135,14 +136,14 @@ public class AuthServiceImpl implements AuthService {
         if (user == null) {
             log.warn("[Auth] 企业微信登录失败: 未绑定企业微信用户 - wecomUserId={}", code);
             loginAttemptService.recordFailedAttempt(lockKey, ip);
-            result.put("error", "未找到关联的账号，请先联系管理员绑定企业微信");
+            result.put("error", StatusMsg.WECOM_NOT_BOUND);
             return result;
         }
 
         if (user.getStatus() != 1) {
             log.warn("[Auth] 企业微信登录失败: 账号已停用 - wecomUserId={}", code);
             loginAttemptService.recordFailedAttempt(lockKey, ip);
-            result.put("error", "账号已停用，请联系管理员");
+            result.put("error", StatusMsg.ACCOUNT_DISABLED);
             return result;
         }
 

@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 import xyz.leeyangy.spc.common.PageConvert;
 import xyz.leeyangy.spc.common.R;
 import xyz.leeyangy.spc.common.StatusCode;
+import xyz.leeyangy.spc.common.StatusMsg;
 import xyz.leeyangy.spc.common.annotation.OperationLog;
 import xyz.leeyangy.spc.dto.ParamCreateDTO;
 import xyz.leeyangy.spc.dto.ParamUpdateDTO;
@@ -48,7 +49,7 @@ public class AdminStandardController {
     public R<ParamVO> getById(@PathVariable Long id) {
         Param param = paramService.getById(id);
         if (param == null) {
-            return R.fail(StatusCode.DATA_NOT_FOUND, "工艺参数不存在");
+            return R.fail(StatusCode.DATA_NOT_FOUND, StatusMsg.STANDARD_NOT_FOUND);
         }
         return R.ok(ParamVO.from(param));
     }
@@ -62,7 +63,7 @@ public class AdminStandardController {
                 .eq(Param::getParamCode, req.getParamCode())
                 .eq(Param::getDeleted, 0));
         if (count > 0) {
-            return R.fail(StatusCode.CONFLICT, "工艺参数编码已存在");
+            return R.fail(StatusCode.CONFLICT, StatusMsg.STANDARD_CODE_EXISTS);
         }
         Param param = new Param();
         param.setParamCode(req.getParamCode());
@@ -82,7 +83,7 @@ public class AdminStandardController {
     public R<ParamVO> update(@PathVariable Long id, @Valid @RequestBody ParamUpdateDTO req) {
         Param exist = paramService.getById(id);
         if (exist == null) {
-            return R.fail(StatusCode.DATA_NOT_FOUND, "工艺参数不存在");
+            return R.fail(StatusCode.DATA_NOT_FOUND, StatusMsg.STANDARD_NOT_FOUND);
         }
 
         if (req.getParamCode() != null && !req.getParamCode().equals(exist.getParamCode())) {
@@ -91,7 +92,7 @@ public class AdminStandardController {
                     .ne(Param::getId, id)
                     .eq(Param::getDeleted, 0));
             if (count > 0) {
-                return R.fail(StatusCode.CONFLICT, "工艺参数编码已存在");
+                return R.fail(StatusCode.CONFLICT, StatusMsg.STANDARD_CODE_EXISTS);
             }
         }
 
@@ -115,7 +116,7 @@ public class AdminStandardController {
     public R<ParamVO> duplicate(@PathVariable Long id) {
         Param source = paramService.getById(id);
         if (source == null) {
-            return R.fail(StatusCode.DATA_NOT_FOUND, "工艺参数不存在");
+            return R.fail(StatusCode.DATA_NOT_FOUND, StatusMsg.STANDARD_NOT_FOUND);
         }
 
         String baseCode = source.getParamCode();
@@ -134,7 +135,7 @@ public class AdminStandardController {
 
         paramService.save(copy);
         log.info("[Admin] 复制工艺参数: {} -> {}", source.getParamCode(), newCode);
-        return R.ok("复制成功", ParamVO.from(copy));
+        return R.ok(StatusMsg.COPY_SUCCESS, ParamVO.from(copy));
     }
 
     /**
@@ -172,7 +173,7 @@ public class AdminStandardController {
     public R<Void> delete(@PathVariable Long id) {
         Param exist = paramService.getById(id);
         if (exist == null) {
-            return R.fail(StatusCode.DATA_NOT_FOUND, "工艺参数不存在");
+            return R.fail(StatusCode.DATA_NOT_FOUND, StatusMsg.STANDARD_NOT_FOUND);
         }
         paramService.update(new LambdaUpdateWrapper<Param>()
                 .eq(Param::getId, id)

@@ -12,6 +12,8 @@ import org.springframework.util.AntPathMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 import xyz.leeyangy.spc.common.JwtUtil;
 import xyz.leeyangy.spc.common.R;
+import xyz.leeyangy.spc.common.StatusCode;
+import xyz.leeyangy.spc.common.StatusMsg;
 import xyz.leeyangy.spc.common.constants.RoleConstants;
 import xyz.leeyangy.spc.service.TokenBlacklistService;
 
@@ -58,7 +60,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                             request.getRequestURI(), request.getRemoteAddr());
                     response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                     response.setContentType("application/json;charset=UTF-8");
-                    response.getWriter().write(objectMapper.writeValueAsString(R.fail(401, "Token已失效，请重新登录")));
+                    response.getWriter().write(objectMapper.writeValueAsString(R.fail(StatusCode.UNAUTHORIZED, StatusMsg.TOKEN_INVALID)));
                     return;
                 }
 
@@ -70,7 +72,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                                 userId, request.getRequestURI(), request.getRemoteAddr());
                         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                         response.setContentType("application/json;charset=UTF-8");
-                        response.getWriter().write(objectMapper.writeValueAsString(R.fail(401, "Token已失效，请重新登录")));
+                        response.getWriter().write(objectMapper.writeValueAsString(R.fail(StatusCode.UNAUTHORIZED, StatusMsg.TOKEN_INVALID)));
                         return;
                     }
 

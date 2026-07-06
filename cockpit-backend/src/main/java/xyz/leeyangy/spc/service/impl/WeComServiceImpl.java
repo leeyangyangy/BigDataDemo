@@ -8,6 +8,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import xyz.leeyangy.spc.common.StatusMsg;
 import xyz.leeyangy.spc.common.exception.BusinessException;
 import xyz.leeyangy.spc.common.exception.ExternalServiceException;
 import xyz.leeyangy.spc.common.exception.ParamValidationException;
@@ -96,7 +97,7 @@ public class WeComServiceImpl implements WeComService {
             int errcode = ((Number) result.get("errcode")).intValue();
             if (errcode != 0) {
                 if (errcode == 40029) {
-                    throw new ParamValidationException("扫码已过期，请重新扫码");
+                    throw new ParamValidationException(StatusMsg.QRCODE_EXPIRED);
                 }
                 log.error("[WeCom] 获取用户信息失败: errcode={} errmsg={}", errcode, result.get("errmsg"));
                 throw new ExternalServiceException(SERVICE_NAME, "获取用户信息失败: " + result.get("errmsg"));

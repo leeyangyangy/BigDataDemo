@@ -35,6 +35,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { yieldApi } from '@/utils/api.js'
+import { StatusCode } from '@/utils/statusCode'
 import { getComponent } from './registry.js'
 
 const components = ref([])
@@ -61,7 +62,7 @@ async function loadComponents() {
   error.value = null
   try {
     const accessRes = await yieldApi.checkAccess()
-    if (!accessRes || accessRes.code !== 200) {
+    if (!accessRes || accessRes.code !== StatusCode.SUCCESS) {
       error.value = '无数据中心访问权限'
       return
     }
@@ -72,7 +73,7 @@ async function loadComponents() {
     }
     // 取首个可见车间查询其关联组件 (兜底会返回 yield_dashboard)
     const res = await yieldApi.getComponents(workshops[0])
-    if (res && res.code === 200 && Array.isArray(res.data)) {
+    if (res && res.code === StatusCode.SUCCESS && Array.isArray(res.data)) {
       components.value = res.data
     } else {
       // 兜底: 默认 yield_dashboard

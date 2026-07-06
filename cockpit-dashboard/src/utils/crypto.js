@@ -1,5 +1,7 @@
 import CryptoJS from 'crypto-js'
 import JSEncrypt from 'jsencrypt'
+import { StatusCode } from './statusCode.js'
+import { StatusMsg } from './statusMsg.js'
 
 // 会话级 AES key/iv, 登录时由前端随机生成, RSA 加密上送给后端。
 // sessionStorage 确保标签页关闭即清除, 不在 localStorage 长期保存。
@@ -27,7 +29,7 @@ export async function ensurePublicKey(fetchPublicKey) {
   if (cachedPublicKey) return cachedPublicKey
 
   const res = await fetchPublicKey()
-  if (!res || res.code !== 200 || !res.data || !res.data.publicKey) {
+  if (!res || res.code !== StatusCode.SUCCESS || !res.data || !res.data.publicKey) {
     throw new Error('拉取 RSA 公钥失败')
   }
   cachedPublicKey = res.data.publicKey
@@ -75,10 +77,10 @@ export async function generateAndExchangeKey(exchangeFn) {
   try {
     // 上送后端
     const res = await exchangeFn(encKey, encIv)
-    if (!res || res.code !== 200) {
+    if (!res || res.code !== StatusCode.SUCCESS) {
       // 失败时回滚 KV, 避免后续请求用错误的 KV 加密
       sessionStorage.removeItem(KV_KEY)
-      throw new Error('key-exchange 失败: ' + (res?.msg || '未知错误'))
+      throw new Error(StatusMsg.KEY_EXCHANGE_FAILED + ': ' + (res?.msg || '未知错误'))
     }
     console.log('[Crypto] AES KV 已生成并上送, 后续请求将走加密通道')
   } catch (e) {

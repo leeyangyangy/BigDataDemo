@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 import xyz.leeyangy.spc.common.PageConvert;
 import xyz.leeyangy.spc.common.R;
+import xyz.leeyangy.spc.common.StatusMsg;
 import xyz.leeyangy.spc.common.annotation.OperationLog;
 import xyz.leeyangy.spc.dto.EquipmentCreateDTO;
 import xyz.leeyangy.spc.dto.EquipmentUpdateDTO;
@@ -45,7 +46,7 @@ public class AdminEquipmentController {
     @GetMapping("/{id}")
     public R<EquipmentVO> getById(@PathVariable Long id) {
         Equipment equipment = equipmentService.getById(id);
-        if (equipment == null) return R.fail("设备不存在");
+        if (equipment == null) return R.fail(StatusMsg.EQUIPMENT_NOT_FOUND);
         return R.ok(EquipmentVO.from(equipment));
     }
 
@@ -55,16 +56,16 @@ public class AdminEquipmentController {
     @PostMapping
     public R<EquipmentVO> create(@Valid @RequestBody EquipmentCreateDTO req) {
         if (req.getEquipCode() == null || req.getEquipCode().trim().isEmpty()) {
-            return R.fail("设备编码不能为空");
+            return R.fail(StatusMsg.EQUIPMENT_CODE_REQUIRED);
         }
         if (req.getEquipName() == null || req.getEquipName().trim().isEmpty()) {
-            return R.fail("设备名称不能为空");
+            return R.fail(StatusMsg.EQUIPMENT_NAME_REQUIRED);
         }
 
         long count = equipmentService.count(new LambdaQueryWrapper<Equipment>()
                 .eq(Equipment::getEquipCode, req.getEquipCode().trim())
                 .eq(Equipment::getDeleted, 0));
-        if (count > 0) return R.fail("设备编码已存在");
+        if (count > 0) return R.fail(StatusMsg.EQUIPMENT_CODE_EXISTS);
 
         Equipment equipment = new Equipment();
         equipment.setEquipCode(req.getEquipCode().trim());
@@ -79,7 +80,7 @@ public class AdminEquipmentController {
 
         equipmentService.save(equipment);
         log.info("[Admin] 创建设备: code={} name={}", equipment.getEquipCode(), equipment.getEquipName());
-        return R.ok("创建成功", EquipmentVO.from(equipment));
+        return R.ok(StatusMsg.CREATE_SUCCESS, EquipmentVO.from(equipment));
     }
 
     @OperationLog(module = "EQUIPMENT", action = "UPDATE", targetType = "Equipment",
@@ -88,7 +89,7 @@ public class AdminEquipmentController {
     @PutMapping("/{id}")
     public R<EquipmentVO> update(@PathVariable Long id, @Valid @RequestBody EquipmentUpdateDTO req) {
         Equipment exist = equipmentService.getById(id);
-        if (exist == null) return R.fail("设备不存在");
+        if (exist == null) return R.fail(StatusMsg.EQUIPMENT_NOT_FOUND);
 
         if (req.getEquipName() != null) exist.setEquipName(req.getEquipName().trim());
         if (req.getEquipType() != null) exist.setEquipType(req.getEquipType());
@@ -109,7 +110,7 @@ public class AdminEquipmentController {
             log.info("[Admin] 更新设备: id={} code={} processId={}", id, exist.getEquipCode(), exist.getProcessId());
         }
 
-        return R.ok("更新成功", EquipmentVO.from(equipmentService.getById(id)));
+        return R.ok(StatusMsg.UPDATE_SUCCESS, EquipmentVO.from(equipmentService.getById(id)));
     }
 
     @OperationLog(module = "EQUIPMENT", action = "DELETE", targetType = "Equipment",
@@ -118,7 +119,7 @@ public class AdminEquipmentController {
     @DeleteMapping("/{id}")
     public R<Void> delete(@PathVariable Long id) {
         Equipment equipment = equipmentService.getById(id);
-        if (equipment == null) return R.fail("设备不存在");
+        if (equipment == null) return R.fail(StatusMsg.EQUIPMENT_NOT_FOUND);
         equipmentService.update(new LambdaUpdateWrapper<Equipment>()
                 .eq(Equipment::getId, id)
                 .set(Equipment::getDeleted, 1));

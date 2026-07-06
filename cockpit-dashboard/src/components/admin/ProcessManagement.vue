@@ -333,6 +333,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { adminApi, spcApi } from '@/utils/api.js'
+import { StatusCode } from '@/utils/statusCode'
+import { StatusMsg } from '@/utils/statusMsg'
 
 const DATA_TYPE_LABELS = { CONTINUOUS: '连续型', DISCRETE: '离散型', COUNT: '计数型' }
 function formatDataType(val) {
@@ -395,7 +397,7 @@ async function loadData() {
       keyword: keyword.value,
       status: filterStatus.value !== '' ? Number(filterStatus.value) : undefined
     })
-    if (res.code === 200 && res.data) {
+    if (res.code === StatusCode.SUCCESS && res.data) {
       list.value = res.data.records || []
       total.value = res.data.total || 0
     }
@@ -450,12 +452,12 @@ async function handleSubmit() {
       res = await adminApi.process.create(form.value)
     }
 
-    if (res.code === 200) {
-      formMsg.value = isEdit.value ? '更新成功' : '创建成功'
+    if (res.code === StatusCode.SUCCESS) {
+      formMsg.value = isEdit.value ? StatusMsg.UPDATE_SUCCESS : StatusMsg.CREATE_SUCCESS
       formMsgType.value = 'success'
       setTimeout(() => { closeForm(); loadData() }, 1000)
     } else {
-      formMsg.value = res.msg || '操作失败'
+      formMsg.value = res.msg || StatusMsg.OPERATION_FAILED
       formMsgType.value = 'error'
     }
   } catch (e) {
@@ -471,7 +473,7 @@ async function handleDuplicate(item) {
 
   try {
     const res = await adminApi.process.duplicate(item.id)
-    if (res.code === 200) {
+    if (res.code === StatusCode.SUCCESS) {
       loadData()
     }
   } catch (e) {
@@ -484,7 +486,7 @@ async function handleDelete(item) {
 
   try {
     const res = await adminApi.process.delete(item.id)
-    if (res.code === 200) {
+    if (res.code === StatusCode.SUCCESS) {
       loadData()
     }
   } catch (e) {
@@ -500,7 +502,7 @@ onMounted(() => {
 async function loadWorkshopList() {
   try {
     const res = await adminApi.workshop.listAll()
-    if (res.code === 200) workshopList.value = res.data || []
+    if (res.code === StatusCode.SUCCESS) workshopList.value = res.data || []
   } catch (e) { console.error('加载车间列表失败', e) }
 }
 
@@ -518,7 +520,7 @@ async function openEquipModal(item) {
 async function loadProcessEquipData(processId) {
   try {
     const res = await spcApi.getProcessEquipment(processId)
-    processEquipList.value = (res.code === 200 && Array.isArray(res.data)) ? res.data : []
+    processEquipList.value = (res.code === StatusCode.SUCCESS && Array.isArray(res.data)) ? res.data : []
   } catch (e) { console.error('加载工序设备失败:', e); processEquipList.value = [] }
 }
 
@@ -541,7 +543,7 @@ async function searchAvailableEquip() {
       keyword: equipSearchKeyword.value || undefined,
       size: 50
     })
-    if (res.code === 200 && res.data?.records) {
+    if (res.code === StatusCode.SUCCESS && res.data?.records) {
       availableEquipList.value = res.data.records.filter(eq => eq.processId !== currentProcess.value?.id)
     } else {
       availableEquipList.value = []
@@ -562,7 +564,7 @@ async function bindEquipment(eq) {
       ...eq,
       processId: currentProcess.value.id
     })
-    if (res.code === 200) {
+    if (res.code === StatusCode.SUCCESS) {
       showEquipSelector.value = false
       await loadProcessEquipData(currentProcess.value.id)
       await loadEquipCounts()
@@ -599,12 +601,12 @@ async function submitEquip() {
       res = await adminApi.equipment.create(payload)
     }
 
-    if (res.code === 200) {
-      equipMsg.value = equipEditId.value ? '更新成功' : '添加成功'
+    if (res.code === StatusCode.SUCCESS) {
+      equipMsg.value = equipEditId.value ? StatusMsg.UPDATE_SUCCESS : StatusMsg.ADD_SUCCESS
       equipMsgType.value = 'success'
       setTimeout(() => { showEquipForm.value = false; loadProcessEquipData(currentProcess.value.id) }, 800)
     } else {
-      equipMsg.value = res.msg || '操作失败'
+      equipMsg.value = res.msg || StatusMsg.OPERATION_FAILED
       equipMsgType.value = 'error'
     }
   } catch (e) {
@@ -620,7 +622,7 @@ async function handleUnbindEquip(eq) {
 
   try {
     const res = await adminApi.equipment.update(eq.id, { clearProcessId: true })
-    if (res.code === 200) {
+    if (res.code === StatusCode.SUCCESS) {
       await loadProcessEquipData(currentProcess.value.id)
       await loadEquipCounts()
     }
@@ -632,7 +634,7 @@ async function loadEquipCounts() {
   for (const p of list.value) {
     try {
       const res = await spcApi.getProcessEquipment(p.id)
-      map[p.id] = (res.code === 200 && Array.isArray(res.data)) ? res.data.length : 0
+      map[p.id] = (res.code === StatusCode.SUCCESS && Array.isArray(res.data)) ? res.data.length : 0
     } catch (e) { map[p.id] = 0 }
   }
   processEquipCountMap.value = map
@@ -663,7 +665,7 @@ async function loadBoundParams(processId) {
       adminApi.process.getParams(processId),
       spcApi.getParamPage({ current: 1, size: 200 })
     ])
-    if (bindRes.code === 200 && bindRes.data && allParamRes.code === 200) {
+    if (bindRes.code === StatusCode.SUCCESS && bindRes.data && allParamRes.code === StatusCode.SUCCESS) {
       const boundIds = bindRes.data.map(b => b.paramId)
       boundParamList.value = allParamRes.data.records.filter(p => boundIds.includes(p.id))
     } else {
@@ -679,7 +681,7 @@ async function searchAvailableParams() {
       keyword: paramSearchKeyword.value || undefined,
       size: 100
     })
-    if (res.code === 200 && res.data?.records) {
+    if (res.code === StatusCode.SUCCESS && res.data?.records) {
       const boundIds = boundParamList.value.map(p => p.id)
       availableParamList.value = res.data.records.filter(p => !boundIds.includes(p.id))
     } else {
@@ -720,12 +722,12 @@ async function submitParamBind() {
   try {
     const items = boundParamList.value.map((p) => ({ paramId: p.id }))
     const res = await adminApi.process.bindParams(currentBindProcess.value.id, items)
-    if (res.code === 200) {
-      paramMsg.value = '绑定成功'
+    if (res.code === StatusCode.SUCCESS) {
+      paramMsg.value = StatusMsg.BIND_SUCCESS
       paramMsgType.value = 'success'
       setTimeout(() => { showParamBind.value = false }, 800)
     } else {
-      paramMsg.value = res.msg || '绑定失败'
+      paramMsg.value = res.msg || StatusMsg.BIND_FAILED
       paramMsgType.value = 'error'
     }
   } catch (e) {

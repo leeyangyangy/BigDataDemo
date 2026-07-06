@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 import xyz.leeyangy.spc.common.R;
+import xyz.leeyangy.spc.common.StatusMsg;
 import xyz.leeyangy.spc.common.annotation.OperationLog;
 import xyz.leeyangy.spc.entity.SysWorkshopComponent;
 import xyz.leeyangy.spc.entity.Workshop;
@@ -72,7 +73,7 @@ public class AdminDataCenterController {
             @RequestBody List<SysWorkshopComponent> components) {
         Workshop w = workshopService.getById(workshopId);
         if (w == null || (w.getDataCenterVisible() == null || w.getDataCenterVisible() != 1)) {
-            return R.fail("车间不存在或未标记为数据中心可见");
+            return R.fail(StatusMsg.WORKSHOP_NOT_DATA_CENTER);
         }
         sysWorkshopComponentService.rebindComponents(workshopId, components);
         log.info("[Admin] 更新车间 {} 组件关联: {} 个", workshopId, components != null ? components.size() : 0);

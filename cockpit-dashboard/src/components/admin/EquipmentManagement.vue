@@ -136,6 +136,8 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { adminApi, spcApi } from '../../utils/api.js'
+import { StatusCode } from '../../utils/statusCode.js'
+import { StatusMsg } from '../../utils/statusMsg.js'
 
 const list = ref([])
 const processList = ref([])
@@ -215,14 +217,14 @@ async function handleSubmit() {
     } else {
       res = await adminApi.equipment.create(form.value)
     }
-    if (res.code === 200) {
+    if (res.code === StatusCode.SUCCESS) {
       closeForm()
       loadData()
     } else {
-      errorMsg.value = res.message || (isEdit.value ? '更新失败' : '创建失败')
+      errorMsg.value = res.message || (isEdit.value ? StatusMsg.UPDATE_FAILED : StatusMsg.CREATE_FAILED)
     }
   } catch (e) {
-    errorMsg.value = e.message || '请求失败'
+    errorMsg.value = e.message || StatusMsg.REQUEST_FAILED
   } finally {
     submitting.value = false
   }
@@ -234,8 +236,8 @@ async function handleDelete(item) {
   deleting.value = true
   try {
     const res = await adminApi.equipment.delete(item.id)
-    if (res.code === 200) loadData()
-    else alert(res.message || '删除失败')
+    if (res.code === StatusCode.SUCCESS) loadData()
+    else alert(res.message || StatusMsg.DELETE_FAILED)
   } catch (e) { alert(e.message) }
   finally { deleting.value = false }
 }
@@ -243,7 +245,7 @@ async function handleDelete(item) {
 async function loadProcesses() {
   try {
     const res = await spcApi.getProcessPage({ current: 1, size: 100 })
-    if (res.code === 200) processList.value = res.data.records
+    if (res.code === StatusCode.SUCCESS) processList.value = res.data.records
   } catch (e) {}
 }
 
@@ -257,7 +259,7 @@ async function loadData() {
       processId: filterProcessId.value || undefined
     }
     const res = await adminApi.equipment.getPage(params)
-    if (res.code === 200) {
+    if (res.code === StatusCode.SUCCESS) {
       list.value = res.data.records
       total.value = res.data.total
     }

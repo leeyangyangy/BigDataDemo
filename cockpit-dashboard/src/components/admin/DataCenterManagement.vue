@@ -93,6 +93,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { adminApi } from '../../utils/api.js'
+import { StatusCode } from '../../utils/statusCode.js'
+import { StatusMsg } from '../../utils/statusMsg.js'
 
 const workshops = ref([])
 const loading = ref(false)
@@ -134,17 +136,17 @@ async function loadData() {
       adminApi.dataCenter.listWorkshops(),
       adminApi.dataCenter.listAvailableComponents()
     ])
-    if (wsRes.code === 200) {
+    if (wsRes.code === StatusCode.SUCCESS) {
       workshops.value = wsRes.data || []
       // 批量加载每个车间的组件数
       await Promise.all(workshops.value.map(async w => {
         const r = await adminApi.dataCenter.listComponents(w.id)
-        if (r.code === 200) {
+        if (r.code === StatusCode.SUCCESS) {
           componentCounts.value[w.id] = (r.data || []).length
         }
       }))
     }
-    if (acRes.code === 200) {
+    if (acRes.code === StatusCode.SUCCESS) {
       availableComponents.value = acRes.data || []
     }
   } catch (e) {
@@ -162,7 +164,7 @@ async function openEdit(workshop) {
   showForm.value = true
   try {
     const res = await adminApi.dataCenter.listComponents(workshop.id)
-    if (res.code === 200) {
+    if (res.code === StatusCode.SUCCESS) {
       // 映射为可编辑对象
       editingComponents.value = (res.data || []).map(c => ({
         componentKey: c.componentKey,
@@ -205,13 +207,13 @@ async function saveForm() {
       enabled: c.enabled ?? 1
     }))
     const res = await adminApi.dataCenter.updateComponents(editing.value.id, payload)
-    if (res.code === 200) {
+    if (res.code === StatusCode.SUCCESS) {
       formMsg.value = '保存成功'
       formMsgType.value = 'success'
       componentCounts.value[editing.value.id] = (res.data || []).length
       setTimeout(() => { closeForm() }, 500)
     } else {
-      formMsg.value = res.msg || '保存失败'
+      formMsg.value = res.msg || StatusMsg.SAVE_FAILED
       formMsgType.value = 'error'
     }
   } catch (e) {

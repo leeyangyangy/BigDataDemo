@@ -143,6 +143,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { adminApi, spcApi } from '@/utils/api.js'
+import { StatusCode } from '@/utils/statusCode'
+import { StatusMsg } from '@/utils/statusMsg'
 
 const list = ref([])
 const total = ref(0)
@@ -186,7 +188,7 @@ async function loadData() {
       keyword: keyword.value,
       status: filterStatus.value !== '' ? Number(filterStatus.value) : undefined
     })
-    if (res.code === 200 && res.data) {
+    if (res.code === StatusCode.SUCCESS && res.data) {
       list.value = res.data.records || []
       total.value = res.data.total || 0
     }
@@ -238,12 +240,12 @@ async function handleSubmit() {
       res = await adminApi.product.create(form.value)
     }
 
-    if (res.code === 200) {
-      formMsg.value = isEdit.value ? '更新成功' : '创建成功'
+    if (res.code === StatusCode.SUCCESS) {
+      formMsg.value = isEdit.value ? StatusMsg.UPDATE_SUCCESS : StatusMsg.CREATE_SUCCESS
       formMsgType.value = 'success'
       setTimeout(() => { closeForm(); loadData() }, 1000)
     } else {
-      formMsg.value = res.msg || '操作失败'
+      formMsg.value = res.msg || StatusMsg.OPERATION_FAILED
       formMsgType.value = 'error'
     }
   } catch (e) {
@@ -259,7 +261,7 @@ async function handleDelete(item) {
 
   try {
     const res = await adminApi.product.delete(item.id)
-    if (res.code === 200) {
+    if (res.code === StatusCode.SUCCESS) {
       loadData()
     }
   } catch (e) {
@@ -282,11 +284,11 @@ async function openBindProcess(item) {
       spcApi.getProductProcesses(item.id)
     ])
 
-    if (processRes.code === 200) {
+    if (processRes.code === StatusCode.SUCCESS) {
       allProcesses.value = processRes.data.records || []
     }
 
-    if (boundRes.code === 200 && boundRes.data) {
+    if (boundRes.code === StatusCode.SUCCESS && boundRes.data) {
       selectedProcessIds.value = boundRes.data.map(b => b.processId)
       boundRes.data.forEach(b => {
         processSortMap.value[b.processId] = b.sortOrder || 0
@@ -314,12 +316,12 @@ async function handleBindSubmit() {
 
     const res = await spcApi.bindProductProcesses(bindProductId.value, items)
 
-    if (res.code === 200) {
-      bindMsg.value = '绑定成功'
+    if (res.code === StatusCode.SUCCESS) {
+      bindMsg.value = StatusMsg.BIND_SUCCESS
       bindMsgType.value = 'success'
       setTimeout(() => { showBindProcess.value = false }, 1000)
     } else {
-      bindMsg.value = res.msg || '绑定失败'
+      bindMsg.value = res.msg || StatusMsg.BIND_FAILED
       bindMsgType.value = 'error'
     }
   } catch (e) {

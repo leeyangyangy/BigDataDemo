@@ -9,6 +9,7 @@ import xyz.leeyangy.spc.common.CryptoKeyService;
 import xyz.leeyangy.spc.common.IpUtil;
 import xyz.leeyangy.spc.common.R;
 import xyz.leeyangy.spc.common.RsaKeyHolder;
+import xyz.leeyangy.spc.common.StatusMsg;
 import xyz.leeyangy.spc.common.annotation.OperationLog;
 import xyz.leeyangy.spc.dto.ChangePasswordDTO;
 import xyz.leeyangy.spc.dto.LoginDTO;
@@ -68,10 +69,10 @@ public class AuthController {
         String encKey = body.get("encKey");
         String encIv = body.get("encIv");
         if (encKey == null || encIv == null) {
-            return R.fail("encKey/encIv 不能为空");
+            return R.fail(StatusMsg.KEY_EXCHANGE_PARAMS_REQUIRED);
         }
         boolean ok = cryptoKeyService.storeKey(userId, encKey, encIv);
-        return ok ? R.ok(null) : R.fail("key-exchange 失败");
+        return ok ? R.ok(null) : R.fail(StatusMsg.KEY_EXCHANGE_FAILED);
     }
 
     /**
@@ -83,7 +84,7 @@ public class AuthController {
                                        @RequestAttribute String role) {
         SysUser user = sysUserService.getById(userId);
         if (user == null) {
-            return R.fail("用户不存在");
+            return R.fail(StatusMsg.USER_NOT_FOUND);
         }
         Map<String, Object> data = new HashMap<>();
         data.put("id", user.getId());
@@ -157,18 +158,18 @@ public class AuthController {
                                   @RequestAttribute Long userId) {
         SysUser user = sysUserService.getById(userId);
         if (user == null) {
-            return R.fail("用户不存在");
+            return R.fail(StatusMsg.USER_NOT_FOUND);
         }
         if (!passwordEncoder.matches(req.getOldPassword(), user.getPassword())) {
-            return R.fail("原密码错误");
+            return R.fail(StatusMsg.ORIGINAL_PASSWORD_ERROR);
         }
         // 等保三级: 密码防重用 (新密码不能与最近 N 次密码相同)
         if (passwordHistoryService.isPasswordReused(userId, req.getNewPassword())) {
-            return R.fail("新密码不能与最近使用过的密码相同, 请更换");
+            return R.fail(StatusMsg.PASSWORD_REUSED);
         }
         // 同时检查新密码不能与当前密码相同
         if (passwordEncoder.matches(req.getNewPassword(), user.getPassword())) {
-            return R.fail("新密码不能与当前密码相同");
+            return R.fail(StatusMsg.PASSWORD_SAME_AS_CURRENT);
         }
 
         String newHash = passwordEncoder.encode(req.getNewPassword());

@@ -16,7 +16,7 @@ public class R<T> implements Serializable {
     public static <T> R<T> ok() {
         R<T> r = new R<>();
         r.code = StatusCode.SUCCESS;
-        r.msg = "操作成功";
+        r.msg = StatusMsg.SUCCESS;
         return r;
     }
 

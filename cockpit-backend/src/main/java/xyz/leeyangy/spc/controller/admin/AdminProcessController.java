@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 import xyz.leeyangy.spc.common.PageConvert;
 import xyz.leeyangy.spc.common.R;
 import xyz.leeyangy.spc.common.StatusCode;
+import xyz.leeyangy.spc.common.StatusMsg;
 import xyz.leeyangy.spc.common.annotation.OperationLog;
 import xyz.leeyangy.spc.dto.ProcessCreateDTO;
 import xyz.leeyangy.spc.dto.ProcessUpdateDTO;
@@ -51,7 +52,7 @@ public class AdminProcessController {
     public R<ProcessVO> getById(@PathVariable Long id) {
         Process process = processService.getById(id);
         if (process == null) {
-            return R.fail(StatusCode.DATA_NOT_FOUND, "工序不存在");
+            return R.fail(StatusCode.DATA_NOT_FOUND, StatusMsg.PROCESS_NOT_FOUND);
         }
         return R.ok(ProcessVO.from(process));
     }
@@ -62,17 +63,17 @@ public class AdminProcessController {
     @PostMapping
     public R<ProcessVO> create(@Valid @RequestBody ProcessCreateDTO req) {
         if (req.getProcessCode() == null || req.getProcessCode().trim().isEmpty()) {
-            return R.fail("工序编码不能为空");
+            return R.fail(StatusMsg.PROCESS_CODE_REQUIRED);
         }
         if (req.getProcessName() == null || req.getProcessName().trim().isEmpty()) {
-            return R.fail("工序名称不能为空");
+            return R.fail(StatusMsg.PROCESS_NAME_REQUIRED);
         }
 
         long count = processService.count(new LambdaQueryWrapper<Process>()
                 .eq(Process::getProcessCode, req.getProcessCode())
                 .eq(Process::getDeleted, 0));
         if (count > 0) {
-            return R.fail("工序编码已存在");
+            return R.fail(StatusMsg.PROCESS_CODE_EXISTS);
         }
 
         Process process = new Process();
@@ -86,7 +87,7 @@ public class AdminProcessController {
 
         processService.save(process);
         log.info("[Admin] 创建工序: code={} name={}", process.getProcessCode(), process.getProcessName());
-        return R.ok("创建成功", ProcessVO.from(process));
+        return R.ok(StatusMsg.CREATE_SUCCESS, ProcessVO.from(process));
     }
 
     @OperationLog(module = "PROCESS", action = "UPDATE", targetType = "Process",
@@ -96,7 +97,7 @@ public class AdminProcessController {
     public R<ProcessVO> update(@PathVariable Long id, @Valid @RequestBody ProcessUpdateDTO req) {
         Process existProcess = processService.getById(id);
         if (existProcess == null) {
-            return R.fail("工序不存在");
+            return R.fail(StatusMsg.PROCESS_NOT_FOUND);
         }
 
         if (req.getProcessName() != null) {
@@ -120,7 +121,7 @@ public class AdminProcessController {
 
         processService.updateById(existProcess);
         log.info("[Admin] 更新工序: id={} code={}", id, existProcess.getProcessCode());
-        return R.ok("更新成功", ProcessVO.from(existProcess));
+        return R.ok(StatusMsg.UPDATE_SUCCESS, ProcessVO.from(existProcess));
     }
 
     @OperationLog(module = "PROCESS", action = "DUPLICATE", targetType = "Process",
@@ -130,7 +131,7 @@ public class AdminProcessController {
     public R<ProcessVO> duplicate(@PathVariable Long id) {
         Process source = processService.getById(id);
         if (source == null) {
-            return R.fail("工序不存在");
+            return R.fail(StatusMsg.PROCESS_NOT_FOUND);
         }
 
         String baseCode = source.getProcessCode();
@@ -149,7 +150,7 @@ public class AdminProcessController {
 
         processService.save(copy);
         log.info("[Admin] 复制工序: {} -> {}", source.getProcessCode(), newCode);
-        return R.ok("复制成功", ProcessVO.from(copy));
+        return R.ok(StatusMsg.COPY_SUCCESS, ProcessVO.from(copy));
     }
 
     /**
@@ -187,7 +188,7 @@ public class AdminProcessController {
     public R<Void> delete(@PathVariable Long id) {
         Process process = processService.getById(id);
         if (process == null) {
-            return R.fail("工序不存在");
+            return R.fail(StatusMsg.PROCESS_NOT_FOUND);
         }
         processService.update(new LambdaUpdateWrapper<Process>()
                 .eq(Process::getId, id)
