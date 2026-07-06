@@ -91,7 +91,6 @@
             </td>
             <td class="actions">
               <button class="btn-action btn-detail" @click="openDetail(item)">详情</button>
-              <button class="btn-action btn-del" @click="handleDelete(item)">删除</button>
             </td>
           </tr>
         </tbody>
@@ -333,17 +332,7 @@ function closeDetail() {
   detailItem.value = null
 }
 
-async function handleDelete(item) {
-  if (!confirm(`确定删除此条变更日志吗？\n时间：${formatTime(item.createdAt)}\n类型：${typeLabel(item.changeType)}`)) return
-  try {
-    const res = await adminApi.changeLog.delete(item.id)
-    if (res.code === 200) {
-      loadData()
-    }
-  } catch (e) {
-    alert(e.message || '删除失败')
-  }
-}
+// handleDelete 已移除 (等保三级要求: 审计日志不可删除)
 
 onMounted(async () => {
   await loadParams()

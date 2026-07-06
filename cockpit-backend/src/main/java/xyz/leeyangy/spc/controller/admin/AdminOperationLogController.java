@@ -6,7 +6,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 import xyz.leeyangy.spc.common.PageConvert;
 import xyz.leeyangy.spc.common.R;
-import xyz.leeyangy.spc.entity.OperationLog;
 import xyz.leeyangy.spc.service.OperationLogService;
 import xyz.leeyangy.spc.vo.OperationLogVO;
 
@@ -36,19 +35,6 @@ public class AdminOperationLogController {
         return R.ok(OperationLogVO.from(operationLogService.getById(id)));
     }
 
-    @DeleteMapping("/{id}")
-    public R<Boolean> delete(@PathVariable Long id) {
-        log.info("[Admin] 删除操作日志: id={}", id);
-        return R.ok(operationLogService.removeById(id));
-    }
-
-    @DeleteMapping("/clean")
-    public R<Boolean> cleanBefore(@RequestParam String beforeDate) {
-        long count = operationLogService.count();
-        boolean ok = operationLogService.remove(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<OperationLog>()
-                        .le(OperationLog::getCreatedAt, beforeDate + " 23:59:59"));
-        log.info("[Admin] 清理操作日志: before={}, 删除{}条", beforeDate, count);
-        return R.ok(ok);
-    }
+    // 等保三级要求: 审计日志不可删除, 已移除原 @DeleteMapping("/{id}") 和 @DeleteMapping("/clean") 端点
+    // 如需日志归档, 请通过数据库运维流程执行, 并记录归档操作
 }

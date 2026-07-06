@@ -34,7 +34,6 @@
       </div>
       <div class="toolbar-actions">
         <button class="btn-refresh" @click="loadData">刷新</button>
-        <button class="btn-clean" @click="showCleanDialog = true">清理</button>
       </div>
     </div>
 
@@ -83,7 +82,6 @@
             <td>{{ item.durationMs != null ? item.durationMs + 'ms' : '-' }}</td>
             <td class="actions">
               <button class="btn-action btn-detail" @click="openDetail(item)">详情</button>
-              <button class="btn-action btn-del" @click="handleDelete(item)">删除</button>
             </td>
           </tr>
         </tbody>
@@ -168,21 +166,7 @@
       </div>
     </div>
 
-    <!-- 清理弹窗 -->
-    <div class="modal-overlay" v-if="showCleanDialog" @click.self="showCleanDialog = false">
-      <div class="modal-card">
-        <h3 class="modal-title">清理历史日志</h3>
-        <div class="clean-form">
-          <label>清理此日期之前的所有日志：</label>
-          <input v-model="cleanDate" type="date" class="form-input" />
-          <p class="clean-warning">⚠️ 此操作不可恢复，请谨慎操作</p>
-        </div>
-        <div class="modal-actions">
-          <button class="btn-cancel" @click="showCleanDialog = false">取消</button>
-          <button class="btn-submit btn-danger" @click="handleClean" :disabled="cleaning">{{ cleaning ? '清理中...' : '确认清理' }}</button>
-        </div>
-      </div>
-    </div>
+    <!-- 清理弹窗已移除 (等保三级要求: 审计日志不可删除) -->
   </div>
 </template>
 
@@ -203,9 +187,6 @@ const startDate = ref('')
 const endDate = ref('')
 
 const showDetail = ref(false)
-const showCleanDialog = ref(false)
-const cleaning = ref(false)
-const cleanDate = ref('')
 const detailItem = ref(null)
 
 const successCount = computed(() => list.value.filter(i => i.result === 'SUCCESS').length)
@@ -291,33 +272,7 @@ function closeDetail() {
   detailItem.value = null
 }
 
-async function handleDelete(item) {
-  if (!confirm(`确定删除此条日志吗？\n时间：${formatTime(item.createdAt)}\n操作：${modLabel(item.module)} / ${actionLabel(item.action)}`)) return
-  try {
-    await adminApi.operationLog.delete(item.id)
-    loadData()
-  } catch (e) {
-    alert(e.message || '删除失败')
-  }
-}
-
-async function handleClean() {
-  if (!cleanDate.value) { alert('请选择日期'); return }
-  if (!confirm(`确定删除 ${cleanDate} 之前的所有日志吗？此操作不可恢复！`)) return
-  cleaning.value = true
-  try {
-    const res = await adminApi.operationLog.cleanBefore(cleanDate.value)
-    if (res.code === 200) {
-      showCleanDialog.value = false
-      cleanDate.value = ''
-      loadData()
-    }
-  } catch (e) {
-    alert(e.message || '清理失败')
-  } finally {
-    cleaning.value = false
-  }
-}
+// handleDelete/handleClean 已移除 (等保三级要求: 审计日志不可删除)
 
 onMounted(async () => {
   await loadData()

@@ -43,9 +43,5 @@ public class AdminLogController {
         return R.ok(StandardChangeLogVO.from(changeLogService.getById(id)));
     }
 
-    @DeleteMapping("/{id}")
-    public R<Boolean> delete(@PathVariable Long id) {
-        log.info("[Admin] 删除变更日志: id={}", id);
-        return R.ok(changeLogService.removeById(id));
-    }
+    // 等保三级要求: 审计日志不可删除, 已移除原 @DeleteMapping("/{id}") 端点
 }

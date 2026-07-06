@@ -103,7 +103,8 @@ public class OperationLogAspect {
         if (operatorId == null && result != null) {
             operatorId = extractUserIdFromResult(result);
         }
-        String operatorName = null;
+        // 从 request attribute 提取操作者用户名 (JwtAuthFilter 第 83 行已写入)
+        String operatorName = extractOperatorName(request);
 
         String fullContent = content;
         if (errorType != null && errorMsg != null) {
@@ -313,6 +314,20 @@ public class OperationLogAspect {
         }
         Object userId = request.getAttribute("userId");
         return toLong(userId);
+    }
+
+    /**
+     * 从 request attribute 提取操作者用户名。
+     *
+     * <p>JwtAuthFilter 在鉴权通过后将 username 写入 request attribute,
+     * 切面直接读取即可, 无需再次解析 JWT。</p>
+     */
+    private String extractOperatorName(HttpServletRequest request) {
+        if (request == null) {
+            return null;
+        }
+        Object username = request.getAttribute("username");
+        return username == null ? null : username.toString();
     }
 
     /**

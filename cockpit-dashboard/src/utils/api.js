@@ -370,14 +370,13 @@ export const adminApi = {
   },
   changeLog: {
     getPage: (params) => api.get('/admin/change-log/page', params),
-    getDetail: (id) => api.get(`/admin/change-log/${id}`),
-    delete: (id) => api.delete(`/admin/change-log/${id}`)
+    getDetail: (id) => api.get(`/admin/change-log/${id}`)
+    // delete 已移除 (等保三级要求: 审计日志不可删除)
   },
   operationLog: {
     getPage: (params) => api.get('/admin/operation-log/page', params),
-    getDetail: (id) => api.get(`/admin/operation-log/${id}`),
-    delete: (id) => api.delete(`/admin/operation-log/${id}`),
-    cleanBefore: (date) => api.delete(`/admin/operation-log/clean?beforeDate=${date}`)
+    getDetail: (id) => api.get(`/admin/operation-log/${id}`)
+    // delete/cleanBefore 已移除 (等保三级要求: 审计日志不可删除)
   },
   // 数据中心: 车间-组件关联管理 (后台管理用)
   dataCenter: {
