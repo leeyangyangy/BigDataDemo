@@ -7,10 +7,13 @@ import org.springframework.web.bind.annotation.*;
 import xyz.leeyangy.spc.common.PageConvert;
 import xyz.leeyangy.spc.common.R;
 import xyz.leeyangy.spc.common.annotation.OperationLog;
+import xyz.leeyangy.spc.dto.BatchCreateDTO;
+import xyz.leeyangy.spc.dto.BatchUpdateDTO;
 import xyz.leeyangy.spc.entity.Batch;
 import xyz.leeyangy.spc.service.BatchService;
 import xyz.leeyangy.spc.vo.BatchVO;
 
+import javax.validation.Valid;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -45,7 +48,18 @@ public class BatchController {
             content = "'创建批次: ' + #result.data.batchCode",
             targetId = "#result.data.id")
     @PostMapping
-    public R<BatchVO> create(@RequestBody Batch batch) {
+    public R<BatchVO> create(@Valid @RequestBody BatchCreateDTO dto) {
+        Batch batch = new Batch();
+        batch.setBatchCode(dto.getBatchCode());
+        batch.setProductId(dto.getProductId());
+        batch.setProcessId(dto.getProcessId());
+        batch.setWorkshopId(dto.getWorkshopId());
+        batch.setLineId(dto.getLineId());
+        batch.setLotSize(dto.getLotSize());
+        batch.setBatchStatus(dto.getBatchStatus());
+        batch.setStartTime(dto.getStartTime());
+        batch.setEndTime(dto.getEndTime());
+        batch.setStatus(dto.getStatus());
         Batch created = batchService.createBatch(batch);
         log.info("[Batch] 创建批次: id={} code={}", created.getId(), created.getBatchCode());
         return R.ok(BatchVO.from(created));
@@ -55,7 +69,18 @@ public class BatchController {
             content = "'更新批次: ' + #result.data.batchCode",
             targetId = "#id")
     @PutMapping("/{id}")
-    public R<BatchVO> update(@PathVariable Long id, @RequestBody Batch batch) {
+    public R<BatchVO> update(@PathVariable Long id, @Valid @RequestBody BatchUpdateDTO dto) {
+        Batch batch = new Batch();
+        batch.setBatchCode(dto.getBatchCode());
+        batch.setProductId(dto.getProductId());
+        batch.setProcessId(dto.getProcessId());
+        batch.setWorkshopId(dto.getWorkshopId());
+        batch.setLineId(dto.getLineId());
+        batch.setLotSize(dto.getLotSize());
+        batch.setBatchStatus(dto.getBatchStatus());
+        batch.setStartTime(dto.getStartTime());
+        batch.setEndTime(dto.getEndTime());
+        batch.setStatus(dto.getStatus());
         Batch updated = batchService.updateBatch(id, batch);
         log.info("[Batch] 更新批次: id={} code={}", id, updated.getBatchCode());
         return R.ok(BatchVO.from(updated));

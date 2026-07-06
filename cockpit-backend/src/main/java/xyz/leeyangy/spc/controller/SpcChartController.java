@@ -11,6 +11,8 @@ import org.springframework.web.bind.annotation.*;
 import xyz.leeyangy.spc.common.R;
 import xyz.leeyangy.spc.common.SpcRuleConstants;
 import xyz.leeyangy.spc.common.annotation.OperationLog;
+import xyz.leeyangy.spc.common.constants.RoleConstants;
+import xyz.leeyangy.spc.common.util.WorkshopAccessHelper;
 import xyz.leeyangy.spc.entity.SpcData;
 import xyz.leeyangy.spc.entity.SpcStatResult;
 import xyz.leeyangy.spc.entity.ParamVersion;
@@ -41,6 +43,7 @@ public class SpcChartController {
     private final SpcCalculator spcCalculator;
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
+    private final WorkshopAccessHelper workshopAccessHelper;
 
     /** 图表缓存 key 前缀 */
     private static final String CHART_CACHE_PREFIX = "cockpit:chart:";
@@ -56,10 +59,16 @@ public class SpcChartController {
             @RequestParam(required = false) String batchId,
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startTime,
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime,
-            @RequestParam(defaultValue = "100") Integer limit) {
+            @RequestParam(defaultValue = "100") Integer limit,
+            @RequestAttribute Long userId,
+            @RequestAttribute String role) {
+        // IDOR 修复: 非管理员仅能查询本人绑定车间下的数据; ADMIN 不限制
+        Set<Long> workshopIds = RoleConstants.ADMIN.equals(role)
+                ? null : workshopAccessHelper.getAccessibleWorkshopIds(userId);
 
-        // cache-aside: 查询优先读缓存, 命中直接返回; 数据写入/删除时由 SpcDataServiceImpl.clearListCache() 清除
-        String cacheKey = buildChartCacheKey("control", paramId, productId, batchId, limit, startTime, endTime);
+        // cache-aside: 查询优先读缓存, 命中直接返回; 缓存 key 含车间范围避免不同权限用户串读
+        // 数据写入/删除时由 SpcDataServiceImpl.clearListCache() 清除
+        String cacheKey = buildChartCacheKey("control", workshopScope(workshopIds), paramId, productId, batchId, limit, startTime, endTime);
         Map<String, Object> cached = readChartCache(cacheKey);
         if (cached != null) {
             return R.ok(cached);
@@ -82,7 +91,7 @@ public class SpcChartController {
             return R.ok(emptyResult);
         }
 
-        List<SpcData> dataList = spcDataService.listRecentData(version.getId(), limit, startTime, endTime);
+        List<SpcData> dataList = spcDataService.listRecentData(version.getId(), limit, startTime, endTime, workshopIds);
         // listRecentData 按 collect_time DESC 返回（最新在前），反转成正序（旧→新）以便控制图按时间方向渲染
         Collections.reverse(dataList);
 
@@ -168,17 +177,23 @@ public class SpcChartController {
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startTime,
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime,
             @RequestParam(defaultValue = "100") Integer limit,
-            HttpServletRequest request) {
+            HttpServletRequest request,
+            @RequestAttribute Long userId,
+            @RequestAttribute String role) {
+        // IDOR 修复: 非管理员仅能查询本人绑定车间下的数据; ADMIN 不限制
+        Set<Long> workshopIds = RoleConstants.ADMIN.equals(role)
+                ? null : workshopAccessHelper.getAccessibleWorkshopIds(userId);
 
-        // cache-aside: 查询优先读缓存, 命中直接返回; 数据写入/删除时由 SpcDataServiceImpl.clearListCache() 清除
-        String cacheKey = buildChartCacheKey("data", paramId, equipmentId, productId, limit, startTime, endTime);
+        // cache-aside: 查询优先读缓存, 命中直接返回; 缓存 key 含车间范围避免不同权限用户串读
+        // 数据写入/删除时由 SpcDataServiceImpl.clearListCache() 清除
+        String cacheKey = buildChartCacheKey("data", workshopScope(workshopIds), paramId, equipmentId, productId, limit, startTime, endTime);
         Map<String, Object> cached = readChartCache(cacheKey);
         if (cached != null) {
             return R.ok(cached);
         }
 
         Page<SpcData> pageResult = spcDataService.pageByCondition(
-                new Page<>(1, limit), null, null, productId, paramId, startTime, endTime);
+                new Page<>(1, limit), null, null, productId, paramId, startTime, endTime, workshopIds);
 
         List<SpcData> allData = pageResult.getRecords();
         if (equipmentId != null) {
@@ -288,14 +303,19 @@ public class SpcChartController {
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startTime,
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime,
             @RequestParam(defaultValue = "100") Integer limit,
-            @RequestParam(required = false) String ruleIds) {
+            @RequestParam(required = false) String ruleIds,
+            @RequestAttribute Long userId,
+            @RequestAttribute String role) {
+        // IDOR 修复: 非管理员仅能查询本人绑定车间下的数据; ADMIN 不限制
+        Set<Long> workshopIds = RoleConstants.ADMIN.equals(role)
+                ? null : workshopAccessHelper.getAccessibleWorkshopIds(userId);
 
         ParamVersion version = paramVersionService.getCurrentVersion(paramId, productId);
         if (version == null) {
             return R.ok(new ArrayList<>());
         }
 
-        List<SpcData> dataList = spcDataService.listRecentData(version.getId(), limit, startTime, endTime);
+        List<SpcData> dataList = spcDataService.listRecentData(version.getId(), limit, startTime, endTime, workshopIds);
 
         if (equipmentId != null) {
             dataList = dataList.stream()
@@ -381,6 +401,23 @@ public class SpcChartController {
         if (SpcRuleEngine.RULE_7_FIFTEEN_IN_1SIGMA.equals(ruleCode)) return "info";
         if (SpcRuleEngine.RULE_8_EIGHT_OUTSIDE_1SIGMA.equals(ruleCode)) return "info";
         return "warning";
+    }
+
+    /**
+     * 将用户可访问车间集合编码为缓存 key 片段，确保不同权限用户的缓存互不串读。
+     * <ul>
+     *   <li>{@code null} (ADMIN 不限制) → "all"</li>
+     *   <li>空集合 (无绑定) → "none"</li>
+     *   <li>非空 → 升序拼接，如 "1-2-3"</li>
+     * </ul>
+     */
+    private String workshopScope(Set<Long> workshopIds) {
+        if (workshopIds == null) return "all";
+        if (workshopIds.isEmpty()) return "none";
+        return workshopIds.stream()
+                .sorted()
+                .map(String::valueOf)
+                .collect(Collectors.joining("-"));
     }
 
     /**

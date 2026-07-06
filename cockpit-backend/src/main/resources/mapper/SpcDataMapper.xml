@@ -77,6 +77,12 @@
         <if test="processId != null">
             AND d.process_id = #{processId}
         </if>
+        <if test="processIds != null and processIds.size() > 0">
+            AND d.process_id IN
+            <foreach collection="processIds" item="pid" open="(" separator="," close=")">
+                #{pid}
+            </foreach>
+        </if>
         <if test="equipmentId != null">
             AND d.equipment_id = #{equipmentId}
         </if>

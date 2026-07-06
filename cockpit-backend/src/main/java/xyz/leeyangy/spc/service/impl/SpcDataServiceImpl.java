@@ -18,8 +18,10 @@ import xyz.leeyangy.spc.common.exception.BusinessStateException;
 import xyz.leeyangy.spc.common.exception.ParamValidationException;
 import xyz.leeyangy.spc.common.exception.ResourceNotFoundException;
 import xyz.leeyangy.spc.entity.ParamVersion;
+import xyz.leeyangy.spc.entity.Process;
 import xyz.leeyangy.spc.entity.SpcData;
 import xyz.leeyangy.spc.entity.SpcStatResult;
+import xyz.leeyangy.spc.mapper.ProcessMapper;
 import xyz.leeyangy.spc.mapper.SpcDataMapper;
 import xyz.leeyangy.spc.mapper.SpcStatResultMapper;
 import xyz.leeyangy.spc.service.ParamVersionService;
@@ -33,7 +35,12 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -45,6 +52,7 @@ public class SpcDataServiceImpl extends ServiceImpl<SpcDataMapper, SpcData> impl
     private final SpcRuleEngine spcRuleEngine;
     private final ObjectMapper objectMapper;
     private final SpcStatResultMapper spcStatResultMapper;
+    private final ProcessMapper processMapper;
 
     private static final String IDEMPOTENT_PREFIX = "cockpit:idempotent:";
     private static final String LATEST_DATA_PREFIX = "cockpit:latest:";
@@ -288,7 +296,13 @@ public class SpcDataServiceImpl extends ServiceImpl<SpcDataMapper, SpcData> impl
     public Page<SpcData> pageByCondition(Page<SpcData> page,
                                           Long paramVersionId, String batchId,
                                           Long productId, Long paramId,
-                                          LocalDateTime startTime, LocalDateTime endTime) {
+                                          LocalDateTime startTime, LocalDateTime endTime,
+                                          Collection<Long> workshopIds) {
+        // workshopIds == null → 不限制 (ADMIN); 空集合 → 无绑定, 返回空页
+        Collection<Long> processIds = resolveAccessibleProcessIds(workshopIds);
+        if (workshopIds != null && processIds.isEmpty()) {
+            return page;
+        }
         return page(page, new LambdaQueryWrapper<SpcData>()
                 .eq(paramVersionId != null, SpcData::getParamVersionId, paramVersionId)
                 .eq(batchId != null && !batchId.isEmpty(), SpcData::getBatchId, batchId)
@@ -296,17 +310,25 @@ public class SpcDataServiceImpl extends ServiceImpl<SpcDataMapper, SpcData> impl
                 .eq(paramId != null, SpcData::getParamId, paramId)
                 .ge(startTime != null, SpcData::getCollectTime, startTime)
                 .le(endTime != null, SpcData::getCollectTime, endTime)
+                .in(processIds != null && !processIds.isEmpty(), SpcData::getProcessId, processIds)
                 .eq(SpcData::getDeleted, 0)
                 .orderByDesc(SpcData::getCollectTime));
     }
 
     @Override
-    public List<SpcData> listRecentData(Long paramVersionId, int limit, LocalDateTime startTime, LocalDateTime endTime) {
+    public List<SpcData> listRecentData(Long paramVersionId, int limit, LocalDateTime startTime, LocalDateTime endTime,
+                                         Collection<Long> workshopIds) {
+        // workshopIds == null → 不限制 (ADMIN); 空集合 → 无绑定, 返回空列表
+        Collection<Long> processIds = resolveAccessibleProcessIds(workshopIds);
+        if (workshopIds != null && processIds.isEmpty()) {
+            return new ArrayList<>();
+        }
         LambdaQueryWrapper<SpcData> wrapper = new LambdaQueryWrapper<SpcData>()
                 .eq(SpcData::getParamVersionId, paramVersionId)
                 .eq(SpcData::getDeleted, 0)
                 .ge(startTime != null, SpcData::getCollectTime, startTime)
                 .le(endTime != null, SpcData::getCollectTime, endTime)
+                .in(processIds != null && !processIds.isEmpty(), SpcData::getProcessId, processIds)
                 .orderByDesc(SpcData::getCollectTime);
         if (startTime == null && endTime == null) {
             wrapper.last("LIMIT " + limit);
@@ -321,11 +343,18 @@ public class SpcDataServiceImpl extends ServiceImpl<SpcDataMapper, SpcData> impl
                                              Long processId, Long equipmentId,
                                              Integer isOoc, Integer isOos,
                                              String dataSource,
-                                             LocalDateTime startTime, LocalDateTime endTime) {
-        // 1. 构建缓存 key（全部查询条件拼接，可读且无碰撞）
+                                             LocalDateTime startTime, LocalDateTime endTime,
+                                             Collection<Long> workshopIds) {
+        // workshopIds == null → 不限制 (ADMIN); 空集合 → 无绑定, 返回空页
+        Collection<Long> accessibleProcessIds = resolveAccessibleProcessIds(workshopIds);
+        if (workshopIds != null && accessibleProcessIds.isEmpty()) {
+            return page;
+        }
+
+        // 1. 构建缓存 key（全部查询条件拼接 + 车间范围，可读且无碰撞）
         String cacheKey = buildListCacheKey(page.getCurrent(), page.getSize(),
                 paramVersionId, batchId, productId, paramId,
-                processId, equipmentId, isOoc, isOos, dataSource, startTime, endTime);
+                processId, equipmentId, isOoc, isOos, dataSource, startTime, endTime, workshopIds);
 
         // 2. 先查缓存：命中直接返回
         try {
@@ -346,7 +375,7 @@ public class SpcDataServiceImpl extends ServiceImpl<SpcDataMapper, SpcData> impl
         baseMapper.selectDetailPage(page,
                 paramVersionId, batchId, productId, paramId,
                 processId, equipmentId, isOoc, isOos,
-                dataSource, startTime, endTime);
+                dataSource, startTime, endTime, accessibleProcessIds);
 
         // 4. 回写缓存
         try {
@@ -377,14 +406,15 @@ public class SpcDataServiceImpl extends ServiceImpl<SpcDataMapper, SpcData> impl
         return removeByIds(ids);
     }
 
-    /** 拼接缓存 key：可读 + 无碰撞 */
+    /** 拼接缓存 key：可读 + 无碰撞（含车间范围，避免不同权限用户缓存串读） */
     private String buildListCacheKey(long current, long size,
                                      Long paramVersionId, String batchId,
                                      Long productId, Long paramId,
                                      Long processId, Long equipmentId,
                                      Integer isOoc, Integer isOos,
                                      String dataSource,
-                                     LocalDateTime startTime, LocalDateTime endTime) {
+                                     LocalDateTime startTime, LocalDateTime endTime,
+                                     Collection<Long> workshopIds) {
         return LIST_CACHE_PREFIX + current + ":" + size
                 + ":" + paramVersionId
                 + ":" + batchId
@@ -396,7 +426,33 @@ public class SpcDataServiceImpl extends ServiceImpl<SpcDataMapper, SpcData> impl
                 + ":" + isOos
                 + ":" + dataSource
                 + ":" + startTime
-                + ":" + endTime;
+                + ":" + endTime
+                + ":w=" + (workshopIds == null ? "all" : new HashSet<>(workshopIds));
+    }
+
+    /**
+     * 将用户可访问的车间 ID 集合解析为对应的工序 ID 集合。
+     *
+     * <p>关联链：spc_data.process_id → spc_process.id → spc_process.workshop_id。
+     * SpcData 无直接 workshopId 字段，需通过 Process 间接关联车间。
+     *
+     * @param workshopIds 车间ID集合；{@code null} 表示不限制（ADMIN），返回 {@code null}
+     * @return 工序ID集合；{@code null} 表示不过滤，空集合表示车间下无工序
+     */
+    private Collection<Long> resolveAccessibleProcessIds(Collection<Long> workshopIds) {
+        if (workshopIds == null) {
+            return null;
+        }
+        if (workshopIds.isEmpty()) {
+            return Collections.emptySet();
+        }
+        List<Process> processes = processMapper.selectList(new LambdaQueryWrapper<Process>()
+                .select(Process::getId)
+                .in(Process::getWorkshopId, workshopIds)
+                .eq(Process::getDeleted, 0));
+        return processes.stream()
+                .map(Process::getId)
+                .collect(Collectors.toSet());
     }
 
     /**

@@ -9,9 +9,13 @@ import org.springframework.web.bind.annotation.*;
 import xyz.leeyangy.spc.common.PageConvert;
 import xyz.leeyangy.spc.common.R;
 import xyz.leeyangy.spc.common.annotation.OperationLog;
+import xyz.leeyangy.spc.dto.WorkshopCreateDTO;
+import xyz.leeyangy.spc.dto.WorkshopUpdateDTO;
 import xyz.leeyangy.spc.entity.Workshop;
 import xyz.leeyangy.spc.service.WorkshopService;
 import xyz.leeyangy.spc.vo.WorkshopVO;
+
+import javax.validation.Valid;
 
 @Slf4j
 @RestController
@@ -56,36 +60,37 @@ public class AdminWorkshopController {
             content = "'创建车间: ' + #workshop.workshopCode + ' - ' + #workshop.workshopName",
             targetId = "#workshop.id")
     @PostMapping
-    public R<WorkshopVO> create(@RequestBody Workshop workshop) {
-        if (workshop.getWorkshopCode() == null || workshop.getWorkshopCode().trim().isEmpty()) {
-            return R.fail("车间编码不能为空");
-        }
-        if (workshop.getWorkshopName() == null || workshop.getWorkshopName().trim().isEmpty()) {
-            return R.fail("车间名称不能为空");
-        }
+    public R<WorkshopVO> create(@Valid @RequestBody WorkshopCreateDTO workshop) {
         long count = workshopService.count(new LambdaQueryWrapper<Workshop>()
                 .eq(Workshop::getWorkshopCode, workshop.getWorkshopCode().trim())
                 .eq(Workshop::getDeleted, 0));
         if (count > 0) return R.fail("车间编码已存在");
-        workshop.setStatus(workshop.getStatus() != null ? workshop.getStatus() : 1);
-        workshopService.save(workshop);
-        log.info("[Admin] 创建车间: code={} name={}", workshop.getWorkshopCode(), workshop.getWorkshopName());
-        return R.ok("创建成功", WorkshopVO.from(workshop));
+        Workshop entity = new Workshop();
+        entity.setWorkshopCode(workshop.getWorkshopCode());
+        entity.setWorkshopName(workshop.getWorkshopName());
+        entity.setWorkshopType(workshop.getWorkshopType());
+        entity.setDataCenterVisible(workshop.getDataCenterVisible());
+        entity.setDescription(workshop.getDescription());
+        entity.setStatus(workshop.getStatus() != null ? workshop.getStatus() : 1);
+        entity.setSortOrder(workshop.getSortOrder());
+        workshopService.save(entity);
+        log.info("[Admin] 创建车间: code={} name={}", entity.getWorkshopCode(), entity.getWorkshopName());
+        return R.ok("创建成功", WorkshopVO.from(entity));
     }
 
     @OperationLog(module = "WORKSHOP", action = "UPDATE", targetType = "Workshop",
             content = "'更新车间: ' + #result.data.workshopCode + ' - ' + #result.data.workshopName",
             targetId = "#id")
     @PutMapping("/{id}")
-    public R<WorkshopVO> update(@PathVariable Long id, @RequestBody Workshop workshop) {
+    public R<WorkshopVO> update(@PathVariable Long id, @Valid @RequestBody WorkshopUpdateDTO dto) {
         Workshop exist = workshopService.getById(id);
         if (exist == null) return R.fail("车间不存在");
-        if (workshop.getWorkshopName() != null) exist.setWorkshopName(workshop.getWorkshopName().trim());
-        if (workshop.getWorkshopType() != null) exist.setWorkshopType(workshop.getWorkshopType());
-        if (workshop.getDataCenterVisible() != null) exist.setDataCenterVisible(workshop.getDataCenterVisible());
-        if (workshop.getDescription() != null) exist.setDescription(workshop.getDescription());
-        if (workshop.getStatus() != null) exist.setStatus(workshop.getStatus());
-        if (workshop.getSortOrder() != null) exist.setSortOrder(workshop.getSortOrder());
+        if (dto.getWorkshopName() != null) exist.setWorkshopName(dto.getWorkshopName().trim());
+        if (dto.getWorkshopType() != null) exist.setWorkshopType(dto.getWorkshopType());
+        if (dto.getDataCenterVisible() != null) exist.setDataCenterVisible(dto.getDataCenterVisible());
+        if (dto.getDescription() != null) exist.setDescription(dto.getDescription());
+        if (dto.getStatus() != null) exist.setStatus(dto.getStatus());
+        if (dto.getSortOrder() != null) exist.setSortOrder(dto.getSortOrder());
         workshopService.updateById(exist);
         log.info("[Admin] 更新车间: id={} code={}", id, exist.getWorkshopCode());
         return R.ok("更新成功", WorkshopVO.from(exist));

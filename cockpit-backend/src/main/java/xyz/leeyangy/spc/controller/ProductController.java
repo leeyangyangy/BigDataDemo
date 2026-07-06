@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.*;
 import xyz.leeyangy.spc.common.PageConvert;
 import xyz.leeyangy.spc.common.R;
 import xyz.leeyangy.spc.common.annotation.OperationLog;
+import xyz.leeyangy.spc.dto.ProductCreateDTO;
 import xyz.leeyangy.spc.dto.ProductProcessBindDTO;
 import xyz.leeyangy.spc.entity.Product;
 import xyz.leeyangy.spc.service.ProductProcessService;
@@ -45,7 +46,13 @@ public class ProductController {
     }
 
     @PostMapping
-    public R<ProductVO> create(@RequestBody Product product) {
+    public R<ProductVO> create(@Valid @RequestBody ProductCreateDTO dto) {
+        Product product = new Product();
+        product.setProductCode(dto.getProductCode());
+        product.setProductName(dto.getProductName());
+        product.setProductType(dto.getProductType());
+        product.setSpecification(dto.getSpecification());
+        product.setStatus(dto.getStatus());
         productService.save(product);
         return R.ok(ProductVO.from(product));
     }

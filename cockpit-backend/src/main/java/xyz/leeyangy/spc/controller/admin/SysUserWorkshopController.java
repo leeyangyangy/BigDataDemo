@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.*;
 import xyz.leeyangy.spc.common.R;
 import xyz.leeyangy.spc.common.StatusCode;
 import xyz.leeyangy.spc.common.annotation.OperationLog;
+import xyz.leeyangy.spc.dto.UserWorkshopRebindDTO;
 import xyz.leeyangy.spc.entity.SysUser;
 import xyz.leeyangy.spc.entity.SysUserWorkshop;
 import xyz.leeyangy.spc.entity.Workshop;
@@ -15,6 +16,7 @@ import xyz.leeyangy.spc.service.SysUserWorkshopService;
 import xyz.leeyangy.spc.service.WorkshopService;
 import xyz.leeyangy.spc.vo.WorkshopVO;
 
+import javax.validation.Valid;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -96,15 +98,13 @@ public class SysUserWorkshopController {
     @PutMapping("/{userId}")
     public R<Map<String, Object>> rebind(
             @PathVariable Long userId,
-            @RequestBody Map<String, Object> body) {
+            @Valid @RequestBody UserWorkshopRebindDTO body) {
         SysUser user = sysUserService.getById(userId);
         if (user == null) return R.fail(StatusCode.DATA_NOT_FOUND, "用户不存在");
 
-        @SuppressWarnings("unchecked")
-        List<Long> workshopIds = toLongList(body.get("workshopIds"));
-        Long primaryId = toLong(body.get("primaryWorkshopId"));
-        @SuppressWarnings("unchecked")
-        List<Long> testStationIds = toLongList(body.get("testStationIds"));
+        List<Long> workshopIds = body.getWorkshopIds() != null ? body.getWorkshopIds() : new ArrayList<>();
+        List<Long> testStationIds = body.getTestStationIds() != null ? body.getTestStationIds() : new ArrayList<>();
+        Long primaryId = body.getPrimaryWorkshopId();
 
         // 校验主车间必须在 workshopIds 中
         if (primaryId != null && !workshopIds.contains(primaryId)) {
@@ -141,30 +141,5 @@ public class SysUserWorkshopController {
                 .eq(Workshop::getDeleted, 0)
                 .orderByAsc(Workshop::getSortOrder));
         return R.ok(list.stream().map(WorkshopVO::from).collect(Collectors.toList()));
-    }
-
-    @SuppressWarnings("unchecked")
-    private List<Long> toLongList(Object obj) {
-        if (obj == null) return new ArrayList<>();
-        if (obj instanceof List) {
-            List<?> list = (List<?>) obj;
-            List<Long> result = new ArrayList<>(list.size());
-            for (Object o : list) {
-                Long l = toLong(o);
-                if (l != null) result.add(l);
-            }
-            return result;
-        }
-        return new ArrayList<>();
-    }
-
-    private Long toLong(Object obj) {
-        if (obj == null) return null;
-        if (obj instanceof Number) return ((Number) obj).longValue();
-        try {
-            return Long.parseLong(obj.toString());
-        } catch (NumberFormatException e) {
-            return null;
-        }
     }
 }
