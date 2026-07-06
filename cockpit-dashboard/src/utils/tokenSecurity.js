@@ -15,8 +15,8 @@ const USER_KEY = 'cockpit_user'
 const TOKEN_EXPIRY_KEY = 'cockpit_token_exp'
 const LAST_ACTIVITY_KEY = 'cockpit_last_activity'
 
-/** 会话超时阈值 (毫秒), 与后端 JWT expiration=28800000 (8h) 对齐 */
-export const SESSION_TIMEOUT_MS = 8 * 60 * 60 * 1000
+/** 会话超时阈值 (毫秒), 等保三级要求空闲超时 15-30 分钟 */
+export const SESSION_TIMEOUT_MS = 30 * 60 * 1000
 
 /** 无操作超时检查间隔 (毫秒) */
 const IDLE_CHECK_INTERVAL_MS = 60 * 1000

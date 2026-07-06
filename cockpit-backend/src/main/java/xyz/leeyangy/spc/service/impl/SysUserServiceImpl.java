@@ -40,7 +40,8 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     public boolean updatePassword(Long userId, String newPassword) {
         return update(new LambdaUpdateWrapper<SysUser>()
                 .eq(SysUser::getId, userId)
-                .set(SysUser::getPassword, passwordEncoder.encode(newPassword)));
+                .set(SysUser::getPassword, passwordEncoder.encode(newPassword))
+                .set(SysUser::getPasswordUpdatedAt, LocalDateTime.now()));
     }
 
     @Override

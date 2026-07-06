@@ -22,11 +22,17 @@ import java.util.Map;
 public class JwtUtil {
 
     /**
-     * JWT 密钥。生产环境必须通过环境变量 SPC_JWT_SECRET 注入, 长度 >= 32 字节。
+     * JWT 密钥。生产环境必须通过环境变量 COCKPIT_JWT_SECRET 注入, 长度 >= 32 字节。
      * 开发环境若未配置, 默认启用随机密钥, 不再使用静态默认值。
      */
     @Value("${cockpit.jwt.secret:}")
     private String secret;
+
+    /** JWT 签发方 (iss 声明), 用于校验 Token 来源, 防止跨服务重放 */
+    private static final String ISSUER = "cockpit";
+
+    /** JWT 接收方 (aud 声明), 用于校验 Token 受众, 防止跨服务重放 */
+    private static final String AUDIENCE = "cockpit-web";
 
     @Value("${cockpit.jwt.expiration:28800000}")
     private long expiration;
@@ -75,6 +81,8 @@ public class JwtUtil {
         return Jwts.builder()
                 .setClaims(claims)
                 .setSubject(empNo)
+                .setIssuer(ISSUER)
+                .setAudience(AUDIENCE)
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + expiration))
                 .signWith(key, SignatureAlgorithm.HS256)
@@ -84,6 +92,8 @@ public class JwtUtil {
     public Claims parseToken(String token) {
         return Jwts.parserBuilder()
                 .setSigningKey(key)
+                .requireIssuer(ISSUER)
+                .requireAudience(AUDIENCE)
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
@@ -94,7 +104,7 @@ public class JwtUtil {
             parseToken(token);
             return true;
         } catch (Exception e) {
-            log.warn("[JWT] Token验证失败: {}", e.getMessage());
+            log.warn("[SECURITY_ALERT] JWT Token 验证失败: {} - {}", e.getClass().getSimpleName(), e.getMessage());
             return false;
         }
     }
