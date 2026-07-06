@@ -15,24 +15,26 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
       TZ: Asia/Shanghai
-      # ----- external MySQL (占位符由 application-prod.yml 读取) -----
+      # ----- external MySQL (必须配置专用账户, 禁止使用 root) -----
       MYSQL_HOST: ${MYSQL_HOST:-192.168.1.106}
       MYSQL_PORT: ${MYSQL_PORT:-3306}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-cockpit_all_stack}
-      MYSQL_USER: ${MYSQL_USER:-root}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-root}
+      # 安全要求: 不提供 root 默认值, 必须在 .env 中显式配置专用账户
+      MYSQL_USER: ${MYSQL_USER:?MYSQL_USER must be set in .env (do not use root)}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD must be set in .env}
       MYSQL_SSL_ENABLED: ${MYSQL_SSL_ENABLED:-false}
+      MYSQL_ALLOW_PUBLIC_KEY_RETRIEVAL: ${MYSQL_ALLOW_PUBLIC_KEY_RETRIEVAL:-false}
       # ----- external Redis -----
       REDIS_HOST: ${REDIS_HOST:-192.168.1.106}
       REDIS_PORT: ${REDIS_PORT:-6379}
       # REDIS_PASSWORD 留空时, application-prod.yml 中 password 解析为空字符串,
       # Redisson 不会发起 AUTH, 兼容无密码 Redis。
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      # ----- external RabbitMQ -----
+      # ----- external RabbitMQ (必须配置专用账户, 禁止使用 guest) -----
       RABBITMQ_HOST: ${RABBITMQ_HOST:-192.168.1.106}
       RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
-      RABBITMQ_USER: ${RABBITMQ_USER:-root}
-      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-password}
+      RABBITMQ_USER: ${RABBITMQ_USER:?RABBITMQ_USER must be set in .env (do not use guest)}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD must be set in .env}
       RABBITMQ_VHOST: ${RABBITMQ_VHOST:-collect_data_vhost}
       # ----- secrets (占位符由 application-prod.yml 读取) -----
       # AES key/iv 由前端随机生成、RSA 加密上送, 见 /api/auth/key-exchange,

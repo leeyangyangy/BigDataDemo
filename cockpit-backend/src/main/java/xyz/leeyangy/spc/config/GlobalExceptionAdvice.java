@@ -95,7 +95,7 @@ public class GlobalExceptionAdvice {
 
     /**
      * 非业务运行时异常：未预期到的系统级故障（如 AESUtil 加解密失败、NPE 等）。
-     * 记入操作日志便于排查。
+     * 记入操作日志便于排查, 但不向客户端泄露内部异常细节 (等保三级要求)。
      */
     @ExceptionHandler(RuntimeException.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -108,13 +108,15 @@ public class GlobalExceptionAdvice {
                     request, null, null);
         } catch (Exception ignored) { }
 
-        return R.fail(500, "系统异常: " + (e.getMessage() != null ? e.getMessage() : "未知错误"));
+        // 不向客户端泄露 e.getMessage(), 仅返回通用提示
+        return R.fail(500, "系统内部错误，请稍后重试");
     }
 
     @ExceptionHandler(SecurityException.class)
     @ResponseStatus(HttpStatus.FORBIDDEN)
     public R<Void> handleSecurity(SecurityException e, HttpServletRequest request) {
-        log.warn("[Global] 安全异常: {}", e.getMessage());
+        log.warn("[SECURITY_ALERT] 安全异常 (403): uri={} ip={} cause={}",
+                request.getRequestURI(), request.getRemoteAddr(), e.getMessage());
         try {
             operationLogService.record("SYSTEM", "SECURITY", null, null,
                     e.getMessage(), OperationLogConstants.RESULT_FAIL, null, 0,

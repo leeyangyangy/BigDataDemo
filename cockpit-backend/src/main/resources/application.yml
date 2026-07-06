@@ -105,6 +105,9 @@ cockpit:
         - /api/swagger-ui/**
         - /api/v3/api-docs/**
         - /api/spc/data/export/**
+    password:
+      history-count: 5  # 密码历史保留数量 (等保三级防重用)
+      max-age-days: 90  # 密码最长使用天数 (等保三级: 定期更换)
   wecom:
     corpId: wwYOUR_CORP_ID
     agentId: YOUR_AGENT_ID
@@ -118,9 +121,21 @@ cockpit:
   cors:
     allowed-origins: http://localhost:5174,http://localhost:5173,http://127.0.0.1:5174,http://192.168.1.111:5174
 
+  # 限流配置 (等保三级: 登录失败处理 + API 限流)
+  rate-limit:
+    login:
+      max-attempts: 5        # 5 次失败后锁定 (开发环境调高方便调试, 生产环境用 application-prod.yml)
+      window-seconds: 300    # 5 分钟窗口
+      lockout-seconds: 1800  # 锁定 30 分钟
+    api:
+      max-requests: 500
+      window-seconds: 60
+
+  # 密码策略 (等保三级: 密码历史 + 强度校验) - 已合并到上方 cockpit.security 块
+
   # SPC 报告相关配置(年份自动取当前年份,无需手动修改)
   report:
-    company-name: 飓芯科技
+    company-name: 飾芯科技
     company-website: https://hurricanechip.com/
 
 management:
@@ -131,16 +146,3 @@ management:
   endpoint:
     health:
       show-details: when-authorized
-
-  rate-limit:
-    login:
-      max-attempts: 20
-      window-seconds: 60
-      lockout-seconds: 1800  # 开发环境: 失败 20 次后锁定 30 分钟
-    api:
-      max-requests: 500
-      window-seconds: 60
-
-  security:
-    password:
-      history-count: 5  # 密码历史保留数量 (等保三级防重用)

@@ -42,7 +42,6 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         return uri.equals("/api/auth/login")
                 || uri.equals("/api/auth/wechat-login")
                 || uri.equals("/api/auth/public-key")
-                || uri.startsWith("/actuator")
                 || uri.equals("/error");
     }
 
@@ -55,7 +54,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 String token = authHeader.substring(BEARER_PREFIX.length());
 
                 if (blacklistService.isBlacklisted(token)) {
-                    log.warn("[JWT] Token已在黑名单中, 拒绝访问");
+                    log.warn("[SECURITY_ALERT] Token 已在黑名单中, 拒绝访问 - uri={} ip={}",
+                            request.getRequestURI(), request.getRemoteAddr());
                     response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                     response.setContentType("application/json;charset=UTF-8");
                     response.getWriter().write(objectMapper.writeValueAsString(R.fail(401, "Token已失效，请重新登录")));
@@ -66,7 +66,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                     Long userId = jwtUtil.getUserId(token);
 
                     if (blacklistService.isUserKicked(userId)) {
-                        log.warn("[JWT] 用户{}的Token已被踢出, 拒绝访问", userId);
+                        log.warn("[SECURITY_ALERT] 用户 Token 已被踢出, 拒绝访问 - userId={} uri={} ip={}",
+                                userId, request.getRequestURI(), request.getRemoteAddr());
                         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                         response.setContentType("application/json;charset=UTF-8");
                         response.getWriter().write(objectMapper.writeValueAsString(R.fail(401, "Token已失效，请重新登录")));
